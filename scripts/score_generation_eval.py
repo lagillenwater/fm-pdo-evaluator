@@ -18,10 +18,18 @@ Delta sources form a ladder: ``additive`` (each drug's mean real delta, line-ind
 the floor) and ``knn`` (the mean real delta of the lines whose baseline is nearest the held
 line -- uses the baseline, so it can express line x drug specificity). Both are rebuilt
 leaving the scored line out, so a baseline never sees the held line's own treated cells.
-Stack's generated delta plugs into the same ``sources`` map as a third rung once the Tahoe
-generation run is produced on Alpine.
+Stack's generated delta joins the same ``sources`` map as a third rung: pass ``--generated-dir``
+(the stack-generation output), ``--query-baseline`` (the AnnData fed to it as ``--test-adata``),
+and ``--pert-map`` (pert_id -> CID, written by the context split). Its delta is
+``logcpm(generated) - logcpm(query baseline)``, keyed (query line, drug CID), so it runs through
+both checks identically to the baselines.
 
+  # baselines only:
   PYTHONPATH=src python scripts/score_generation_eval.py --context tahoe_context.h5ad --k 10
+  # + Stack:
+  PYTHONPATH=src python scripts/score_generation_eval.py --deltas-bundle tahoe_deltas \\
+      --generated-dir generated --query-baseline tahoe_query.h5ad \\
+      --pert-map context_by_drug/pert_to_cid.tsv --k 10
 """
 
 from __future__ import annotations
@@ -34,9 +42,34 @@ import pandas as pd
 
 from fmharness.adapters import build_adapters
 from fmharness.data.loaders import load_tranche
-from fmharness.deltas import build_additive_deltas, build_knn_deltas, build_tahoe_deltas
+from fmharness.deltas import (
+    build_additive_deltas,
+    build_generated_deltas,
+    build_knn_deltas,
+    build_tahoe_deltas,
+)
 from fmharness.evaluation import build_sample_design, delta_fidelity, score_predictions
 from fmharness.signatures import load_hallmark
+
+
+def _rel(repo: Path, p: str) -> Path:
+    """Resolve ``p`` against the repo root unless it is already absolute."""
+    q = Path(p)
+    return q if q.is_absolute() else repo / q
+
+
+def _load_pert_map(path: Path) -> dict[str, str]:
+    """Read a ``pert_id<TAB>cid`` TSV into ``{pert_id: cid}`` for build_generated_deltas.
+
+    The generated files are named by Tahoe pert_id (drug name); this maps each back to
+    the PubChem CID the real deltas / designs are keyed by. Written by 03's context split.
+    """
+    m: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        pert, _, cid = line.partition("\t")
+        if pert.strip() and cid.strip():
+            m[pert.strip()] = cid.strip()
+    return m
 
 
 def _loo_baseline_source(
@@ -83,6 +116,23 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=10, help="neighbors for the k-NN source")
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs for the generation metric")
     ap.add_argument("--n-permutations", type=int, default=1000)
+    ap.add_argument(
+        "--generated-dir",
+        default=None,
+        help="dir of Stack-generated <pert_id>.h5ad treated files; adds the 'stack' source",
+    )
+    ap.add_argument(
+        "--query-baseline",
+        default=None,
+        help="query AnnData given to stack-generation as --test-adata; the generated delta is "
+        "generated - this baseline (required with --generated-dir)",
+    )
+    ap.add_argument(
+        "--pert-map",
+        default=None,
+        help="TSV 'pert_id<TAB>cid' mapping generated pert_ids to PubChem CID "
+        "(context split writes context_by_drug/pert_to_cid.tsv; required with --generated-dir)",
+    )
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
 
@@ -106,8 +156,17 @@ def main() -> None:
         "additive": _loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
         "knn": _loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
     }
-    # Stack plugs in here once the Tahoe generation run exists:
-    #   sources["stack"] = build_generated_deltas(generated_dir, baseline, pert_to_drug)
+    # Stack's generated delta joins the same ladder when a generation run is supplied:
+    # delta = logcpm(generated) - logcpm(query baseline), keyed (query line, drug CID). It
+    # then flows through both checks exactly like the baselines, on equal footing.
+    if args.generated_dir:
+        if not (args.query_baseline and args.pert_map):
+            ap.error("--generated-dir requires --query-baseline and --pert-map")
+        sources["stack"] = build_generated_deltas(
+            _rel(repo, args.generated_dir),
+            _rel(repo, args.query_baseline),
+            _load_pert_map(_rel(repo, args.pert_map)),
+        )
 
     # Check 1 -- generation quality vs the real Tahoe delta.
     fid_rows: list[dict[str, object]] = []
