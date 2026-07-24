@@ -11,10 +11,13 @@ time and reshapes immediately (peak memory = one drug, not all of them), then ag
 
 Run on Alpine as a SINGLE process (needs datasets + pyarrow + huggingface_hub; the compute node
 has internet). The table is a flat 1026-file shard set with no drug partition, so every query
-scans all footers -- running many of these concurrently trips HF's 429 rate limit; keep it one
-process (auth with HF_TOKEN to raise the ceiling):
+touches all files -- concurrent queries trip HF's 429 rate limit, so keep it one process, and
+authenticate first (``hf auth login``) to raise the ceiling. ``--local-dir`` is the robust path:
+one authenticated bulk download to scratch, then local bounded reads (no per-query network):
+  hf auth login
   python scripts/build_tahoe_pseudobulk_deltas.py \\
-      --drugs-cid-file data/static/tahoe_target_cids.txt --out-dir tahoe_deltas/
+      --drugs-cid-file data/static/tahoe_target_cids.txt \\
+      --local-dir /scratch/alpine/$USER/tahoe_pseudobulk_de --out-dir tahoe_deltas/
 then score (no single-cell context needed):
   PYTHONPATH=src python scripts/score_generation_eval.py --deltas-bundle tahoe_deltas/ --k 10
 """
@@ -39,6 +42,12 @@ def main() -> None:
         "--drugs-cid-file", required=True, help="PubChem CIDs to keep (the GDSC2 answer key)"
     )
     ap.add_argument("--out-dir", default="tahoe_deltas")
+    ap.add_argument(
+        "--local-dir",
+        default=None,
+        help="query parquet from this local dir instead of hf:// (downloads the DE config there "
+        "once if empty). The robust path: one authenticated bulk pull, then local bounded reads.",
+    )
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
 
@@ -61,26 +70,53 @@ def main() -> None:
     if not target_names:
         raise SystemExit("no Tahoe drug maps to a target CID -- check the CID file")
 
-    # locate the config's parquet on HF, then read only the target-drug rows + 5 columns.
-    fs = HfFileSystem()
-    paths = [p for p in fs.glob(f"datasets/{TAHOE}/**/*.parquet") if DE in p]
-    if not paths:
-        raise SystemExit(f"could not locate {DE} parquet files under datasets/{TAHOE}")
-    print(f"reading {len(paths)} pseudobulk parquet files (drug-filtered, {len(DE_COLS)} cols) ...")
-    dset = pads.dataset([f"hf://{p}" for p in paths], filesystem=fs, format="parquet")
+    # locate the config's parquet, locally (robust) or on HF (hf://).
+    if args.local_dir:
+        local = Path(args.local_dir)
+        local = local if local.is_absolute() else repo / local
+        # DE is the parent DIRECTORY, not part of the filename (train-NNNNN-of-01026.parquet),
+        # so match on the full path, not the filename glob.
+        if not any(DE in str(p) for p in local.rglob("*.parquet")):
+            print(f"downloading the {DE} config to {local} (one-time, authenticated) ...")
+            from huggingface_hub import snapshot_download  # type: ignore
 
-    # Pull and reshape ONE drug at a time: a single drug is ~1e7 rows, whereas all target
-    # drugs at once is ~1e8 -- with object-dtype string columns that OOMs a 64 GB node.
-    # Reshaping each drug to its compact (delta, key, base) and dropping the raw rows caps
-    # peak memory at one drug, and the serial requests ease HF's rate limiting (the flat
-    # 1026-file layout means every query still scans all footers, so DO NOT parallelize this).
+            snapshot_download(
+                TAHOE, repo_type="dataset", allow_patterns=[f"*{DE}*"], local_dir=str(local)
+            )
+        paths = sorted(str(p) for p in local.rglob("*.parquet") if DE in str(p))
+        if not paths:
+            raise SystemExit(f"no {DE} parquet under {local}")
+        print(f"reading {len(paths)} LOCAL pseudobulk parquet files ({len(DE_COLS)} cols) ...")
+        dset = pads.dataset(paths, format="parquet")
+    else:
+        fs = HfFileSystem()
+        paths = [p for p in fs.glob(f"datasets/{TAHOE}/**/*.parquet") if DE in p]
+        if not paths:
+            raise SystemExit(f"could not locate {DE} parquet files under datasets/{TAHOE}")
+        print(f"reading {len(paths)} REMOTE pseudobulk parquet (hf://, {len(DE_COLS)} cols) ...")
+        dset = pads.dataset([f"hf://{p}" for p in paths], filesystem=fs, format="parquet")
+
+    # Read ONE drug at a time through a BOUNDED scanner. The earlier OOM was pyarrow's default
+    # scanner over-buffering the scan across the 1026 files (aggressive readahead + pre_buffer),
+    # not the per-drug result (~1e7 rows). fragment_readahead=1 / batch_readahead=1 / no threads /
+    # no pre_buffer cap the in-flight scan to a couple of small batches, so peak memory is one
+    # drug's reshaped result, not the scan. The flat no-drug-partition layout means every query
+    # still touches all files, so keep this a single process (DO NOT parallelize the scan).
+    scan_opts = {
+        "columns": DE_COLS,
+        "batch_size": 64_000,
+        "batch_readahead": 1,
+        "fragment_readahead": 1,
+        "use_threads": False,
+        "fragment_scan_options": pads.ParquetFragmentScanOptions(pre_buffer=False),
+    }
     delta_parts: list[pd.DataFrame] = []
     key_parts: list[pd.DataFrame] = []
     base_parts: list[pd.DataFrame] = []
     for i, name in enumerate(target_names, start=1):
-        tbl = dset.to_table(columns=DE_COLS, filter=pads.field("drug") == name)
-        de = tbl.to_pandas(self_destruct=True)
-        del tbl
+        de = dset.scanner(filter=pads.field("drug") == name, **scan_opts).to_table().to_pandas(
+            self_destruct=True
+        )
         if de.empty:
             print(f"  [{i}/{len(target_names)}] {name}: no rows")
             continue

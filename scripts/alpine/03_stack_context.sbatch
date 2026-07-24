@@ -23,7 +23,9 @@ cd "$REPO"
 module load anaconda
 conda activate stack               # data env: fmharness + datasets
 export PYTHONPATH="$REPO/src"
-export HF_HOME="/scratch/alpine/$USER/hf"
+export HF_HUB_CACHE="/scratch/alpine/$USER/hf"    # cache large downloads on scratch, not /projects
+# do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
+export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
 
 # ---- build the context (target drugs + their DMSO_TF controls, capped per cond) ----
 python scripts/build_tahoe_context.py \
