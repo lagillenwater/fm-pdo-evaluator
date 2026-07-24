@@ -5,41 +5,27 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=64G                    # per shard; 8 shards -> ~1/8 the single-run peak
-#SBATCH --time=08:00:00
-#SBATCH --array=0-7                  # 8 drug shards; each pulls its slice of the DE table
-#SBATCH --output=logs/%x-%A_%a.out
-#SBATCH --error=logs/%x-%A_%a.out
+#SBATCH --mem=24G                    # per-drug streaming keeps peak low; no big materialize
+#SBATCH --time=12:00:00
+#SBATCH --output=logs/%x-%j.out
+#SBATCH --error=logs/%x-%j.out
 #
-# The pseudobulk shortcut, fanned out over drugs. Each array task pulls ONLY its
-# round-robin slice of Tahoe's pseudobulk_differential_expression table (pyarrow
-# predicate pushdown on drug), so peak memory and the row-materialize are divided
-# across tasks instead of one ~1B-row query. 02 merges the shard bundles.
+# The pseudobulk shortcut, as a SINGLE streaming process -- deliberately NOT an array.
+# Tahoe's pseudobulk table is a flat 1026-file shard set with no drug partition, so every
+# query scans all footers; fanning it across array tasks trips HF's 429 rate limit and each
+# task still buffers all its drugs at once -> OOM. The script instead pulls one drug at a
+# time and reshapes immediately, so peak memory is a single drug and the requests serialize.
 set -euo pipefail
 
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
 module load anaconda
-conda activate stack           # data/scoring env (no torch)
+conda activate stack                 # data env: datasets + pyarrow + huggingface_hub (no torch)
 export PYTHONPATH="$REPO/src"
 export HF_HOME="/scratch/alpine/$USER/hf"
-
-NSHARDS="${SLURM_ARRAY_TASK_COUNT:-8}"
-TASK="${SLURM_ARRAY_TASK_ID:-0}"
-CIDFILE="$REPO/data/static/tahoe_target_cids.txt"  # written by 00 (Tahoe-mapped CIDs only)
-SHARDDIR="$REPO/tahoe_deltas/shard_${TASK}"
-SHARDCIDS="$REPO/tahoe_deltas/cids_${TASK}.txt"
-mkdir -p "$REPO/tahoe_deltas"
-
-# round-robin the CID list so mapped drugs are spread evenly across shards.
-mapfile -t ALL < <(tr ' \t' '\n\n' < "$CIDFILE" | grep .)
-: > "$SHARDCIDS"
-for i in "${!ALL[@]}"; do
-  if (( i % NSHARDS == TASK )); then echo "${ALL[$i]}" >> "$SHARDCIDS"; fi
-done
-echo "shard $TASK/$NSHARDS: $(wc -l < "$SHARDCIDS") drugs"
+export HF_TOKEN="CHANGE_ME"          # an HF token lifts the anonymous 429 ceiling (huggingface-cli login)
 
 python scripts/build_tahoe_pseudobulk_deltas.py \
-    --drugs-cid-file "$SHARDCIDS" \
-    --out-dir "$SHARDDIR"
+    --drugs-cid-file data/static/tahoe_target_cids.txt \
+    --out-dir tahoe_deltas
