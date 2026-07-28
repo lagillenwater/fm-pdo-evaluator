@@ -225,14 +225,34 @@ def regret_norm_at_k(preds: pd.DataFrame, ks: tuple[int, ...] = (1, 3, 5)) -> di
     return {k: (float(np.mean(v)) if v else float("nan")) for k, v in acc.items()}
 
 
+def per_drug_spearman(preds: pd.DataFrame, pred_col: str = "y_pred", min_n: int = 3) -> float:
+    """Median within-drug Spearman across drugs, KEEPING the cell-line main effect.
+
+    For each drug, the rank correlation between observed and predicted response across cell
+    lines; the median over drugs. Unlike ``interaction_rho`` this does NOT remove each line's
+    overall sensitivity, so it also rewards predicting which lines are broadly sensitive -- the
+    literature-standard per-drug metric (Kurilov et al. 2020), sitting between ``global`` and
+    ``interaction``. Drugs with fewer than ``min_n`` lines or no spread are skipped."""
+    rhos: list[float] = []
+    for _, g in preds.groupby("drug"):
+        yt = g["y_true"].to_numpy(dtype=np.float64)
+        yp = g[pred_col].to_numpy(dtype=np.float64)
+        if len(g) >= min_n and yt.std() > 0 and yp.std() > 0:
+            rho = float(np.asarray(spearmanr(yt, yp))[0])
+            if np.isfinite(rho):
+                rhos.append(rho)
+    return float(np.median(rhos)) if rhos else float("nan")
+
+
 def score_predictions(
     preds: pd.DataFrame, *, n_perm: int = 1000, seed: int = 0
 ) -> dict[str, float]:
     """Score a predictions frame (patient, drug, y_true, y_pred; AUC-like, lower = better).
 
     One place for the composition the eval scripts share: global Spearman, the headline
-    interaction rho (organoid x drug), its within-drug label-permutation p-value, and
-    normalized regret@{1,3}. Returns a flat dict of floats (``n`` is the pair count)."""
+    interaction rho (organoid x drug), its within-drug label-permutation p-value, the per-drug
+    Spearman (keeps the line main effect), and normalized regret@{1,3}. Returns a flat dict of
+    floats (``n`` is the pair count)."""
     from fmharness.controls import permute_within_drug  # local import: avoid an import cycle
 
     it = interaction_rho(preds, "y_pred")
@@ -255,6 +275,7 @@ def score_predictions(
     return {
         "global": round(global_spearman(preds), 3),
         "interaction": round(it, 3),
+        "perdrug": round(per_drug_spearman(preds), 3),
         "p_label": round(float(np.mean(null >= it)), 3),
         "regret@1": round(regret.get(1, float("nan")), 3),
         "regret@3": round(regret.get(3, float("nan")), 3),

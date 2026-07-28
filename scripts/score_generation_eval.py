@@ -13,12 +13,16 @@ delta sources, so each source is judged on equal footing:
   with a random-gene-set negative control -- if it does not clear that control, the readout is
   underpowered on this data and a check-2 null is inconclusive.
 
-  Check 2 (cell-line end-to-end, leave-cell-line-out): each source -> a readout -> a predicted
-  sensitivity, scored against external MEASURED viability (GDSC2 AUC) on the shared (DepMap line,
-  drug) pairs, by interaction rho with a within-drug label-permutation null and regret@k. Readouts:
-  ``hallmark`` (fixed, all four sets), ``proliferation`` (fixed, only the E2F + G2M sets that clear
-  the gate -- the death sets add noise), and the SUPERVISED ``szalai`` (L2 linear) and ``xgboost``,
-  the latter two fit leakage-free by grouped-by-cell-line k-fold on the real delta vs AUC.
+  Check 2 (cell-line end-to-end, leave-cell-line-out): predict measured viability (GDSC2 AUC) on
+  the shared (DepMap line, drug) pairs, scored by global / per-drug / interaction Spearman (per-drug
+  keeps the line main effect -- the literature-standard metric), a within-drug label-permutation
+  null, and regret@k. Two designs on equal footing: (a) FIXED signature readouts -- ``hallmark``
+  (all four Hallmark sets) and ``proliferation`` (only E2F + G2M, the sets that clear the gate) --
+  applied to the delta sources; (b) a REPRESENTATION-CONTROLLED grid -- the untreated ``expr``
+  baseline AND every delta source fed to the SAME penalized regressions (``l2`` Ridge, ``l1``
+  Lasso, ``en`` elastic-net), fit per-drug on that representation, so a difference is the
+  representation not the model (Kurilov 2020). A delta source earns its keep only if it beats
+  ``expr``; ``--folds`` >= #lines makes the fit true leave-one-cell-line-out.
 
 Delta sources form a ladder: ``additive`` (each drug's mean real delta, line-independent -- the
 floor); ``knn`` (mean real delta of the lines whose baseline is nearest the held line); and
@@ -41,13 +45,16 @@ both checks identically to the baselines.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import ElasticNet, Lasso, Ridge
+from sklearn.preprocessing import StandardScaler
 
-from fmharness.adapters import ALL_METHODS, build_adapters
+from fmharness.adapters import build_adapters
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     build_additive_deltas,
@@ -63,7 +70,20 @@ from fmharness.signatures import load_hallmark, score_signatures
 # (G2M clearly, E2F marginally); the death sets (P53, apoptosis) add only noise on Tahoe. A
 # ``proliferation`` readout scores just these, so a real but weak signal is not diluted away.
 PROLIFERATION = ("HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT")
-DEFAULT_READOUTS = ("hallmark", "proliferation", *(m for m in ALL_METHODS if m != "hallmark"))
+FIXED_READOUTS = ("hallmark", "proliferation")  # fixed-signature readouts, applied to delta sources
+PENALTY_NAMES = ("l2", "l1", "en")  # penalized regressions for the representation-controlled grid
+
+
+def _make_penalty(name: str) -> object:
+    """A fresh penalized-regression model: l2=Ridge, l1=Lasso, en=elastic-net -- matched to szalai's
+    L2 and xgboost's elastic-net selection, but as clean linear models on equal footing."""
+    if name == "l2":
+        return Ridge(alpha=10.0)
+    if name == "l1":
+        return Lasso(alpha=0.01, max_iter=5000)
+    if name == "en":
+        return ElasticNet(alpha=0.01, l1_ratio=0.5, max_iter=5000)
+    raise ValueError(f"unknown penalty {name!r}")
 
 
 def _rel(repo: Path, p: str) -> Path:
@@ -84,6 +104,73 @@ def _load_pert_map(path: Path) -> dict[str, str]:
         if pert.strip() and cid.strip():
             m[pert.strip()] = cid.strip()
     return m
+
+
+def _repr_by_drug(
+    delta: pd.DataFrame, key: pd.DataFrame, genes: pd.Index
+) -> dict[str, pd.DataFrame]:
+    """Split a delta source into ``{drug: DataFrame[line x genes]}`` for per-drug regression."""
+    d = delta.reindex(columns=genes).fillna(0.0)
+    pat = key["patient"].astype(str).to_numpy()
+    drg = key["drug"].astype(str).to_numpy()
+    out: dict[str, pd.DataFrame] = {}
+    for drug in pd.unique(drg):
+        m = d[drg == drug]
+        m.index = pd.Index(pat[drg == drug])
+        out[str(drug)] = m
+    return out
+
+
+def _penalized_preds(
+    feat: dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame],
+    design: pd.DataFrame,
+    fold_of: dict[str, int],
+    n_folds: int,
+    uniq_lines: list[str],
+    penalty: str,
+    *,
+    min_lines: int = 8,
+    min_train: int = 5,
+) -> pd.DataFrame:
+    """Per-drug penalized regression (representation -> AUC), leave-cell-line-out by fold.
+
+    ``feat`` maps a drug to a (line x gene) frame -- a dict for a delta source, or a callable for a
+    drug-independent representation (baseline expression). For each drug the model is fit on the
+    training-fold lines' features vs AUC and predicts the held-fold lines; the StandardScaler is fit
+    on the training lines only, so a single held line (true LOO) is scored leakage-free. All
+    representations share one model class, so a difference is the representation, not the model.
+    Returns preds (patient, drug, y_true, y_pred); y_pred is an AUC estimate (same sign as y_true).
+    """
+    auc_by_drug = {
+        str(d): dict(zip(g["patient"].astype(str), g["y"], strict=False))
+        for d, g in design.groupby("drug")
+    }
+    rows: list[tuple[str, str, float, float]] = []
+    for drug, auc in auc_by_drug.items():
+        fdf = feat(drug) if callable(feat) else feat.get(drug)
+        if fdf is None or fdf.empty:
+            continue
+        fdf = fdf.copy()
+        fdf.index = pd.Index([str(i) for i in fdf.index])
+        lines_d = [ln for ln in fdf.index if ln in auc]
+        if len(lines_d) < min_lines:
+            continue
+        for f in range(n_folds):
+            held = {ln for ln in uniq_lines if fold_of[ln] == f}
+            tr = [ln for ln in lines_d if ln not in held]
+            te = [ln for ln in lines_d if ln in held]
+            if len(tr) < min_train or not te:
+                continue
+            sc = StandardScaler().fit(fdf.loc[tr].to_numpy(dtype=np.float64))
+            model = _make_penalty(penalty).fit(
+                sc.transform(fdf.loc[tr].to_numpy(dtype=np.float64)), [auc[ln] for ln in tr]
+            )
+            pred = model.predict(sc.transform(fdf.loc[te].to_numpy(dtype=np.float64)))
+            rows.extend(
+                (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
+            )
+    cols = ["patient", "drug", "y_true", "y_pred"]
+    return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 
 def _loo_baseline_source(
@@ -155,14 +242,20 @@ def main() -> None:
     )
     ap.add_argument(
         "--methods",
-        default=",".join(DEFAULT_READOUTS),
-        help="comma-separated readouts for check 2 (hallmark, proliferation, szalai, xgboost)",
+        default=",".join(FIXED_READOUTS),
+        help="fixed-signature readouts on the delta sources (subset of hallmark, proliferation)",
     )
     ap.add_argument(
-        "--readout-folds",
+        "--penalties",
+        default=",".join(PENALTY_NAMES),
+        help="penalized regressions for the representation grid (subset of l2, l1, en)",
+    )
+    ap.add_argument(
+        "--folds",
         type=int,
         default=5,
-        help="grouped-by-cell-line folds for the LEAKAGE-FREE supervised readout fit",
+        help="grouped-by-cell-line folds for the leakage-free penalized fit; set >= #lines "
+        "(e.g. 999) for true leave-one-cell-line-out",
     )
     ap.add_argument(
         "--generated-dir",
@@ -271,77 +364,51 @@ def main() -> None:
     print("\n=== gate: Hallmark readout on the REAL Tahoe delta (vs random gene sets) ===")
     print(gate.to_string(index=False) if not gate.empty else "(no (line, drug) overlap with AUC)")
 
-    # Check 2 -- each source -> readout -> predicted sensitivity vs measured AUC. hallmark and
-    # proliferation are FIXED signatures (predict directly). szalai/xgboost are SUPERVISED and fit
-    # LEAKAGE-FREE by grouped-by-cell-line k-fold on the REAL Tahoe delta vs AUC (HVG panel): a
-    # fold's lines are held out of that fold's fit, so the readout never sees a line's own (delta,
-    # viability) before scoring any source's reconstruction of it. Predicting a whole fold at once
-    # keeps the readout's per-cohort z-score stable (a single line's ~32 rows would be too few).
-    methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    # Check 2 -- predict AUC (leave-cell-line-out), two designs on equal footing:
+    #  (a) FIXED signature readouts (hallmark, proliferation) on the delta sources -- the
+    #      generation-through-death/proliferation-biology path (predict directly, no fitting).
+    #  (b) REPRESENTATION-CONTROLLED penalized regression: the untreated baseline expression AND
+    #      every delta source, each fed to the SAME L1/L2/elastic-net models (per-drug, fit on that
+    #      representation), so a difference is the representation, not the model (Kurilov 2020). A
+    #      delta source earns its keep only if it beats `expr`. --folds >= #lines gives true LOO.
+    fixed_methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    penalties = [p.strip() for p in args.penalties.split(",") if p.strip()]
     fixed_sigs = {
         "hallmark": hallmark,
         "proliferation": {n: hallmark[n] for n in PROLIFERATION if n in hallmark},
     }
     fixed_readouts = {
         m: build_adapters(["hallmark"], signatures=fixed_sigs[m])[0]
-        for m in methods
+        for m in fixed_methods
         if m in fixed_sigs
     }
-    supervised = [m for m in methods if m not in fixed_sigs]
-
-    real_lines = real_key["patient"].astype(str).to_numpy()
-    real_via = real_key.merge(
-        design.rename(columns={"y": "_y"}), on=["patient", "drug"], how="left"
-    )["_y"].to_numpy()
-    rd_panel = real_delta.reindex(columns=hvg).fillna(0.0)
-    uniq_lines = sorted(set(real_lines))
-    n_folds = max(1, min(args.readout_folds, len(uniq_lines)))
+    uniq_lines = sorted(set(real_key["patient"].astype(str)))
+    n_folds = max(1, min(args.folds, len(uniq_lines)))
     fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}  # deterministic line -> fold
+    target_drugs = set(real_key["drug"].astype(str))
+    design_target = design[design["drug"].astype(str).isin(target_drugs)]
 
-    # one supervised readout per (method, fold), fit on the lines NOT in that fold.
-    fold_readouts: dict[tuple[str, int], object] = {}
-    for f in range(n_folds):
-        held = {ln for ln in uniq_lines if fold_of[ln] == f}
-        tr = (~pd.Series(real_lines).isin(held).to_numpy()) & ~np.isnan(real_via)
-        if int(tr.sum()) < 5:
-            continue
-        for adapter in build_adapters(supervised, signatures=None):
-            adapter.fit(rd_panel[tr], real_via[tr])
-            fold_readouts[(adapter.name, f)] = adapter
-
-    def _sensitivity(method: str, sdelta: pd.DataFrame, skey: pd.DataFrame) -> np.ndarray:
-        """Per-source-row sensitivity through one readout. Fixed: predict directly. Supervised:
-        each held row gets its fold's leakage-free model, but z-scored over the WHOLE source (one
-        ``predict(sp)`` per fold), so folds share one normalization and cross-fold ranks compare."""
-        if method in fixed_readouts:
-            return np.asarray(fixed_readouts[method].predict(sdelta), dtype=float)
-        sp = sdelta.reindex(columns=hvg).fillna(0.0)
-        lines = skey["patient"].astype(str).to_numpy()
-        sens = np.full(len(sdelta), np.nan)
-        for f in range(n_folds):
-            model = fold_readouts.get((method, f))
-            if model is None:
-                continue
-            held = {ln for ln in uniq_lines if fold_of[ln] == f}
-            mask = pd.Series(lines).isin(held).to_numpy()
-            if mask.any():
-                sens[mask] = model.predict(sp)[mask]  # whole-source z-score; fold's held-out model
-        return sens
+    def _row(s: dict[str, float]) -> dict[str, object]:
+        return {
+            "global": s["global"],
+            "interaction": s["interaction"],
+            "perdrug": s["perdrug"],
+            "p_label": s["p_label"],
+            "regret@1": s["regret@1"],
+            "regret@3": s["regret@3"],
+            "n": int(s["n"]),
+        }
 
     out: list[dict[str, object]] = []
+
+    # (a) fixed-signature readouts on the delta sources (sensitivity -> -y_pred vs AUC).
     for name, (d, kk) in sources.items():
-        for method in methods:
-            sens = _sensitivity(method, d, kk)
-            valid = ~np.isnan(sens)
+        for method, adapter in fixed_readouts.items():
+            sens = np.asarray(adapter.predict(d), dtype=float)
             merged = pd.DataFrame(
-                {
-                    "patient": kk["patient"].to_numpy()[valid],
-                    "drug": kk["drug"].to_numpy()[valid],
-                    "_s": sens[valid],
-                }
+                {"patient": kk["patient"].to_numpy(), "drug": kk["drug"].to_numpy(), "_s": sens}
             ).merge(design.rename(columns={"y": "y_true"}), on=["patient", "drug"], how="inner")
             if merged.empty:
-                print(f"  [{name}/{method}] no (line, drug) overlap with {args.auc_tranche}")
                 continue
             preds = pd.DataFrame(
                 {
@@ -352,18 +419,23 @@ def main() -> None:
                 }
             )
             s = score_predictions(preds, n_perm=args.n_permutations)
-            out.append(
-                {
-                    "source": name,
-                    "method": method,
-                    "global": s["global"],
-                    "interaction": s["interaction"],
-                    "p_label": s["p_label"],
-                    "regret@1": s["regret@1"],
-                    "regret@3": s["regret@3"],
-                    "n": int(s["n"]),
-                }
-            )
+            out.append({"source": name, "method": method, **_row(s)})
+
+    # (b) representation-controlled penalized regression: baseline expression + every delta source.
+    base_hvg = base.reindex(columns=hvg).fillna(0.0)
+    representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
+        "expr": lambda _drug: base_hvg
+    }
+    for name, (d, kk) in sources.items():
+        representations[name] = _repr_by_drug(d, kk, hvg)
+    for repr_name, feat in representations.items():
+        for pen in penalties:
+            preds = _penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
+            if preds.empty:
+                continue
+            s = score_predictions(preds, n_perm=args.n_permutations)
+            out.append({"source": repr_name, "method": pen, **_row(s)})
+
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")
     print(pd.DataFrame(out).to_string(index=False) if out else "(no scored pairs)")
 
