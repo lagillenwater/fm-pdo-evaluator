@@ -200,15 +200,25 @@ def main() -> None:
         f"{real_delta.shape[1]} genes"
     )
 
-    # top-HVG panel: shared by the learned (pca/nmf) sources and the supervised readouts, to keep
-    # the per-line PCA/NMF and the readout fits fast and out of the hopeless p>>n regime.
+    # top-HVG panel: the supervised readouts fit on it and the learned (pca/nmf) sources reduce on
+    # it, keeping the per-line PCA/NMF and readout fits fast and out of the hopeless p>>n regime.
+    # The learned sources ALSO emit the fixed-signature genes: pca/nmf output a delta only over the
+    # genes they are built on, so without the Hallmark genes a fixed readout would see an empty set
+    # on those sources and score them zero (the bug that NaN'd pca/nmf x proliferation).
+    hallmark = load_hallmark(repo / "data/static/hallmark_signatures.gmt")
+    sig_genes = pd.Index(sorted({g for genes, _ in hallmark.values() for g in genes}))
     hvg = pd.Index(real_delta.var(axis=0).sort_values(ascending=False).index[: args.n_hvg])
+    learned_genes = hvg.union(sig_genes)
 
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
         "additive": _loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
         "knn": _loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
-        "pca": _loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=hvg),
-        "nmf": _loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=hvg),
+        "pca": _loo_baseline_source(
+            "pca", real_delta, real_key, base, k=args.k, genes=learned_genes
+        ),
+        "nmf": _loo_baseline_source(
+            "nmf", real_delta, real_key, base, k=args.k, genes=learned_genes
+        ),
     }
     # Stack's generated delta joins the same ladder when a generation run is supplied:
     # delta = logcpm(generated) - logcpm(query baseline), keyed (query line, drug CID). It
@@ -239,8 +249,7 @@ def main() -> None:
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
     print(pd.DataFrame(fid_rows).to_string(index=False))
 
-    # Readout + labels shared by the gate and check 2.
-    hallmark = load_hallmark(repo / "data/static/hallmark_signatures.gmt")
+    # Labels for the gate and check 2 (hallmark was loaded above for the learned-source panel).
     _, design = build_sample_design(
         load_tranche(args.auc_tranche, repo), "all", "auc", drug_key="pubchem_cid"
     )
