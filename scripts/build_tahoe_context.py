@@ -2,8 +2,10 @@
 
 Tahoe is the in-domain single-cell drug context (replacing bulk L1000): given a perturbation
 context of drug-treated cells and a query baseline, Stack generates the query's treated state.
-This streams a *subset* -- the target drugs plus their DMSO_TF vehicle controls, in the target
-cell lines -- from the HuggingFace parquet, reconstructs expression over the Stack gene panel
+This reads only a *subset* -- the target drugs plus their DMSO_TF vehicle controls, in the target
+cell lines -- directly from the HuggingFace parquet via a pushed-down ``drug`` filter (pyarrow
+prunes non-matching row-groups, so target drugs are found wherever their plates sit and the
+~95% of non-target cells are never decoded), reconstructs expression over the Stack gene panel
 from the tokenized (``genes`` token-id + ``expressions`` value) format, maps the Cellosaurus
 ``cell_line_id`` to its DepMap id, and writes a context AnnData whose obs schema matches
 ``build_l1000_context`` (pert_id / pert_iname / cell_id / is_control) so the stack-generation
@@ -11,8 +13,9 @@ call and the delta builders consume it unchanged. Treated and DMSO cells are tag
 per-line baseline (is_control) and the real treated state (the truth for generation-quality)
 are both slices of this one file -- no separate query/baseline build needed for cell lines.
 
-Run on Alpine (needs ``datasets``; streams from HF so no full ~100M-cell download). It still
-full-scans the stream, so ``--max-cells-per-cond`` caps cells per (line, drug) to bound memory:
+Run on Alpine (needs ``datasets`` + ``pyarrow``; reads from HF so no full ~100M-cell download,
+and only target + DMSO cells are decoded). ``--max-cells-per-cond`` caps cells per (line, drug)
+to bound memory:
   python scripts/build_tahoe_context.py --drugs-cid-file data/static/gdsc2_auc_pubchem_cids.txt \\
       --max-cells-per-cond 200 --out tahoe_context.h5ad
 then generate (same call shape as the L1000 path, with the Tahoe context as base-adata):
@@ -71,9 +74,9 @@ def main() -> None:
         "--max-scan-cells",
         type=int,
         default=None,
-        help="stop after streaming this many cells (default: full ~100M scan). ~18M ~= 1h at "
-        "~5k cells/s; Tahoe shards mix drugs, so an early cap still samples most conditions, "
-        "just with fewer cells each -- fine for a pseudobulk context / generation prompt",
+        help="stop after reading this many MATCHING (target + DMSO) cells; default reads all. "
+        "The drug filter is pushed into the parquet read, so only target drugs' cells are "
+        "decoded (not the full ~100M stream) -- this cap rarely matters",
     )
     ap.add_argument("--out", default="tahoe_context.h5ad")
     ap.add_argument(
@@ -98,7 +101,10 @@ def main() -> None:
     pan = gm[sym_u.isin(panel)].drop_duplicates("token_id")
     panel_syms = [s.upper() for s in pan["gene_symbol"].astype(str)]
     token_to_col = {int(t): i for i, t in enumerate(pan["token_id"])}
-    print(f"panel: {len(panel_syms)} of Stack's 15,012-gene vocabulary covered by Tahoe genes")
+    print(
+        f"panel: {len(panel_syms)} of Stack's 15,012-gene vocabulary covered by Tahoe genes",
+        flush=True,
+    )
 
     # The stream's cell_line_id is a Cellosaurus accession (CVCL_...); map it to DepMap via the
     # metadata's Cellosaurus + DepMap columns (Check 2 and the GDSC2 join key on DepMap).
@@ -120,7 +126,45 @@ def main() -> None:
     cap = args.max_cells_per_cond
     max_scan = args.max_scan_cells
     cond_count: dict[tuple[str, str], int] = {}
-    stream = load_dataset(TAHOE, "expression_data", split="train", streaming=True)
+    # ---- push the drug filter into the parquet read (no full-stream decode) ----------------
+    # Tahoe's expression_data shards are ordered by plate, and each drug lives on specific
+    # plates, so a streamed scan-cap silently drops most target drugs. Instead read ONLY the
+    # target-drug + DMSO cells: pyarrow prunes whole row-groups by the `drug` column, so this
+    # is complete regardless of shard order and never decodes the ~95% of cells that a stream
+    # would read then discard. The kept set is identical to a full-scan streaming run.
+    import os
+
+    import pyarrow.dataset as pads
+    from huggingface_hub import HfFileSystem  # type: ignore  # Alpine-only, heavy import
+    from pyarrow.fs import FSSpecHandler, PyFileSystem
+
+    # Map target CIDs -> Tahoe drug names so the pushed filter is a clean string `isin` on the
+    # `drug` column (row-group-prunable), not a match on the float-formatted pubchem_cid.
+    target_drugs: set[str] | None = None
+    if keep_cids is not None:
+        dm = load_dataset(TAHOE, "drug_metadata", split="train").to_pandas()
+        dm_cid = next(c for c in dm.columns if "pubchem" in c.lower())
+        dm_drug = "drug" if "drug" in dm.columns else next(
+            c for c in dm.columns if "drug" in c.lower()
+        )
+        target_drugs = set(dm.loc[dm[dm_cid].map(_ncid).isin(keep_cids), dm_drug].astype(str))
+        print(f"target drugs: {len(target_drugs)} Tahoe names <- {len(keep_cids)} CIDs", flush=True)
+        if not target_drugs:
+            raise SystemExit("no Tahoe drug names matched the requested CIDs")
+
+    fs = HfFileSystem(token=os.environ.get("HF_TOKEN") or None)
+    # 'expression_data' is the config DIRECTORY; the pseudobulk config ('..._expression') does
+    # not contain the substring 'expression_data', so this selects the cell matrix cleanly.
+    files = [f for f in fs.glob(f"datasets/{TAHOE}/**/*.parquet") if "expression_data" in f]
+    if not files:
+        raise SystemExit("no expression_data parquet shards resolved on HF")
+    print(f"expression_data: {len(files)} shards; first = {files[0]}", flush=True)
+
+    pafs = PyFileSystem(FSSpecHandler(fs))
+    dataset = pads.dataset(files, filesystem=pafs, format="parquet")
+    read_cols = ["drug", "pubchem_cid", "cell_line_id", "plate", "sample", "genes", "expressions"]
+    filt = pads.field("drug").isin(sorted(target_drugs | {DMSO})) if target_drugs else None
+    scanner = dataset.scanner(columns=read_cols, filter=filt, batch_size=args.batch)
 
     g_acc: list[np.ndarray] = []
     e_acc: list[np.ndarray] = []
@@ -134,38 +178,47 @@ def main() -> None:
             e_acc.clear()
 
     scanned = 0
-    for scanned, r in enumerate(stream, start=1):
-        if max_scan is not None and scanned > max_scan:
-            break
-        is_ctl = r["drug"] == DMSO
-        if keep_cids is not None and not is_ctl and _ncid(r["pubchem_cid"]) not in keep_cids:
-            continue
-        if lines is not None and r["cell_line_id"] not in lines:
-            continue
-        dose = sample_dose.get(str(r["sample"]), float("nan"))
-        if args.dose_um is not None and not is_ctl and not np.isclose(dose, args.dose_um):
-            continue
-        if cap is not None:
-            ckey = (str(r["cell_line_id"]), str(r["drug"]))
-            if cond_count.get(ckey, 0) >= cap:
+    stop = False
+    for batch in scanner.to_batches():
+        # small columns to Python once per batch; the big genes/expressions arrays are
+        # materialized per row only when a cell is actually kept (after the per-cond cap).
+        drug_c = batch.column("drug").to_pylist()
+        cid_c = batch.column("pubchem_cid").to_pylist()
+        cl_c = batch.column("cell_line_id").to_pylist()
+        plate_c = batch.column("plate").to_pylist()
+        samp_c = batch.column("sample").to_pylist()
+        genes_c = batch.column("genes")
+        expr_c = batch.column("expressions")
+        for i in range(batch.num_rows):
+            scanned += 1
+            if max_scan is not None and scanned > max_scan:
+                stop = True
+                break
+            if scanned % 1_000_000 == 0:  # heartbeat: matching cells read + cells kept
+                print(f"  read {scanned:,} matching cells, kept {len(obs_rows):,}", flush=True)
+            drug = drug_c[i]
+            is_ctl = drug == DMSO
+            cl = cl_c[i]
+            if lines is not None and cl not in lines:
                 continue
-            cond_count[ckey] = cond_count.get(ckey, 0) + 1
-        g_acc.append(r["genes"])
-        e_acc.append(r["expressions"])
-        obs_rows.append(
-            (
-                r["drug"],
-                _ncid(r["pubchem_cid"]),
-                r["cell_line_id"],
-                cl2dep.get(str(r["cell_line_id"]), ""),
-                bool(is_ctl),
-                r["plate"],
-                r["sample"],
-                dose,
+            dose = sample_dose.get(str(samp_c[i]), float("nan"))
+            if args.dose_um is not None and not is_ctl and not np.isclose(dose, args.dose_um):
+                continue
+            if cap is not None:
+                ckey = (str(cl), str(drug))
+                if cond_count.get(ckey, 0) >= cap:
+                    continue
+                cond_count[ckey] = cond_count.get(ckey, 0) + 1
+            g_acc.append(genes_c[i].values.to_numpy(zero_copy_only=False))
+            e_acc.append(expr_c[i].values.to_numpy(zero_copy_only=False))
+            obs_rows.append(
+                (drug, _ncid(cid_c[i]), cl, cl2dep.get(str(cl), ""), bool(is_ctl),
+                 plate_c[i], samp_c[i], dose)
             )
-        )
-        if len(g_acc) >= args.batch:
-            flush()
+            if len(g_acc) >= args.batch:
+                flush()
+        if stop:
+            break
     flush()
 
     n_cols = len(panel_syms)

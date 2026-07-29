@@ -1,20 +1,21 @@
 #!/bin/bash
 #SBATCH --job-name=tahoe-context
 #SBATCH --partition=amilan
-#SBATCH --qos=long                   # streaming full-scan of Tahoe expression_data can exceed 24h
+#SBATCH --qos=long                   # generous ceiling; the pushed-down read is typically ~1-2h
 #SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G                    # bounded by --batch; the stream is not held in memory
+#SBATCH --mem=48G                    # bounded by --max-cells-per-cond; only kept cells held
 #SBATCH --time=36:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
 # Build the single-cell Tahoe context Stack generation consumes (the pseudobulk
 # shortcut does NOT produce this), then pre-split it per drug so 04 can fan out one
-# drug per GPU. Single job, NOT an array: `datasets` streaming full-scans regardless
-# of filter, so arraying this would mean N redundant scans of the 100M-cell stream.
+# drug per GPU. Single job, NOT an array: one pushed-down read over the parquet already
+# covers every target drug (pyarrow prunes non-matching row-groups), so arraying would
+# only duplicate work.
 set -euo pipefail
 
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
@@ -23,17 +24,18 @@ cd "$REPO"
 module load anaconda
 conda activate stack               # data env: fmharness + datasets
 export PYTHONPATH="$REPO/src"
+export PYTHONUNBUFFERED=1                          # flush prints immediately so the heartbeat shows live
 export HF_HUB_CACHE="/scratch/alpine/$USER/hf"    # cache large downloads on scratch, not /projects
 # do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
 
 # ---- build the context (target drugs + their DMSO_TF controls, capped per cond) ----
-# --max-scan-cells stops after ~18M cells (~1h) instead of the full ~100M scan; Tahoe shards mix
-# drugs so this still samples every condition, just with fewer cells each. Drop it for a full scan.
+# The drug filter is pushed into the parquet read (pyarrow prunes non-matching row-groups), so
+# only the target drugs' + DMSO cells are decoded -- complete drug coverage, no full-stream scan,
+# so no scan cap is needed. --max-cells-per-cond still caps cells per (line, drug) for memory.
 python scripts/build_tahoe_context.py \
     --drugs-cid-file data/static/tahoe_target_cids.txt \
     --max-cells-per-cond 200 \
-    --max-scan-cells 18000000 \
     --out tahoe_context.h5ad
 
 # ---- pre-split + emit the query baseline and pert->CID map for 04/05 ----------------

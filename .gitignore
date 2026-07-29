@@ -248,3 +248,7 @@ docs/results.md
 /l1000_context*.h5ad
 stack_input_gdscv2.h5ad
 stack_input_sarcoma.h5ad
+
+# Generated presentation deck + Office lock files (regenerable; never tracked)
+/harness_overview.pptx
+~$*.pptx
