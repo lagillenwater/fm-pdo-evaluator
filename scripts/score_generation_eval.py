@@ -51,7 +51,7 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import ElasticNet, Lasso, Ridge
+from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.preprocessing import StandardScaler
 
 from fmharness.adapters import build_adapters
@@ -75,14 +75,16 @@ PENALTY_NAMES = ("l2", "l1", "en")  # penalized regressions for the representati
 
 
 def _make_penalty(name: str) -> object:
-    """A fresh penalized-regression model: l2=Ridge, l1=Lasso, en=elastic-net -- matched to szalai's
-    L2 and xgboost's elastic-net selection, but as clean linear models on equal footing."""
+    """A fresh ALPHA-CV-TUNED penalized model: l2=RidgeCV (efficient GCV), l1=LassoCV, en=
+    ElasticNetCV (both inner 3-fold on the training lines). Tuning the penalty per representation
+    makes the grid model-fair -- a fixed alpha over-/under-regularizes some representations and
+    flips the ranking (Kurilov 2020)."""
     if name == "l2":
-        return Ridge(alpha=10.0)
+        return RidgeCV(alphas=np.logspace(-2, 3, 12))
     if name == "l1":
-        return Lasso(alpha=0.01, max_iter=5000)
+        return LassoCV(n_alphas=30, cv=3, max_iter=5000, random_state=0)
     if name == "en":
-        return ElasticNet(alpha=0.01, l1_ratio=0.5, max_iter=5000)
+        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=5000, random_state=0)
     raise ValueError(f"unknown penalty {name!r}")
 
 
