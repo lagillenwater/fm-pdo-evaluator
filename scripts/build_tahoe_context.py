@@ -38,6 +38,15 @@ TAHOE = "tahoebio/Tahoe-100M"
 DMSO = "DMSO_TF"  # Tahoe's vehicle-control drug name
 
 
+def _ncid(x: object) -> str:
+    """Normalize a PubChem CID to a plain int-string. Tahoe stores it float-formatted
+    ('1923.0'), so a raw ``str()`` never matches the target int-strings ('1923')."""
+    try:
+        return str(int(float(x)))  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -57,6 +66,14 @@ def main() -> None:
         type=int,
         default=None,
         help="subsample cap on cells kept per (cell line, drug); bounds memory (default no cap)",
+    )
+    ap.add_argument(
+        "--max-scan-cells",
+        type=int,
+        default=None,
+        help="stop after streaming this many cells (default: full ~100M scan). ~18M ~= 1h at "
+        "~5k cells/s; Tahoe shards mix drugs, so an early cap still samples most conditions, "
+        "just with fewer cells each -- fine for a pseudobulk context / generation prompt",
     )
     ap.add_argument("--out", default="tahoe_context.h5ad")
     ap.add_argument(
@@ -83,12 +100,13 @@ def main() -> None:
     token_to_col = {int(t): i for i, t in enumerate(pan["token_id"])}
     print(f"panel: {len(panel_syms)} of Stack's 15,012-gene vocabulary covered by Tahoe genes")
 
-    # Cellosaurus cell_line_id -> DepMap id (column name not fixed across releases).
+    # The stream's cell_line_id is a Cellosaurus accession (CVCL_...); map it to DepMap via the
+    # metadata's Cellosaurus + DepMap columns (Check 2 and the GDSC2 join key on DepMap).
     dep_col = next((c for c in clm.columns if "depmap" in c.lower()), None)
-    id_col = "cell_line_id" if "cell_line_id" in clm.columns else clm.columns[0]
+    cvcl_col = next((c for c in clm.columns if "cellosaur" in c.lower()), None)
     cl2dep: dict[str, str] = {}
-    if dep_col:
-        cl2dep = dict(zip(clm[id_col].astype(str), clm[dep_col].astype(str), strict=False))
+    if dep_col and cvcl_col:
+        cl2dep = dict(zip(clm[cvcl_col].astype(str), clm[dep_col].astype(str), strict=False))
     sample_dose = {
         str(s): parse_dose_um(str(c))
         for s, c in zip(sm["sample"], sm["drugname_drugconc"], strict=False)
@@ -97,9 +115,10 @@ def main() -> None:
     cids = set(map(str, args.drugs_cid)) if args.drugs_cid else set()
     if args.drugs_cid_file:
         cids |= {tok for tok in Path(args.drugs_cid_file).read_text().split() if tok}
-    keep_cids: set[str] | None = cids or None
+    keep_cids: set[str] | None = {n for c in cids if (n := _ncid(c))} or None
     lines = set(args.cell_lines) if args.cell_lines else None
     cap = args.max_cells_per_cond
+    max_scan = args.max_scan_cells
     cond_count: dict[tuple[str, str], int] = {}
     stream = load_dataset(TAHOE, "expression_data", split="train", streaming=True)
 
@@ -114,9 +133,12 @@ def main() -> None:
             g_acc.clear()
             e_acc.clear()
 
-    for r in stream:
+    scanned = 0
+    for scanned, r in enumerate(stream, start=1):
+        if max_scan is not None and scanned > max_scan:
+            break
         is_ctl = r["drug"] == DMSO
-        if keep_cids is not None and not is_ctl and str(r["pubchem_cid"]) not in keep_cids:
+        if keep_cids is not None and not is_ctl and _ncid(r["pubchem_cid"]) not in keep_cids:
             continue
         if lines is not None and r["cell_line_id"] not in lines:
             continue
@@ -133,7 +155,7 @@ def main() -> None:
         obs_rows.append(
             (
                 r["drug"],
-                str(r["pubchem_cid"]),
+                _ncid(r["pubchem_cid"]),
                 r["cell_line_id"],
                 cl2dep.get(str(r["cell_line_id"]), ""),
                 bool(is_ctl),
@@ -170,9 +192,11 @@ def main() -> None:
     adata.var["feature_name"] = panel_syms
     out = repo / args.out if not Path(args.out).is_absolute() else Path(args.out)
     adata.write_h5ad(out)
+    n_trt = int((~obs["is_control"].astype(bool)).sum())
     print(
-        f"wrote {out}  ({adata.n_obs} cells x {adata.n_vars} genes, "
-        f"{int(obs['is_control'].sum())} DMSO, {obs['cell_id'].ne('').sum()} with a DepMap id)"
+        f"wrote {out}  (scanned {scanned:,} cells -> {adata.n_obs} kept x {adata.n_vars} genes, "
+        f"{n_trt} treated, {int(obs['is_control'].sum())} DMSO, "
+        f"{obs['cell_id'].ne('').sum()} with a DepMap id)"
     )
 
 

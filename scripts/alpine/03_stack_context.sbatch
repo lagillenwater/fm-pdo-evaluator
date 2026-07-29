@@ -28,9 +28,12 @@ export HF_HUB_CACHE="/scratch/alpine/$USER/hf"    # cache large downloads on scr
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
 
 # ---- build the context (target drugs + their DMSO_TF controls, capped per cond) ----
+# --max-scan-cells stops after ~18M cells (~1h) instead of the full ~100M scan; Tahoe shards mix
+# drugs so this still samples every condition, just with fewer cells each. Drop it for a full scan.
 python scripts/build_tahoe_context.py \
     --drugs-cid-file data/static/tahoe_target_cids.txt \
     --max-cells-per-cond 200 \
+    --max-scan-cells 18000000 \
     --out tahoe_context.h5ad
 
 # ---- pre-split + emit the query baseline and pert->CID map for 04/05 ----------------
