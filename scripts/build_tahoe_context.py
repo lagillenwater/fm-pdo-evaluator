@@ -226,8 +226,10 @@ def main() -> None:
                     arrs = pfile.read_row_group(rg, columns=["genes", "expressions"])
                     g_col, e_col = arrs.column("genes"), arrs.column("expressions")
                     for i in keep:
-                        g_acc.append(g_col[i].values.to_numpy(zero_copy_only=False))
-                        e_acc.append(e_col[i].values.to_numpy(zero_copy_only=False))
+                        # .copy() so each kept array owns its data; a zero-copy view would pin the
+                        # whole 30 MB row-group buffer alive until flush -> unbounded memory (OOM).
+                        g_acc.append(g_col[i].values.to_numpy(zero_copy_only=False).copy())
+                        e_acc.append(e_col[i].values.to_numpy(zero_copy_only=False).copy())
                         obs_rows.append(
                             (drug_c[i], _ncid(cid_c[i]), cl_c[i], cl2dep.get(str(cl_c[i]), ""),
                              drug_c[i] == DMSO, plate_c[i], samp_c[i],
