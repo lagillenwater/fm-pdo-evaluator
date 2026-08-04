@@ -43,9 +43,13 @@ PERT=$(awk -F'\t' -v i="$TASK" '$1==i{print $2}' context_by_drug/manifest.tsv)
 echo "task $TASK -> pert '$PERT' ($SHARD)"
 
 QUERY="tahoe_query.h5ad"              # cell-line control baselines (written by 03); 50 cells
-CKPT="stack-aligned/bc_large_aligned.ckpt"
-GENELIST="stack-aligned/basecount_1000per_15000max.pkl"
-mkdir -p generated
+# Env-overridable so the base (unaligned) checkpoint can be A/B'd against the aligned one, e.g.:
+#   CKPT=stack-large/bc_large.ckpt GENELIST=stack-large/basecount_1000per_15000max.pkl \
+#   OUTDIR=generated_base sbatch --array=3 scripts/alpine/04_stack_generate.sbatch
+CKPT="${CKPT:-stack-aligned/bc_large_aligned.ckpt}"
+GENELIST="${GENELIST:-stack-aligned/basecount_1000per_15000max.pkl}"
+OUTDIR="${OUTDIR:-generated}"
+mkdir -p "$OUTDIR"
 
 # Stack splits its 512-cell set as n_test = int(512*(1 - prompt_ratio - context_ratio)), rest base.
 # --mode vanilla is REQUIRED: the default (generate) mode ignores context_ratio and instead SCHEDULES
@@ -67,4 +71,4 @@ stack-generation \
     --mode vanilla \
     --prompt-ratio 0.501 \
     --context-ratio 0.4 \
-    --output-dir generated/
+    --output-dir "$OUTDIR"/
