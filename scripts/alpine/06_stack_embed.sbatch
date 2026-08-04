@@ -30,7 +30,12 @@ conda activate stack
 TASK="${SLURM_ARRAY_TASK_ID:-0}"
 case "$TASK" in
   0) CKPT="stack-large/bc_large.ckpt"           ; GENELIST="stack-large/basecount_1000per_15000max.pkl"   ; LABEL="base" ;;
-  1) CKPT="stack-aligned/bc_large_aligned.ckpt" ; GENELIST="stack-aligned/basecount_1000per_15000max.pkl" ; LABEL="aligned" ;;
+  1) # stack-embedding loads into StateICLModel (no gen head), so the aligned checkpoint's head
+     # keys fail the strict load -- strip them once to an encoder-only checkpoint and embed that.
+     SRC="stack-aligned/bc_large_aligned.ckpt"
+     CKPT="stack-aligned/bc_large_aligned_encoder.ckpt"
+     GENELIST="stack-aligned/basecount_1000per_15000max.pkl" ; LABEL="aligned"
+     [[ -f "$CKPT" ]] || python scripts/strip_ckpt_head.py --in "$SRC" --out "$CKPT" ;;
   *) echo "no checkpoint for task $TASK -- nothing to do"; exit 0 ;;
 esac
 echo "task $TASK -> embed query with '$LABEL' ($CKPT)"
