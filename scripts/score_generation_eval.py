@@ -82,9 +82,9 @@ def _make_penalty(name: str) -> object:
     if name == "l2":
         return RidgeCV(alphas=np.logspace(-2, 3, 12))
     if name == "l1":
-        return LassoCV(n_alphas=30, cv=3, max_iter=5000, random_state=0)
+        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)
     if name == "en":
-        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=5000, random_state=0)
+        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)
     raise ValueError(f"unknown penalty {name!r}")
 
 

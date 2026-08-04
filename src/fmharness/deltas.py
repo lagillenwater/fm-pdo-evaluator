@@ -121,13 +121,16 @@ def soragni_pert_map(repo: Path) -> dict[str, str]:
 
 
 def _drug_of(path: Path, gen: ad.AnnData, valid: set[str]) -> str:
-    """Find the L1000 pert_id a generated file corresponds to (Stack writes
+    """Find the pert_id a generated file corresponds to (Stack writes
     ``generated/<pert_id>.h5ad``)."""
     if path.stem in valid:
         return path.stem
-    for tok in path.stem.replace("-", "_").split("_"):
-        if tok in valid:
-            return tok
+    # stack-generation sanitizes spaces in the split name to underscores when it writes the
+    # file, so 'Retinoic_acid.h5ad' is really pert_id 'Retinoic acid' -- undo that first.
+    if path.stem.replace("_", " ") in valid:
+        return path.stem.replace("_", " ")
+    # NB: no single-token fallback -- 'Trametinib_DMSO_TF_solvate_' would wrongly match 'Trametinib'
+    # and mis-attribute the solvate's delta. Fall back to the pert_id in uns instead.
     for key in ("pert_id", "condition", "drug"):
         v = gen.uns.get(key) if key in gen.uns else None
         if isinstance(v, str) and v in valid:
@@ -182,6 +185,12 @@ def build_generated_deltas(
         raise ValueError("no generated files matched a drug; check generated_dir / mapping")
     delta = pd.DataFrame(np.asarray(delta_rows), columns=genes)
     key = pd.DataFrame(keys, columns=pd.Index(["patient", "drug"]))
+    # Guard against two files mapping to the same (line, drug) -- keep the first so the
+    # downstream per-drug regression never gets duplicate rows for a line.
+    dup = key.duplicated(["patient", "drug"]).to_numpy()
+    if dup.any():
+        print(f"  build_generated_deltas: dropped {int(dup.sum())} duplicate (line, drug) rows")
+        delta, key = delta[~dup].reset_index(drop=True), key[~dup].reset_index(drop=True)
     return delta, key
 
 
