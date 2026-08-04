@@ -108,6 +108,19 @@ def _load_pert_map(path: Path) -> dict[str, str]:
     return m
 
 
+def _load_line_matrix(path: Path) -> pd.DataFrame:
+    """Load a per-cell-line feature matrix (index = line id) for the check-2 grid, from a
+    ``.h5ad`` (X + obs_names), ``.parquet``, or ``.csv``. Used to fold a precomputed FM
+    embedding (one vector per line) in head-to-head with expr/pca."""
+    if path.suffix == ".h5ad":
+        a = ad.read_h5ad(path)
+        x = a.X.toarray() if hasattr(a.X, "toarray") else np.asarray(a.X)
+        return pd.DataFrame(x, index=pd.Index([str(o) for o in a.obs_names])).astype(float)
+    df = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path, index_col=0)
+    df.index = pd.Index([str(i) for i in df.index])
+    return df.astype(float)
+
+
 def _repr_by_drug(
     delta: pd.DataFrame, key: pd.DataFrame, genes: pd.Index
 ) -> dict[str, pd.DataFrame]:
@@ -276,6 +289,14 @@ def main() -> None:
         help="TSV 'pert_id<TAB>cid' mapping generated pert_ids to PubChem CID "
         "(context split writes context_by_drug/pert_to_cid.tsv; required with --generated-dir)",
     )
+    ap.add_argument(
+        "--stack-emb",
+        nargs="*",
+        default=None,
+        help="precomputed per-line FM embeddings to add as check-2 representations, each "
+        "'label=path' (path .h5ad/.parquet/.csv, index/obs = cell line id). Repeatable, e.g. "
+        "--stack-emb base=emb_base.h5ad aligned=emb_aligned.h5ad",
+    )
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
 
@@ -430,6 +451,15 @@ def main() -> None:
     }
     for name, (d, kk) in sources.items():
         representations[name] = _repr_by_drug(d, kk, hvg)
+    # precomputed FM embeddings (base / aligned Stack) as drug-independent representations --
+    # one vector per line, scored in the SAME penalized grid as expr/pca (head-to-head). The base
+    # checkpoint has no generation head, so this is how it enters the comparison at all.
+    for spec in args.stack_emb or []:
+        label, _, p = spec.partition("=")
+        if not (label.strip() and p.strip()):
+            ap.error(f"--stack-emb expects 'label=path', got {spec!r}")
+        emb = _load_line_matrix(_rel(repo, p.strip()))
+        representations[label.strip()] = (lambda e: lambda _drug: e)(emb)
     for repr_name, feat in representations.items():
         for pen in penalties:
             preds = _penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
