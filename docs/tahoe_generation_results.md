@@ -106,6 +106,22 @@ not yet the single best drug pick.
 Stack embedding.** Drug main effect (global) reaches ~0.5–0.64 for every representation, but the
 cell-line-specific interaction is ≈0 and non-significant for all except base-embedding ridge.
 
+> **Proposed — MOA-level interpretation of the shortlists.** Selection gap is drug-level and
+> mechanism-blind: representations can post the same ΔAUC while shortlisting mechanistically
+> different drugs, and the top-3 convergence is likely because the true-best drug for most of the
+> 50 lines is one of a few broadly-potent compounds (so every representation picks the same
+> pan-active MOAs — a saturated, low-power discriminator). Two mechanism-aware readouts to add:
+> (1) **MOA hit-rate@k** — does the top-k contain a drug sharing the true-best's pathway/target?
+> Me-too compounds collapse, it is the clinical question (right pathway, not right compound), and
+> the base embedding's positive interaction predicts it should hit more often than PCA at equal
+> ΔAUC. (2) **Stratify the interaction by MOA class** — targeted agents (MEK/PI3K/RTK/CDK…) are
+> line-specific by biology, broad cytotoxics are not, so base's edge should concentrate in
+> targeted MOAs and vanish in cytotoxics; if it does, that is mechanistic corroboration of the
+> 0.119 and ties to the driver-matching story, if not the signal is likely non-biological.
+> Caveats: 50 lines → per-MOA is illustrative not powered; control hit-rate against the pan-active
+> base rate (shuffled shortlist) so saturation does not read as skill. Needs GDSC2
+> `PATHWAY_NAME`/`PUTATIVE_TARGET` joined to the drug table (not in the current context map).
+
 ## Ceilings — the most any predictor can score
 
 | comparison | pairs | overall (global) | cell-line-specific (interaction) | per-drug |
