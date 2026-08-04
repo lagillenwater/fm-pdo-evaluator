@@ -91,9 +91,11 @@ def main() -> None:
         is_ctl = a.obs[ctrl_col].to_numpy().astype(bool)
     else:
         is_ctl = np.array([p.strip().lower() in VEHICLE_NAMES for p in pert])
+    # stack-finetune's drug config identifies controls by a fixed VALUE in the condition column
+    # (control_condition), not a flag -- normalize every control cell's pert_id to "control".
     obs = pd.DataFrame(
         {
-            "pert_id": pert,
+            "pert_id": np.where(is_ctl, "control", pert),
             "is_control": is_ctl,
             "cell_line": a.obs[line_col].astype(str).to_numpy(),
             "dose": a.obs[dose_col].to_numpy() if dose_col else np.full(a.n_obs, np.nan),
