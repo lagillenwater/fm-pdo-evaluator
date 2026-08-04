@@ -67,7 +67,12 @@ perts = sorted(set(obs.loc[~is_ctl, "pert_id"].astype(str)))
 lines = []
 for i, p in enumerate(perts):
     trt = adata[(obs["pert_id"].astype(str) == p).to_numpy()]
-    ad.concat([trt, ctl]).write_h5ad(outdir / f"{i:04d}.h5ad")
+    shard = ad.concat([trt, ctl])
+    # ad.concat drops var columns by default -> re-attach feature_name so stack-generation's
+    # --gene-name-col aligns on symbols instead of falling back to the index; make obs unique.
+    shard.var["feature_name"] = [str(v) for v in shard.var_names]
+    shard.obs_names_make_unique()
+    shard.write_h5ad(outdir / f"{i:04d}.h5ad")
     lines.append(f"{i}\t{p}\t{i:04d}.h5ad")
 (outdir / "manifest.tsv").write_text("\n".join(lines) + "\n")
 
