@@ -248,3 +248,14 @@ docs/results.md
 /l1000_context*.h5ad
 stack_input_gdscv2.h5ad
 stack_input_sarcoma.h5ad
+
+# Generated presentation deck + Office lock files (regenerable; never tracked)
+/harness_overview.pptx
+~$*.pptx
+# The deck itself is a regenerable binary; its build scripts ARE tracked, so
+# `python3 scripts/plot_generation_eval_summary.py && python3 scripts/update_harness_overview_slides.py`
+# reproduces it.
+/docs/prospective_evaluation_harness_overview.pptx
+
+# Claude Code harness config (local tooling preferences, not project code)
+.claude/

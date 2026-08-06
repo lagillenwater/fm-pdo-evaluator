@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# Read-only Alpine access for the harness workflow.
+#
+# Claude Code is granted this script, not raw `ssh`, so the read-only boundary is enforced
+# in version-controlled code rather than in permission-string prefixes (which cannot express
+# "any command except the mutating ones"). Job submission and cancellation are deliberately
+# absent: `sbatch` spends an allocation and `scancel` destroys running work, so both stay
+# human-initiated.
+#
+# Connection comes from the `alpine` host alias in ~/.ssh/config (override with ALPINE_HOST).
+# That alias sets ControlMaster/ControlPersist, so every call here reuses one authenticated
+# socket instead of re-handshaking.
+#
+#   ralpine status                 # is the multiplexed connection up?
+#   ralpine sq                     # squeue for you
+#   ralpine sacct [JOBID]          # accounting for today, or one job
+#   ralpine ls   <remote-path>
+#   ralpine tail <remote-path> [N]
+#   ralpine cat  <remote-path>
+#   ralpine log  [JOB-NAME]        # newest matching file under $REMOTE_ROOT/logs
+#   ralpine rev                    # commit + dirty state of the Alpine checkout
+#   ralpine du   <remote-path>
+#   ralpine run  <cmd> [args...]   # only if <cmd> is in READ_ONLY below
+#   ralpine pull <remote-path> <local-path>
+#
+set -euo pipefail
+
+HOST="${ALPINE_HOST:-alpine}"
+REMOTE_ROOT="${ALPINE_ROOT:-/projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator}"
+
+# Remote binaries this script will invoke. Everything here inspects state; nothing writes,
+# submits, or deletes. Adding to this list is a deliberate, reviewable change.
+READ_ONLY=(
+  squeue sacct sinfo sstat scontrol sshare squota
+  ls cat head tail wc du df stat find grep zgrep realpath readlink file
+  hostname pwd whoami date echo uptime nvidia-smi module quota
+)
+
+die() { echo "ralpine: $*" >&2; exit 1; }
+
+# Reject anything that could chain a second command past the allowlisted one.
+reject_metacharacters() {
+  case "$*" in
+    *';'*|*'&'*|*'|'*|*'>'*|*'<'*|*'`'*|*'$('*)
+      die "shell metacharacters are not allowed (would escape the read-only allowlist): $*" ;;
+  esac
+}
+
+is_read_only() {
+  local candidate="$1" allowed
+  for allowed in "${READ_ONLY[@]}"; do
+    [[ "$candidate" == "$allowed" ]] && return 0
+  done
+  return 1
+}
+
+# Send a command line built entirely from literals in THIS script. Never reachable from
+# user input, so it needs no allowlist check -- `rev` uses it for read-only git subcommands
+# that would be unsafe to permit wholesale (bare `git` would also admit `git pull`).
+remote_fixed() {
+  ssh -o BatchMode=yes "$HOST" "$@"
+}
+
+# Run an allowlisted command remotely. Arguments are passed through a single-quoted,
+# escape-safe rendering so remote word-splitting matches local intent.
+remote() {
+  local cmd="$1"; shift
+  is_read_only "$cmd" || die "'$cmd' is not in the read-only allowlist; run it yourself or add it to READ_ONLY"
+  reject_metacharacters "$cmd" "$@"
+  local rendered="$cmd" arg
+  for arg in "$@"; do
+    rendered+=" $(printf '%q' "$arg")"
+  done
+  ssh -o BatchMode=yes "$HOST" "$rendered"
+}
+
+sub="${1:-}"; [[ $# -gt 0 ]] && shift || true
+
+case "$sub" in
+  status)
+    if ssh -O check "$HOST" 2>/dev/null; then
+      echo "master connection to '$HOST' is up"
+    else
+      echo "no master connection to '$HOST'." >&2
+      echo "open one interactively (this is the step that needs a human):  ssh $HOST" >&2
+      exit 1
+    fi
+    ;;
+  sq)      remote squeue -u "$(whoami)" -o '%.10i %.24j %.8T %.10M %.6D %R' ;;
+  sacct)
+    if [[ $# -gt 0 ]]; then
+      remote sacct -j "$1" --format=JobID,JobName%24,State,Elapsed,MaxRSS,ExitCode
+    else
+      remote sacct --starttime today --format=JobID,JobName%24,State,Elapsed,ExitCode
+    fi
+    ;;
+  ls)      [[ $# -ge 1 ]] || die "usage: ralpine ls <remote-path>";   remote ls -la "$@" ;;
+  cat)     [[ $# -ge 1 ]] || die "usage: ralpine cat <remote-path>";  remote cat "$1" ;;
+  du)      [[ $# -ge 1 ]] || die "usage: ralpine du <remote-path>";   remote du -sh "$@" ;;
+  tail)    [[ $# -ge 1 ]] || die "usage: ralpine tail <remote-path> [lines]"
+           remote tail -n "${2:-80}" "$1" ;;
+  log)
+    # Newest log for a job name (or newest overall), then its tail -- the usual "what happened".
+    pattern="${1:-}"
+    newest=$(remote find "$REMOTE_ROOT/logs" -name "*${pattern}*.out" -printf '%T@ %p\n' \
+             | sort -rn | head -1 | cut -d' ' -f2-) || true
+    [[ -n "${newest:-}" ]] || die "no log matching '${pattern}' under $REMOTE_ROOT/logs"
+    echo "== $newest" >&2
+    remote tail -n 120 "$newest"
+    ;;
+  rev)
+    # Which commit produced the results we are about to pull, and is the tree dirty?
+    # Hardcoded read-only git subcommands; `git` stays out of READ_ONLY so `run git pull`
+    # is still refused.
+    remote_fixed "git -C $(printf '%q' "$REMOTE_ROOT") rev-parse HEAD && \
+                  git -C $(printf '%q' "$REMOTE_ROOT") status --porcelain=v1 -b | head -20"
+    ;;
+  run)     [[ $# -ge 1 ]] || die "usage: ralpine run <cmd> [args...]"; remote "$@" ;;
+  pull)
+    [[ $# -eq 2 ]] || die "usage: ralpine pull <remote-path> <local-path>"
+    mkdir -p "$(dirname "$2")"
+    rsync -avh --progress -e "ssh -o BatchMode=yes" "$HOST:$1" "$2"
+    ;;
+  ""|-h|--help|help)
+    sed -n '/^# Read-only Alpine/,/^#   ralpine pull/p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *) die "unknown subcommand '$sub' (try: ralpine help)" ;;
+esac

@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1820 910">
+  <!-- Generator: Adobe Illustrator 30.0.0, SVG Export Plug-In . SVG Version: 2.1.1 Build 123)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: #5a5a5a;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        fill: none;
+      }
+
+      .st0, .st3 {
+        stroke-width: 1.7px;
+      }
+
+      .st1 {
+        stroke: #ccc;
+        stroke-dasharray: 3 5;
+        stroke-width: 1.2px;
+      }
+
+      .st4, .st5, .st6, .st7 {
+        fill: #9a9a9a;
+      }
+
+      .st8 {
+        fill: #f2f2f2;
+        stroke: #777;
+      }
+
+      .st8, .st9, .st10, .st11, .st12, .st13, .st14 {
+        stroke-width: 1.5px;
+      }
+
+      .st9 {
+        fill: #efe8fb;
+      }
+
+      .st9, .st2 {
+        stroke: #7a57b5;
+      }
+
+      .st15 {
+        fill: #5a5a5a;
+      }
+
+      .st5 {
+        font-size: 9.5px;
+      }
+
+      .st5, .st16, .st6, .st17, .st7, .st18, .st19, .st20 {
+        isolation: isolate;
+      }
+
+      .st5, .st6 {
+        font-family: Helvetica-Oblique, Helvetica;
+        font-style: oblique;
+      }
+
+      .st10 {
+        fill: #fbeaea;
+        stroke: #c0504d;
+        stroke-dasharray: 5 4;
+      }
+
+      .st6, .st7 {
+        font-size: 10px;
+      }
+
+      .st11 {
+        fill: #e4f5f3;
+        stroke: #2e9c8e;
+      }
+
+      .st21 {
+        fill: #7a57b5;
+      }
+
+      .st22, .st13 {
+        fill: #fff;
+      }
+
+      .st12 {
+        fill: #e6f4ea;
+        stroke: #3c8c54;
+      }
+
+      .st17 {
+        font-size: 13.5px;
+      }
+
+      .st17, .st18, .st20 {
+        fill: #2b2b2b;
+      }
+
+      .st17, .st19 {
+        font-family: Helvetica-Bold, Helvetica;
+        font-weight: 700;
+      }
+
+      .st13 {
+        stroke: #333;
+      }
+
+      .st2 {
+        stroke-width: 2.6px;
+      }
+
+      .st14 {
+        fill: #e8f1fb;
+        stroke: #4a78b5;
+      }
+
+      .st7, .st18, .st20 {
+        font-family: Helvetica, Helvetica;
+      }
+
+      .st18 {
+        font-size: 11.5px;
+      }
+
+      .st23 {
+        fill: #fdebd0;
+        stroke: #d9892b;
+        stroke-width: 2.2px;
+      }
+
+      .st19 {
+        fill: #555;
+        font-size: 14px;
+      }
+
+      .st20 {
+        font-size: 17px;
+      }
+
+      .st3 {
+        stroke: #9a9a9a;
+        stroke-dasharray: 6 5;
+      }
+    </style>
+  </defs>
+  <rect class="st22" width="1820" height="910"/>
+  <text class="st20" transform="translate(721.74 30)"><tspan x="0" y="0">fm-pdo-evaluator - transcript -&gt; viability evaluation</tspan></text>
+  <line class="st1" x1="30" y1="300" x2="1790" y2="300"/>
+  <text class="st19" transform="translate(38 74)"><tspan x="0" y="0">TRAIN - fit the supervised readout (cell-line cohort)</tspan></text>
+  <text class="st19" transform="translate(38 340)"><tspan x="0" y="0">TEST - held-out evaluation</tspan></text>
+  <line class="st0" x1="390" y1="150" x2="447.4" y2="187.1"/>
+  <polygon class="st15" points="455 192 445 190.9 449.9 183.3 455 192"/>
+  <line class="st0" x1="390" y1="234" x2="447.4" y2="196.9"/>
+  <polygon class="st15" points="455 192 449.9 200.7 445 193.1 455 192"/>
+  <line class="st0" x1="455" y1="192" x2="511" y2="192"/>
+  <polygon class="st15" points="520 192 511 196.5 511 187.5 520 192"/>
+  <line class="st0" x1="850" y1="192" x2="958" y2="192"/>
+  <polygon class="st15" points="967 192 958 196.5 958 187.5 967 192"/>
+  <line class="st2" x1="1085" y1="221" x2="1085" y2="509"/>
+  <polygon class="st21" points="1085 518 1080.5 509 1089.5 509 1085 518"/>
+  <line class="st0" x1="390" y1="452" x2="439.7" y2="519.7"/>
+  <polygon class="st15" points="445 527 436 522.4 443.3 517.1 445 527"/>
+  <line class="st0" x1="390" y1="602" x2="439.7" y2="534.3"/>
+  <polygon class="st15" points="445 527 443.3 536.9 436 531.6 445 527"/>
+  <line class="st0" x1="445" y1="527" x2="486.1" y2="408.5"/>
+  <polygon class="st15" points="489 400 490.3 410 481.8 407 489 400"/>
+  <line class="st0" x1="781" y1="400" x2="875.3" y2="552.3"/>
+  <polygon class="st15" points="880 560 871.4 554.7 879.1 550 880 560"/>
+  <line class="st0" x1="445" y1="527" x2="481.3" y2="504.7"/>
+  <polygon class="st15" points="489 500 483.7 508.5 479 500.9 489 500"/>
+  <line class="st0" x1="781" y1="500" x2="872.3" y2="555.3"/>
+  <polygon class="st15" points="880 560 870 559.2 874.6 551.5 880 560"/>
+  <line class="st0" x1="445" y1="527" x2="484.4" y2="592.3"/>
+  <polygon class="st15" points="489 600 480.5 594.6 488.2 590 489 600"/>
+  <line class="st0" x1="781" y1="600" x2="871.7" y2="563.4"/>
+  <polygon class="st15" points="880 560 873.3 567.5 870 559.2 880 560"/>
+  <line class="st0" x1="445" y1="527" x2="486.9" y2="703.2"/>
+  <polygon class="st15" points="489 712 482.5 704.3 491.3 702.2 489 712"/>
+  <line class="st0" x1="781" y1="712" x2="875.1" y2="567.5"/>
+  <polygon class="st15" points="880 560 878.9 570 871.3 565.1 880 560"/>
+  <line class="st0" x1="880" y1="560" x2="951" y2="560"/>
+  <polygon class="st15" points="960 560 951 564.5 951 555.5 960 560"/>
+  <line class="st0" x1="1210" y1="560" x2="1270.4" y2="459.7"/>
+  <polygon class="st15" points="1275 452 1274.2 462 1266.5 457.4 1275 452"/>
+  <line class="st0" x1="1400" y1="476" x2="1400" y2="579"/>
+  <polygon class="st15" points="1400 588 1395.5 579 1404.5 579 1400 588"/>
+  <line class="st3" x1="1400" y1="781" x2="1400" y2="705"/>
+  <polygon class="st4" points="1400 696 1404.5 705 1395.5 705 1400 696"/>
+  <line class="st3" x1="1564" y1="432" x2="1527.1" y2="588.2"/>
+  <polygon class="st4" points="1525 597 1522.7 587.2 1531.4 589.3 1525 597"/>
+  <line class="st3" x1="1564" y1="556" x2="1529.3" y2="619.1"/>
+  <polygon class="st4" points="1525 627 1525.4 616.9 1533.3 621.3 1525 627"/>
+  <line class="st3" x1="1564" y1="680" x2="1532.8" y2="661.6"/>
+  <polygon class="st4" points="1525 657 1535 657.7 1530.5 665.4 1525 657"/>
+  <line class="st3" x1="1564" y1="804" x2="1527.8" y2="695.5"/>
+  <polygon class="st4" points="1525 687 1532.1 694.1 1523.6 697 1525 687"/>
+  <rect class="st14" x="90" y="119" width="300" height="62" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(166.49 139)"><tspan x="0" y="0">Real perturbation delta</tspan></text>
+    <text class="st18" transform="translate(161.79 154)"><tspan x="0" y="0">L1000 / Tahoe treated - DMSO</tspan></text>
+    <text class="st18" transform="translate(214.12 169)"><tspan x="0" y="0">(cell lines)</tspan></text>
+  </g>
+  <rect class="st8" x="90" y="207" width="300" height="54" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(186.73 230.5)"><tspan x="0" y="0">Training viability</tspan></text>
+    <text class="st18" transform="translate(162.99 245.5)"><tspan x="0" y="0">GDSC2 AUC (cell-line screen)</tspan></text>
+  </g>
+  <rect class="st9" x="520" y="153" width="330" height="78" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(612.61 181)"><tspan x="0" y="0">Fit supervised readout</tspan></text>
+    <text class="st18" transform="translate(628.43 196)"><tspan x="0" y="0">szalai: Ridge L2 linear</tspan></text>
+    <text class="st18" transform="translate(594.06 211)"><tspan x="0" y="0">xgboost: elastic-net + boosted trees</tspan></text>
+  </g>
+  <rect class="st9" x="967" y="163" width="236" height="58" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1030.62 188.5)"><tspan x="0" y="0">FROZEN readout</tspan></text>
+    <text class="st18" transform="translate(1039.14 203.5)"><tspan x="0" y="0">delta -&gt; sensitivity</tspan></text>
+  </g>
+  <rect class="st14" x="90" y="421" width="300" height="62" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(163.49 441)"><tspan x="0" y="0">Held-out query baseline</tspan></text>
+    <text class="st18" transform="translate(180.87 456)"><tspan x="0" y="0">patient tumor / held-out</tspan></text>
+    <text class="st18" transform="translate(173.87 471)"><tspan x="0" y="0">cell-line DMSO (log-CPM)</tspan></text>
+  </g>
+  <rect class="st14" x="90" y="575" width="300" height="54" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(173.99 598.5)"><tspan x="0" y="0">Perturbation context</tspan></text>
+    <text class="st18" transform="translate(167.46 613.5)"><tspan x="0" y="0">drug-treated cells (for Stack)</tspan></text>
+  </g>
+  <rect class="st12" x="489" y="369" width="292" height="62" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(588.13 389)"><tspan x="0" y="0">additive </tspan></text>
+    <text class="st18" transform="translate(564.22 404)"><tspan x="0" y="0">each drug&apos;s mean real delta</tspan></text>
+    <text class="st18" transform="translate(564.04 419)"><tspan x="0" y="0">no patient x drug interaction</tspan></text>
+  </g>
+  <rect class="st12" x="489" y="469" width="292" height="62" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(574.86 489)"><tspan x="0" y="0">learned PCA / NMF</tspan></text>
+    <text class="st18" transform="translate(552.7 504)"><tspan x="0" y="0">baseline -&gt; delta residual (ridge)</tspan></text>
+    <text class="st18" transform="translate(555.26 519)"><tspan x="0" y="0">drug-mean + sample correction</tspan></text>
+  </g>
+  <rect class="st12" x="489" y="569" width="292" height="62" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(619.25 589)"><tspan x="0" y="0">k-NN</tspan></text>
+    <text class="st18" transform="translate(566.28 604)"><tspan x="0" y="0">mean real delta of nearest-</tspan></text>
+    <text class="st18" transform="translate(578.11 619)"><tspan x="0" y="0">baseline lines (cosine)</tspan></text>
+  </g>
+  <rect class="st23" x="489" y="679" width="292" height="66" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(553.61 701)"><tspan x="0" y="0">Stack-Aligned generation</tspan></text>
+    <text class="st18" transform="translate(536.55 716)"><tspan x="0" y="0">in-context generated treated - baseline</tspan></text>
+    <text/>
+  </g>
+  <rect class="st9" x="960" y="518" width="250" height="84" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1039.62 541.5)"><tspan x="0" y="0">Apply readout</tspan></text>
+    <text class="st18" transform="translate(1039.14 556.5)"><tspan x="0" y="0">delta -&gt; sensitivity</tspan></text>
+    <text class="st18" transform="translate(1027.79 571.5)"><tspan x="0" y="0">frozen szalai / xgboost</tspan></text>
+    <text class="st18" transform="translate(1040.74 586.5)"><tspan x="0" y="0">+ hallmark (fixed)</tspan></text>
+  </g>
+  <rect class="st13" x="1275" y="428" width="250" height="48" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1334.35 448.5)"><tspan x="0" y="0">Predicted sensitivity</tspan></text>
+    <text class="st18" transform="translate(1353.02 463.5)"><tspan x="0" y="0">per (sample, drug)</tspan></text>
+  </g>
+  <rect class="st11" x="1275" y="588" width="250" height="108" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1376.37 616)"><tspan x="0" y="0">Metrics</tspan></text>
+    <text class="st18" transform="translate(1350.14 631)"><tspan x="0" y="0">global / interaction /</tspan></text>
+    <text class="st18" transform="translate(1343.75 646)"><tspan x="0" y="0">within-drug Spearman</tspan></text>
+    <text class="st18" transform="translate(1346.55 661)"><tspan x="0" y="0">best drug rankings @k</tspan></text>
+    <text class="st18" transform="translate(1321.06 676)"><tspan x="0" y="0">delta-fidelity Pearson </tspan></text>
+  </g>
+  <rect class="st8" x="1245" y="781" width="310" height="54" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1326.99 804.5)"><tspan x="0" y="0">Test viability (held out)</tspan></text>
+    <text class="st18" transform="translate(1282.38 819.5)"><tspan x="0" y="0">Soragni organoid AUC / held-out GDSC2 AUC</tspan></text>
+  </g>
+  <rect class="st10" x="1564" y="403" width="232" height="58" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1627.87 428.5)"><tspan x="0" y="0">negative control</tspan></text>
+    <text class="st18" transform="translate(1626.63 443.5)"><tspan x="0" y="0">within-drug perm null</tspan></text>
+  </g>
+  <rect class="st10" x="1564" y="527" width="232" height="58" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1627.87 552.5)"><tspan x="0" y="0">negative control</tspan></text>
+    <text class="st18" transform="translate(1636.53 567.5)"><tspan x="0" y="0">random gene-set</tspan></text>
+  </g>
+  <rect class="st10" x="1564" y="651" width="232" height="58" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1629.74 676.5)"><tspan x="0" y="0">positive control</tspan></text>
+    <text class="st18" transform="translate(1604.24 691.5)"><tspan x="0" y="0">planted interaction, recovered</tspan></text>
+  </g>
+  <rect class="st10" x="1564" y="775" width="232" height="58" rx="9" ry="9"/>
+  <g class="st16">
+    <text class="st17" transform="translate(1648.49 800.5)"><tspan x="0" y="0">validation</tspan></text>
+    <text class="st18" transform="translate(1614.46 815.5)"><tspan x="0" y="0">readout gate on real delta</tspan></text>
+  </g>
+  <text class="st6" transform="translate(576.34 250)"><tspan x="0" y="0">hallmark: unsupervised signature -- skips training</tspan></text>
+  <text class="st6" transform="translate(437.96 356)"><tspan x="0" y="0">additive / learned / k-NN reuse the train-cohort real delta; Stack generates from the query</tspan></text>
+  <text class="st7" transform="translate(1412 748)"><tspan x="0" y="0">measured y</tspan></text>
+  <text class="st5" transform="translate(1588.13 852)"><tspan x="0" y="0">null (neg) / recovery (pos) / gate (validation)</tspan></text>
+</svg>

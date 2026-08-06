@@ -32,6 +32,7 @@ from typing import cast
 import anndata as ad
 import numpy as np
 import pandas as pd
+from scipy import sparse
 from sklearn.decomposition import NMF, PCA
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
@@ -120,13 +121,16 @@ def soragni_pert_map(repo: Path) -> dict[str, str]:
 
 
 def _drug_of(path: Path, gen: ad.AnnData, valid: set[str]) -> str:
-    """Find the L1000 pert_id a generated file corresponds to (Stack writes
+    """Find the pert_id a generated file corresponds to (Stack writes
     ``generated/<pert_id>.h5ad``)."""
     if path.stem in valid:
         return path.stem
-    for tok in path.stem.replace("-", "_").split("_"):
-        if tok in valid:
-            return tok
+    # stack-generation sanitizes spaces in the split name to underscores when it writes the
+    # file, so 'Retinoic_acid.h5ad' is really pert_id 'Retinoic acid' -- undo that first.
+    if path.stem.replace("_", " ") in valid:
+        return path.stem.replace("_", " ")
+    # NB: no single-token fallback -- 'Trametinib_DMSO_TF_solvate_' would wrongly match 'Trametinib'
+    # and mis-attribute the solvate's delta. Fall back to the pert_id in uns instead.
     for key in ("pert_id", "condition", "drug"):
         v = gen.uns.get(key) if key in gen.uns else None
         if isinstance(v, str) and v in valid:
@@ -181,6 +185,12 @@ def build_generated_deltas(
         raise ValueError("no generated files matched a drug; check generated_dir / mapping")
     delta = pd.DataFrame(np.asarray(delta_rows), columns=genes)
     key = pd.DataFrame(keys, columns=pd.Index(["patient", "drug"]))
+    # Guard against two files mapping to the same (line, drug) -- keep the first so the
+    # downstream per-drug regression never gets duplicate rows for a line.
+    dup = key.duplicated(["patient", "drug"]).to_numpy()
+    if dup.any():
+        print(f"  build_generated_deltas: dropped {int(dup.sum())} duplicate (line, drug) rows")
+        delta, key = delta[~dup].reset_index(drop=True), key[~dup].reset_index(drop=True)
     return delta, key
 
 
@@ -291,6 +301,82 @@ def build_learned_deltas(
             "drug": np.repeat(drugs, n_p),
         }
     )
+    return delta, key
+
+
+def build_knn_deltas(
+    train_base: pd.DataFrame,
+    train_delta: pd.DataFrame,
+    train_key: pd.DataFrame,
+    target_base: pd.DataFrame,
+    patients: list[str],
+    *,
+    k: int = 10,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """k-NN delta predictor -- the cell-specific baseline matched to Stack's information.
+
+    For each (target sample, drug) the predicted delta is the mean *real* delta of the
+    ``k`` training cell lines whose baseline expression is closest to the target's
+    baseline, among the lines treated with that drug. This is the transparent analogue of
+    Stack's in-context generation: both see the query baseline and the drug's treated
+    examples, but k-NN simply averages the nearest examples' responses instead of
+    generating one. It sits between the additive floor (which ignores the baseline) and
+    Stack: the query baseline selects *which* responses to average, so -- unlike the
+    drug-agnostic linear map -- it can express cell x drug interaction.
+
+    Baselines are compared on standardized, L2-normalized shared-gene profiles (cosine
+    similarity, scale-free). Returns ``(delta[pairs x genes], key[patient, drug])`` in the
+    same shape as the other delta sources.
+    """
+    g = sorted(
+        {str(c) for c in train_base.columns}
+        & {str(c) for c in train_delta.columns}
+        & {str(c) for c in target_base.columns}
+    )
+    if not g:
+        raise ValueError("no shared genes among train_base, train_delta, target_base")
+
+    sc = StandardScaler().fit(train_base[g].to_numpy(dtype=np.float64))
+
+    def _emb(frame: pd.DataFrame) -> np.ndarray:
+        z = sc.transform(np.nan_to_num(frame.reindex(columns=g).to_numpy(dtype=np.float64)))
+        norm = np.linalg.norm(z, axis=1, keepdims=True)
+        norm[norm == 0.0] = 1.0
+        return z / norm
+
+    pats = [str(p) for p in patients]
+    have = [p for p in pats if p in {str(i) for i in target_base.index}]
+    if not have:
+        raise ValueError("no target samples have a usable baseline")
+    q_emb = _emb(target_base.loc[have])  # (n_have x dim), unit vectors
+
+    line_ids = [str(i) for i in train_base.index]
+    line_emb = _emb(train_base)  # (n_lines x dim)
+    line_pos = {lid: i for i, lid in enumerate(line_ids)}
+
+    tk_drug = train_key["drug"].astype(str).to_numpy()
+    row_line = pd.Series(train_key["patient"].astype(str).to_numpy()).map(line_pos).to_numpy()
+    td = train_delta[g].to_numpy(dtype=np.float64)
+
+    # one pass per drug (drugs are few); the query x line neighbor search is vectorized.
+    delta_blocks: list[np.ndarray] = []
+    keys: list[tuple[str, str]] = []
+    for d in sorted(set(tk_drug)):
+        rows = np.flatnonzero(tk_drug == d)
+        li = row_line[rows]
+        keep = ~pd.isna(li)
+        rows, li = rows[keep], li[keep].astype(int)
+        if rows.size == 0:
+            continue
+        sims = q_emb @ line_emb[li].T  # (n_have x n_d) cosine, unit vectors
+        kk = min(k, rows.size)
+        nn = np.argpartition(-sims, kk - 1, axis=1)[:, :kk]  # k nearest lines per target
+        delta_blocks.append(td[rows][nn].mean(axis=1))  # (n_have x genes)
+        keys.extend((p, d) for p in have)
+    if not delta_blocks:
+        raise ValueError("no drug had a training line with a usable baseline")
+    delta = pd.DataFrame(np.vstack(delta_blocks), columns=pd.Index(g))
+    key = pd.DataFrame(keys, columns=pd.Index(["patient", "drug"]))
     return delta, key
 
 
@@ -412,3 +498,135 @@ def build_l1000_gdsc_pairs(
     base = base.loc[:, [str(col) != "" for col in base.columns]]
     base = base.loc[:, ~pd.Index(base.columns).duplicated()]
     return delta, key, cast("pd.DataFrame", dg), base
+
+
+def _group_mean(x: sparse.csr_matrix, codes: np.ndarray, n_groups: int) -> np.ndarray:
+    """Per-group mean of the rows of ``x`` (cells x genes, CSR), vectorized via an indicator
+    matmul -- no per-group loop and no densifying the full cell matrix.
+
+    ``codes`` are integer group ids in ``[0, n_groups)`` aligned to the rows of ``x``.
+    """
+    n = cast("tuple[int, int]", x.shape)[0]
+    g = sparse.csr_matrix(
+        (np.ones(n, dtype=np.float64), (codes, np.arange(n))),
+        shape=(n_groups, n),
+    )
+    sums = dense(g @ x)  # (n_groups x genes)
+    counts = np.asarray(g.sum(axis=1)).ravel()
+    counts[counts == 0] = 1.0
+    return sums / counts[:, None]
+
+
+def build_tahoe_deltas(
+    adata: ad.AnnData,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Real pseudobulk treated-minus-DMSO deltas + per-line baseline from a Tahoe context.
+
+    Aggregates the single cells of a ``build_tahoe_context`` AnnData to a pseudobulk profile
+    per (cell line, drug) treated condition and per (cell line) DMSO control, then returns the
+    log-fold-change ``delta = logcpm(treated) - logcpm(control)`` over the gene panel. This is
+    the in-domain "truth" for generation quality (compare a generated delta to it) and the
+    real-delta source the additive / k-NN baselines consume -- the Tahoe analogue of
+    ``build_l1000_gdsc_pairs``, on the same ``logcpm`` log-fold-change scale so any source is
+    comparable.
+
+    The cell line is keyed by its DepMap id (obs ``cell_id``; falls back to ``cell_line_id``
+    when empty), the drug by PubChem CID (obs ``pubchem_cid``) -- the canonical cross-dataset
+    keys the viability join and the designs use. Returns ``(delta[pairs x genes], key[patient,
+    drug], baseline[line x genes])``; ``baseline`` is the raw pseudobulk mean (counts), since
+    the delta predictors expect a baseline expression profile, not a log fold-change.
+    """
+    obs = adata.obs
+    genes = pd.Index([str(v) for v in adata.var_names])
+    cid = obs["cell_id"].astype(str).to_numpy()
+    cln = obs["cell_line_id"].astype(str).to_numpy()
+    patient = np.where((cid != "") & (cid != "nan"), cid, cln)
+    drug = obs["pubchem_cid"].astype(str).to_numpy()
+    is_ctl = obs["is_control"].to_numpy(dtype=bool)
+    x = adata.X
+    xc = cast(
+        "sparse.csr_matrix",
+        x if sparse.issparse(x) else sparse.csr_matrix(np.asarray(x, dtype=np.float64)),
+    )
+
+    ctl = np.flatnonzero(is_ctl)
+    trt = np.flatnonzero(~is_ctl)
+    if ctl.size == 0:
+        raise ValueError("no DMSO control cells (is_control) in the Tahoe context")
+    if trt.size == 0:
+        raise ValueError("no treated cells in the Tahoe context")
+
+    # control pseudobulk per cell line (drug-agnostic).
+    ccodes, cuniq = pd.factorize(patient[ctl])
+    base = pd.DataFrame(
+        _group_mean(xc[ctl], ccodes, len(cuniq)),
+        index=pd.Index([str(u) for u in cuniq]),
+        columns=genes,
+    )
+
+    # treated pseudobulk per (cell line, drug); a NUL-joined key keeps the pair atomic.
+    tkey = pd.Series(patient[trt]).str.cat(pd.Series(drug[trt]), sep="\x1f").to_numpy()
+    tcodes, tuniq = pd.factorize(tkey)
+    tmean = _group_mean(xc[trt], tcodes, len(tuniq))
+    parts = pd.Series(tuniq).str.split("\x1f", expand=True)
+    tpat, tdrug = parts[0].to_numpy(), parts[1].to_numpy()
+
+    # log fold-change vs each line's own DMSO baseline; drop pairs with no baseline.
+    base_lc = logcpm(base)
+    trt_lc = logcpm(pd.DataFrame(tmean, index=pd.Index(tpat), columns=genes))
+    keep = np.asarray(pd.Index(tpat).isin(base_lc.index))
+    if not keep.any():
+        raise ValueError("no treated (line, drug) pair has a matching DMSO baseline")
+    delta = pd.DataFrame(
+        trt_lc.to_numpy()[keep] - base_lc.reindex(tpat[keep]).to_numpy(),
+        columns=genes,
+    )
+    key = pd.DataFrame({"patient": tpat[keep], "drug": tdrug[keep]})
+    return delta, key, base
+
+
+def pseudobulk_de_to_deltas(
+    de: pd.DataFrame,
+    name_to_cid: dict[str, str],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Real per-(line, drug) deltas + per-line baseline from Tahoe's pseudobulk DESeq2 table.
+
+    The streaming-free shortcut to ``build_tahoe_deltas``: Tahoe ships a
+    ``pseudobulk_differential_expression`` table (per cell line x drug x dose x plate, per gene)
+    carrying ``log2FoldChange`` (treated vs DMSO) and ``baseMean``. This aggregates it to the same
+    ``(delta, key, baseline)`` contract -- delta = mean ``log2FoldChange`` per (DepMap line, drug)
+    pooled over dose and plate; baseline = mean ``baseMean`` per line (a proxy for the line's
+    expression profile, used only to choose k-NN neighbors). The drug is re-keyed from Tahoe's
+    name to its PubChem CID via ``name_to_cid`` (names without a CID are dropped). The log2 scale
+    and the baseMean proxy are harmless downstream: delta_fidelity is correlation-based and the
+    readouts z-score the delta.
+
+    ``de`` needs columns ``gene_name, log2FoldChange, baseMean, Cell_ID_DepMap, drug``. Returns
+    ``(delta[pairs x genes], key[patient, drug], baseline[line x genes])``.
+    """
+    d = de.loc[:, ["gene_name", "log2FoldChange", "baseMean", "Cell_ID_DepMap", "drug"]].copy()
+    d["drug"] = d["drug"].astype(str).map(name_to_cid)
+    d["patient"] = d["Cell_ID_DepMap"].astype(str)
+    d = d[d["drug"].notna()]
+    if d.empty:
+        raise ValueError("no pseudobulk rows mapped to a target drug CID")
+
+    # mean over dose/plate -> one delta per (line, drug); baseMean -> one baseline per line.
+    delta_wide = d.pivot_table(
+        index=["patient", "drug"], columns="gene_name", values="log2FoldChange", aggfunc="mean"
+    ).fillna(0.0)
+    base = d.pivot_table(
+        index="patient", columns="gene_name", values="baseMean", aggfunc="mean"
+    ).fillna(0.0)
+
+    key = pd.DataFrame(
+        {
+            "patient": [str(p) for p in delta_wide.index.get_level_values(0)],
+            "drug": [str(x) for x in delta_wide.index.get_level_values(1)],
+        }
+    )
+    delta = delta_wide.reset_index(drop=True)
+    delta.columns = pd.Index([str(c) for c in delta.columns])
+    base.columns = pd.Index([str(c) for c in base.columns])
+    base.index = pd.Index([str(i) for i in base.index])
+    return delta, key, base

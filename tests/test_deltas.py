@@ -8,12 +8,15 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-from fmharness.l1000 import (
+from fmharness.deltas import (
     build_additive_deltas,
     build_generated_deltas,
+    build_knn_deltas,
     build_learned_deltas,
+    build_tahoe_deltas,
     drug_pert_maps,
     logcpm,
+    pseudobulk_de_to_deltas,
 )
 
 
@@ -129,3 +132,109 @@ def test_build_learned_deltas_is_drug_mean_plus_organoid_correction() -> None:
     o1 = delta[(key["patient"] == "o1") & (key["drug"] == "d1")].to_numpy()[0]
     o2 = delta[(key["patient"] == "o2") & (key["drug"] == "d1")].to_numpy()[0]
     assert not np.allclose(o1, o2)
+
+
+def test_build_knn_deltas_picks_nearest_line() -> None:
+    # 3 training lines with orthogonal baselines; each query points along one line's
+    # direction, so its k=1 neighbor (per drug) is that line -> it inherits that line's
+    # real delta. This is the cell-specific behavior the drug-agnostic map lacked.
+    genes = pd.Index(["A", "B", "C"])
+    train_base = pd.DataFrame(
+        [[10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]],
+        index=pd.Index(["L1", "L2", "L3"]),
+        columns=genes,
+    )
+    keys = [(c, d) for d in ("d1", "d2") for c in ("L1", "L2", "L3")]
+    train_key = pd.DataFrame(keys, columns=pd.Index(["patient", "drug"]))
+    per_line = {"L1": [1.0, 0.0, 0.0], "L2": [0.0, 1.0, 0.0], "L3": [0.0, 0.0, 1.0]}
+    train_delta = pd.DataFrame([per_line[c] for c, _ in keys], columns=genes)
+    # o1 aligns with L2, o2 with L1
+    target_base = pd.DataFrame(
+        [[0.0, 9.0, 1.0], [9.0, 1.0, 0.0]], index=pd.Index(["o1", "o2"]), columns=genes
+    )
+
+    delta, key = build_knn_deltas(
+        train_base, train_delta, train_key, target_base, ["o1", "o2"], k=1
+    )
+    assert delta.shape == (2 * 2, 3)  # 2 drugs x 2 targets
+    assert list(delta.columns) == list(genes)
+    for d in ("d1", "d2"):
+        o1 = delta[(key["patient"] == "o1") & (key["drug"] == d)].to_numpy()[0]
+        o2 = delta[(key["patient"] == "o2") & (key["drug"] == d)].to_numpy()[0]
+        assert np.allclose(o1, [0.0, 1.0, 0.0])  # nearest L2 -> L2's delta
+        assert np.allclose(o2, [1.0, 0.0, 0.0])  # nearest L1 -> L1's delta
+
+    # determinism: identical inputs -> identical output
+    d2, _ = build_knn_deltas(train_base, train_delta, train_key, target_base, ["o1", "o2"], k=1)
+    assert np.allclose(delta.to_numpy(), d2.to_numpy())
+
+
+def test_build_tahoe_deltas_pseudobulks_and_logfc() -> None:
+    # two cell lines, one drug (CID 100) + DMSO, a few single cells each. The real delta is
+    # the log fold-change of the (line, drug) treated pseudobulk vs the line's DMSO pseudobulk.
+    genes = ["A", "B", "C"]
+    x = np.array(
+        [
+            [10.0, 0.0, 0.0],  # ACH-1 DMSO
+            [20.0, 0.0, 0.0],  # ACH-1 DMSO   -> control mean [15, 0, 0]
+            [0.0, 10.0, 0.0],  # ACH-1 CID100
+            [0.0, 30.0, 0.0],  # ACH-1 CID100 -> treated mean [0, 20, 0]
+            [0.0, 0.0, 10.0],  # ACH-2 DMSO   -> control mean [0, 0, 10]; cell_id empty
+            [5.0, 5.0, 0.0],  # ACH-2 CID100 -> treated mean [5, 5, 0]
+        ],
+        dtype=np.float32,
+    )
+    obs = pd.DataFrame(
+        {
+            "cell_id": ["ACH-1", "ACH-1", "ACH-1", "ACH-1", "", ""],  # last line: no DepMap id
+            "cell_line_id": ["CVCL_1", "CVCL_1", "CVCL_1", "CVCL_1", "CVCL_2", "CVCL_2"],
+            "pubchem_cid": ["0", "0", "100", "100", "0", "100"],
+            "is_control": [True, True, False, False, True, False],
+        }
+    )
+    adata = ad.AnnData(X=x, obs=obs)
+    adata.var_names = genes
+
+    delta, key, base = build_tahoe_deltas(adata)
+
+    # baseline = raw pseudobulk mean per line; ACH-2 falls back to its cell_line_id.
+    assert set(base.index) == {"ACH-1", "CVCL_2"}
+    assert np.allclose(base.loc["ACH-1"].to_numpy(), [15.0, 0.0, 0.0])
+    assert np.allclose(base.loc["CVCL_2"].to_numpy(), [0.0, 0.0, 10.0])
+
+    # one row per (line, drug), drug keyed by PubChem CID.
+    assert set(map(tuple, key.to_numpy())) == {("ACH-1", "100"), ("CVCL_2", "100")}
+    assert list(delta.columns) == genes
+
+    # delta is logcpm(treated) - logcpm(line's own DMSO), computed via the shared logcpm.
+    idx = pd.Index(["ACH-1", "CVCL_2"])
+    base_lc = logcpm(pd.DataFrame([[15.0, 0, 0], [0, 0, 10.0]], index=idx, columns=pd.Index(genes)))
+    trt_lc = logcpm(pd.DataFrame([[0, 20.0, 0], [5.0, 5.0, 0]], index=idx, columns=pd.Index(genes)))
+    for p in ("ACH-1", "CVCL_2"):
+        row = delta[key["patient"].to_numpy() == p].to_numpy()[0]
+        assert np.allclose(row, trt_lc.loc[p].to_numpy() - base_lc.loc[p].to_numpy())
+
+
+def test_pseudobulk_de_to_deltas_pools_doses_and_rekeys() -> None:
+    # ACH-1 has two doses (logFC A: 1,3 -> mean 2; B: -1,-3 -> mean -2), ACH-2 one; the
+    # 'other' drug row maps to no CID and is dropped from both the delta and the baseline.
+    de = pd.DataFrame(
+        {
+            "gene_name": ["A", "B", "A", "B", "A", "B", "A"],
+            "log2FoldChange": [1.0, -1.0, 3.0, -3.0, 2.0, 0.0, 9.0],
+            "baseMean": [10.0, 20.0, 10.0, 20.0, 5.0, 5.0, 1.0],
+            "Cell_ID_DepMap": ["ACH-1", "ACH-1", "ACH-1", "ACH-1", "ACH-2", "ACH-2", "ACH-2"],
+            "drug": ["drugX", "drugX", "drugX", "drugX", "drugX", "drugX", "other"],
+        }
+    )
+    delta, key, base = pseudobulk_de_to_deltas(de, {"drugX": "555"})
+
+    assert set(map(tuple, key.to_numpy())) == {("ACH-1", "555"), ("ACH-2", "555")}
+    assert list(delta.columns) == ["A", "B"]
+    i1 = key.index[(key["patient"] == "ACH-1") & (key["drug"] == "555")][0]
+    assert np.allclose(delta.loc[i1].to_numpy(), [2.0, -2.0])  # pooled over the two doses
+    i2 = key.index[(key["patient"] == "ACH-2") & (key["drug"] == "555")][0]
+    assert np.allclose(delta.loc[i2].to_numpy(), [2.0, 0.0])  # 'other'-drug logFC 9.0 excluded
+    # baseline = mean baseMean per line per gene; the dropped 'other' row does not affect ACH-2/A
+    assert np.allclose(base.loc["ACH-1"].to_numpy(), [10.0, 20.0])
+    assert np.allclose(base.loc["ACH-2"].to_numpy(), [5.0, 5.0])
