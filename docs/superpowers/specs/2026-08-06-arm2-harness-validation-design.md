@@ -240,7 +240,7 @@ table (`docs/tahoe_generation_results.md:78-88`), or every difference is explain
 justified in writing. A changed number is either a bug or a documented fix -- it is never
 left unexplained.
 
-### Phase 3 — calibrate the harness (Alpine amilan)
+### Phase 3 — calibrate the harness (Alpine acpu)
 
 1. Wire `plant_interaction` into the Arm-2 driver as a synthetic-label mode.
 2. Effect-size sweep on the real n=50 Tahoe design -> recovery curve (planted interaction ->
@@ -259,7 +259,7 @@ alongside it.
 detected that effect and every number in it is noise. Record it and proceed to Phase 4, where
 n is larger.
 
-### Phase 4 — re-anchor at n~500 (Alpine amilan)
+### Phase 4 — re-anchor at n~500 (Alpine acpu)
 
 1. Wire `load_gdsc2_sarcoma(sarcoma_only=False)` -- the full DepMap ∩ GDSC2 panel from local
    raw counts -- as an Arm-2 cohort.
@@ -282,7 +282,7 @@ table next to the n~500 table.
 **Acceptance:** +0.119 restated as an n~500 measurement against the 0.466 ceiling, with the
 lineage one-hot in the same table.
 
-### Phase 6 — freeze, then full CV (Alpine amilan)
+### Phase 6 — freeze, then full CV (Alpine acpu)
 
 Runs once, on the settled configuration. This is the only phase that pays the ~100x.
 
@@ -307,7 +307,7 @@ work. The loop for every Alpine phase is therefore:
 Requires an open ControlMaster socket -- `ssh alpine` once per session; `ralpine status`
 reports it down otherwise.
 
-Partitions: `amilan` (CPU) for Phases 3, 4, 6. `aa100` (GPU) for Phases 1 and 5. The existing
+Partitions: `acpu` (CPU) for Phases 3, 4, 6. `aa100` (GPU) for Phases 1 and 5. The existing
 sbatch files all request `aa100`; the CPU phases must not inherit that.
 
 ## Out of scope
