@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=stack-finetune
 #SBATCH --partition=aa100
-#SBATCH --qos=gpu-normal
+#SBATCH --qos=gpu-testing
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --gres=gpu:1
-#SBATCH --time=24:00:00              # training run; raise/lower once epoch time is known
+#SBATCH --time=1:00:00              # training run; raise/lower once epoch time is known
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
@@ -25,7 +25,6 @@ set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
-module purge
 module load anaconda
 conda activate stack
 
@@ -41,7 +40,7 @@ stack-finetune \
     --replacement_ratio 0.1 \
     --batch_size 8 \
     --learning_rate 1e-4 \
-    --max_epochs 20 \
+    --max_epochs 1 \
     --precision bf16-mixed \
     --gpus 1 \
     --num_workers 8 \
