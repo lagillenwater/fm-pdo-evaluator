@@ -12,7 +12,7 @@ per-line control baseline. Every delta source is judged on equal footing:
   is merely smooth). Ceiling = delta reproducibility.
 - **Gate:** the real delta scored through Hallmark vs random gene sets — is the readout even
   powered on this data?
-- **Check 2 (end-to-end vs GDSC2 AUC, leave-cell-line-out):** fixed signature readouts, and a
+- **Check 2 (end-to-end vs GDSC2 AUC, grouped 5-fold by cell line):** fixed signature readouts, and a
   representation-controlled penalized grid (expr + every delta source × L1/L2/EN). Ceiling =
   label reproducibility (independent viability screens).
 
@@ -51,14 +51,23 @@ is not recovered by any of them either — `additive`, which ignores the line, i
 Only the two proliferation sets beat random; the cell-death sets are indistinguishable from
 random on Tahoe (so a death-signature readout is underpowered here).
 
-## Check 2 — end-to-end vs GDSC2 AUC (leave-one-cell-line-out, CV-tuned)
+## Check 2 — end-to-end vs GDSC2 AUC (grouped 5-fold by cell line, CV-tuned)
 
 Trained penalized regression. global = overall potency, interaction = cell-line-specific
 response, per-drug = within-drug line ranking, p_label = label-permutation p on interaction.
+
+**Splitting — corrected.** The delta *sources* are rebuilt genuinely leave-one-line-out
+(`_loo_baseline_source`), but the penalized fit is **grouped 5-fold**, not leave-one-out:
+`--folds` defaults to 5 (`score_generation_eval.py:271`) and neither `05_stack_score.sbatch` nor
+`07_stack_emb_score.sbatch` passes it. Still leakage-free — `fold_of` groups by cell line, so no
+line is in both train and test, and the interaction/p_label conclusions stand — but true LOO
+requires re-running with `--folds 999`.
+
 **Selection gap@k**: rank drugs by predicted response for each cell line, take the top k; the
-ΔAUC from the best *actual* drug in that shortlist to the line's true best (AUC units, lower
-better) — the potency you lose by trusting the model's top k. Lowest across the L1/L2/EN sweep
-(each k minimized independently).
+shortfall from the best *actual* drug in that shortlist to the line's true best, **divided by that
+line's observed AUC range** (`regret_norm_at_k`, `evaluation.py:224`) — so it is unitless on
+[0, 1], not AUC units. Lowest across the L1/L2/EN sweep (each k minimized independently).
+Because GDSC2 panels are right-skewed, a **random** ranking scores ≈0.70 here, not 0.50.
 
 **Baseline, generated-delta, and embedding ladder** (base = unaligned `bc_large` embedding;
 aligned = cytokine-aligned checkpoint embedding, encoder-stripped):
@@ -102,6 +111,14 @@ on the top-1 selection gap the representations are close (base 0.27 vs pca 0.22,
 converging further at top-3 (all ~0.08–0.14), so the edge is in the interaction *correlation*,
 not yet the single best drug pick.
 
+**Do not read the gap@1 column as a ranking.** pca 0.219 / aligned 0.240 / knn 0.250 /
+nmf 0.251 / additive 0.264 / base 0.273 span 0.054, against a minimum detectable difference of
+0.047–0.106 at n = 50 lines — and ≈0.028 of that span is the min-over-{L1,L2,EN} operator, which
+buys that much pure selection optimism even on zero-signal models. Those six are mutually
+indistinguishable. Only expr (0.360) and stack (0.320) plausibly separate, and both are
+borderline once the 0.028 is subtracted. Note also that the reported gap@1 and gap@3 for a row
+generally come from *different* penalties, so no single deployable model achieves both.
+
 **Overall potency is solved (~0.6) by everything; personalization is captured only by the base
 Stack embedding.** Drug main effect (global) reaches ~0.5–0.64 for every representation, but the
 cell-line-specific interaction is ≈0 and non-significant for all except base-embedding ridge.
@@ -121,6 +138,61 @@ cell-line-specific interaction is ≈0 and non-significant for all except base-e
 > Caveats: 50 lines → per-MOA is illustrative not powered; control hit-rate against the pan-active
 > base rate (shuffled shortlist) so saturation does not read as skill. Needs GDSC2
 > `PATHWAY_NAME`/`PUTATIVE_TARGET` joined to the drug table (not in the current context map).
+
+> **Proposed — are all the models just picking the same few toxic drugs?** The direct way to
+> answer this is not another summary statistic; it is to look at the actual shortlists. For each
+> representation, write down the drug it ranks #1 for each of the ~50 cell lines, and put that
+> next to the drug that *actually* was best for that line:
+>
+> | | distinct drugs ever picked #1 | most-picked drug, and its share of lines | share of #1 picks that are broadly active |
+> |---|---|---|---|
+> | observed best (the truth) | *reference* | *reference* | *reference* |
+> | potency prior (ignores the cell line) | 1 by construction | 100% | 100% |
+> | expr / pca / nmf / additive / knn | ? | ? | ? |
+> | stack (gen delta) | ? | ? | ? |
+> | base (embed) | ? | ? | ? |
+>
+> "Broadly active" = a drug whose AUC is below the line's own median in most lines — i.e. the
+> compounds that work on nearly everything. Read the table like this: **if a representation picks
+> only 1–2 distinct drugs across all 50 lines, it is ranking toxicity and nothing else.** If its
+> pick distribution resembles the observed one, it is doing something cell-line-specific.
+>
+> **The truth is itself concentrated, which is the trap.** Across 955 GDSC2 lines the observed
+> best drug is one of only 13 distinct compounds, and Staurosporine alone is best for 69% of
+> lines. So "picks toxic drugs" is partly *correct behaviour*, and a good gap@k does not by
+> itself indicate personalization. The question is whether the models are **more** concentrated
+> than the truth. On a 50-line panel the observed reference is ~6 distinct drugs (95% band 4–8)
+> with a modal share of ~0.69 (band 0.58–0.80).
+>
+> **The one control that settles it.** Rank drugs purely by their mean AUC over the training
+> lines, ignoring the cell line entirely — the "potency prior". This is not an external baseline:
+> `_penalized_preds` fits per drug with `StandardScaler` on the training lines
+> (`score_generation_eval.py:179`) and `fit_intercept=True`, so the intercept already *is* that
+> training mean, and the prior is the same fitted model with its coefficients zeroed. Score it
+> with the same gap@k on the same folds. **If the models do not beat it, their shortlists carry
+> no cell-line information at all.** Two independent reconstructions put the prior at gap@1
+> ≈ 0.06–0.11 against 0.22–0.36 for every representation, so the expected result is that the
+> prior *wins* — a stronger statement than "confounded by toxicity".
+>
+> **Why we cannot answer this today, and the fix.** `_penalized_preds` builds the per-(line, drug)
+> prediction frame, scores it, and discards it (`score_generation_eval.py:465-468`); nothing in
+> `results/` holds per-pair predictions, so the picks are unrecoverable. Emitting `y_prior` in the
+> fold loop and dumping `(source, penalty, patient, drug, y_true, y_pred, y_prior)` to
+> `results/check2_preds.parquet` is ~10 lines, after which the table above and the prior
+> comparison are a groupby. `_personalization` (`per_patient_eval.py:444`) already computes the
+> distinct-count and modal-share columns and already carries the observed row as its reference.
+>
+> **If the answer comes back "yes, concentrated"**, the follow-up is to stop scoring selection in
+> raw AUC and score it in percentile-within-drug instead (each drug's out-of-fold rank among
+> training lines). That makes every drug's marginal uniform, so a pan-cytotoxic compound carries
+> zero advantage, random is exactly 1/(k+1), and the potency prior lands there by construction —
+> which is the property that deleting the toxic drugs from the panel was trying to buy, except
+> that deletion also collapses gap@k's per-line normalizer (the prior moves 0.061 → 0.508 with no
+> change in model quality) and conditions on the outcome, since the observed best drug is itself
+> a broadly-active one for 83–93% of lines.
+>
+> This closes the loop on the MOA note above: its guess that the top-3 convergence comes from a
+> few broadly-potent compounds is exactly what the first table tests.
 
 ## Ceilings — the most any predictor can score
 
