@@ -112,3 +112,50 @@ def test_pathway_map_omits_missing_pathways(tmp_path: Path) -> None:
     assert "UnknownDrug" not in pw  # missing pathway, not included
     assert pw["Crizotinib"] == "RTK signalling"
     assert pw["Trametinib"] == "ERK MAPK signalling"
+
+
+def test_load_moa_invariant_to_row_order(tmp_path: Path) -> None:
+    """Deduplication result is the same regardless of CSV row order (invariance test).
+
+    This is the critical test: it verifies that when a compound has conflicting pathway
+    annotations across screening sites, load_moa always selects the same pathway whether
+    the CSV is presented in forward or reversed order. This proves the deduplication is
+    deterministic, not row-order-dependent.
+    """
+    src = tmp_path / "compounds.csv"
+    src_reversed = tmp_path / "compounds_reversed.csv"
+
+    # Fixture: Dasatinib at two sites with different pathways
+    df = pd.DataFrame(
+        {
+            "DRUG_ID": [1, 2],
+            "SCREENING_SITE": ["MGH", "SANGER"],
+            "DRUG_NAME": ["Dasatinib", "Dasatinib"],
+            "SYNONYMS": ["-", "-"],
+            "TARGET": ["ABL", "ABL"],
+            "TARGET_PATHWAY": ["RTK signaling", "Other, kinases"],
+        }
+    )
+    df.to_csv(src, index=False)
+
+    # Reversed version: same rows but in opposite order
+    df.iloc[::-1].to_csv(src_reversed, index=False)
+
+    # Load both versions
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        moa_forward = load_moa(src)
+        moa_reversed = load_moa(src_reversed)
+
+    # Both should have exactly one row for dasatinib
+    assert len(moa_forward) == 1
+    assert len(moa_reversed) == 1
+
+    # Both should return the SAME pathway (alphabetically-first: "Other, kinases" < "RTK")
+    pathway_forward = moa_forward.loc["dasatinib", "target_pathway"]
+    pathway_reversed = moa_reversed.loc["dasatinib", "target_pathway"]
+    assert pathway_forward == pathway_reversed, (
+        f"Invariance violated: forward={pathway_forward}, reversed={pathway_reversed}"
+    )
+    # Verify it's the alphabetically-first one
+    assert pathway_forward == "Other, kinases"

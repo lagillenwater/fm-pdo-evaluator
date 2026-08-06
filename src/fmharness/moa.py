@@ -34,12 +34,13 @@ def normalize_drug(name: str) -> str:
 def load_moa(path: Path) -> pd.DataFrame:
     """Load the GDSC screened-compounds table, indexed by normalized drug key.
 
-    Duplicate keys (the same compound screened at more than one site) collapse to the first
-    occurrence when sorted by drug name, then row index. Target pathway annotations vary by
-    screening site for some compounds; conflicting annotations are detected and reported via
-    warnings, then resolved deterministically by the sort order (so this function's output is
-    reproducible). Missing target or pathway values are preserved as NaN, allowing downstream
-    code to filter them appropriately.
+    Duplicate keys (the same compound screened at more than one site) are deduplicated by
+    retaining the row with the alphabetically-first target_pathway value, then by
+    alphabetically-first target (tiebreaker). NaN pathways sort last. This ensures
+    deterministic output independent of CSV row order. Target pathway annotations vary by
+    screening site for some compounds; when conflicts are detected, a warning names the
+    affected compounds and the alphabetically-first pathway is retained. Missing target or
+    pathway values are preserved as NaN, allowing downstream code to filter them appropriately.
     """
     raw = pd.read_csv(path)
 
@@ -72,11 +73,14 @@ def load_moa(path: Path) -> pd.DataFrame:
         )
         warnings.warn(msg, UserWarning, stacklevel=2)
 
-    # Deduplicate deterministically: for each key, keep first row after sorting by
-    # drug_name, breaking ties by original row order
+    # Deduplicate deterministically: for each key, keep the row with the
+    # alphabetically-first target_pathway (NaN last), then alphabetically-first target.
+    # This ensures reproducibility regardless of CSV row order.
     out_with_key = out.copy()
     out_with_key["__key__"] = out.index
-    sorted_df = out_with_key.sort_values(["__key__", "drug_name"])
+    sorted_df = out_with_key.sort_values(
+        ["__key__", "target_pathway", "target"], na_position="last"
+    )
     dedup = sorted_df.drop_duplicates(subset=["__key__"], keep="first")
     dedup.index = pd.Index(dedup["__key__"], name="key")
     return dedup.loc[:, ["drug_name", "target", "target_pathway"]]
