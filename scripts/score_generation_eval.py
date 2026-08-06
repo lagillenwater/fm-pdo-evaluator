@@ -160,7 +160,7 @@ def _penalized_preds(
         str(d): dict(zip(g["patient"].astype(str), g["y"], strict=False))
         for d, g in design.groupby("drug")
     }
-    rows: list[tuple[str, str, float, float]] = []
+    rows: list[tuple[str, str, float, float, float]] = []
     for drug, auc in auc_by_drug.items():
         fdf = feat(drug) if callable(feat) else feat.get(drug)
         if fdf is None or fdf.empty:
@@ -181,10 +181,15 @@ def _penalized_preds(
                 sc.transform(fdf.loc[tr].to_numpy(dtype=np.float64)), [auc[ln] for ln in tr]
             )
             pred = model.predict(sc.transform(fdf.loc[te].to_numpy(dtype=np.float64)))
+            # The potency prior: this drug's mean AUC over the training-fold lines, i.e. the
+            # same fitted model with its coefficients zeroed. Ranking by it ignores the cell
+            # line entirely, so it is the floor any line-specific claim has to clear.
+            prior = float(np.mean([auc[ln] for ln in tr]))
             rows.extend(
-                (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
+                (ln, drug, float(auc[ln]), float(p), prior)
+                for ln, p in zip(te, pred, strict=False)
             )
-    cols = ["patient", "drug", "y_true", "y_pred"]
+    cols = ["patient", "drug", "y_true", "y_pred", "y_prior"]
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 
@@ -271,6 +276,11 @@ def main() -> None:
         default=5,
         help="grouped-by-cell-line folds for the leakage-free penalized fit; set >= #lines "
         "(e.g. 999) for true leave-one-cell-line-out",
+    )
+    ap.add_argument(
+        "--preds-out",
+        default="results/check2_preds.parquet",
+        help="per-(line, drug) check-2 predictions dump; enables the selection audit",
     )
     ap.add_argument(
         "--generated-dir",
@@ -460,13 +470,22 @@ def main() -> None:
             ap.error(f"--stack-emb expects 'label=path', got {spec!r}")
         emb = _load_line_matrix(_rel(repo, p.strip()))
         representations[label.strip()] = (lambda e: lambda _drug: e)(emb)
+    pred_frames: list[pd.DataFrame] = []
     for repr_name, feat in representations.items():
         for pen in penalties:
             preds = _penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
             if preds.empty:
                 continue
+            pred_frames.append(preds.assign(source=repr_name, method=pen))
             s = score_predictions(preds, n_perm=args.n_permutations)
             out.append({"source": repr_name, "method": pen, **_row(s)})
+
+    if pred_frames:
+        dest = _rel(repo, args.preds_out)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        cols = ["source", "method", "patient", "drug", "y_true", "y_pred", "y_prior"]
+        pd.concat(pred_frames, ignore_index=True)[cols].to_parquet(dest, index=False)
+        print(f"wrote {dest} ({sum(len(f) for f in pred_frames)} rows)")
 
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")
     print(pd.DataFrame(out).to_string(index=False) if out else "(no scored pairs)")
