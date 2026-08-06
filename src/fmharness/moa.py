@@ -13,6 +13,7 @@ Source: ``data/raw/gdsc2_sarcoma/gdsc2/screened_compounds_rel_8.5.csv`` (GDSC re
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -34,26 +35,68 @@ def load_moa(path: Path) -> pd.DataFrame:
     """Load the GDSC screened-compounds table, indexed by normalized drug key.
 
     Duplicate keys (the same compound screened at more than one site) collapse to the first
-    row; the target annotation does not vary by site.
+    occurrence when sorted by drug name, then row index. Target pathway annotations vary by
+    screening site for some compounds; conflicting annotations are detected and reported via
+    warnings, then resolved deterministically by the sort order (so this function's output is
+    reproducible). Missing target or pathway values are preserved as NaN, allowing downstream
+    code to filter them appropriately.
     """
     raw = pd.read_csv(path)
+
+    # Preserve missing values; do not stringify NaN to "nan"
     out = pd.DataFrame(
         {
-            "drug_name": raw["DRUG_NAME"].astype(str),
-            "target": raw["TARGET"].astype(str),
-            "target_pathway": raw["TARGET_PATHWAY"].astype(str),
+            "drug_name": raw["DRUG_NAME"],
+            "target": raw["TARGET"],
+            "target_pathway": raw["TARGET_PATHWAY"],
         }
     )
     out.index = pd.Index(out["drug_name"].map(normalize_drug), name="key")
-    return out.loc[~out.index.duplicated(keep="first")]
+
+    # Detect and warn about pathway disagreements for duplicate keys
+    dup_keys = out.index[out.index.duplicated(keep=False)].unique()
+    disagreements = []
+    for key in dup_keys:
+        group = out.loc[key]
+        if isinstance(group, pd.Series):
+            continue  # Single row, not truly a duplicate
+        pathways = group["target_pathway"].dropna().unique()
+        if len(pathways) > 1:
+            disagreements.append(key)
+
+    if disagreements:
+        msg = (
+            f"load_moa: {len(disagreements)} normalized drug keys have differing "
+            f"target_pathway values across screening sites: "
+            f"{', '.join(sorted(disagreements))}"
+        )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+
+    # Deduplicate deterministically: for each key, keep first row after sorting by
+    # drug_name, breaking ties by original row order
+    out_with_key = out.copy()
+    out_with_key["__key__"] = out.index
+    sorted_df = out_with_key.sort_values(["__key__", "drug_name"])
+    dedup = sorted_df.drop_duplicates(subset=["__key__"], keep="first")
+    dedup.index = pd.Index(dedup["__key__"], name="key")
+    return dedup.loc[:, ["drug_name", "target", "target_pathway"]]
 
 
 def pathway_map(moa: pd.DataFrame, drugs: Iterable[str]) -> dict[str, str]:
     """Map each drug name, as written by the caller, to its target pathway.
 
-    Unmatched drugs are omitted rather than mapped to a sentinel, so a caller counting
-    coverage sees the true join rate.
+    Unmatched drugs (either absent from the table or lacking a pathway annotation) are
+    omitted, so a caller counting coverage sees the true join rate. This contract ensures
+    the returned dict never maps to NaN or the string "nan".
     """
     lookup = moa["target_pathway"].to_dict()
-    pairs = ((d, lookup.get(normalize_drug(d))) for d in drugs)
-    return {d: pw for d, pw in pairs if pw is not None}
+    pairs = (
+        (d, lookup.get(normalize_drug(d)))
+        for d in drugs
+    )
+    # Filter out None and NaN pathways
+    return {
+        d: pw
+        for d, pw in pairs
+        if pw is not None and pd.notna(pw)
+    }
