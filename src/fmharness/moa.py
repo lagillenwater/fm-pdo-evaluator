@@ -104,3 +104,34 @@ def pathway_map(moa: pd.DataFrame, drugs: Iterable[str]) -> dict[str, str]:
         for d, pw in pairs
         if pw is not None and pd.notna(pw)
     }
+
+
+def moa_hit_rate_at_k(
+    preds: pd.DataFrame, pathway: dict[str, str], ks: tuple[int, ...] = (1, 3, 5)
+) -> dict[int, float]:
+    """Share of lines whose top-k shortlist contains the true-best drug's pathway.
+
+    ``y_pred`` is AUC-like, so shortlists rank ascending. Unlike gap@k this credits a
+    mechanistically correct pick even when the compound is wrong, which is the clinical
+    question and which collapses me-too compounds. Lines whose observed best drug carries no
+    pathway annotation are skipped rather than counted as misses.
+    """
+    df = preds.copy()
+    df["pathway"] = df["drug"].map(lambda d: pathway.get(d))
+    best_pw = df.loc[df.groupby("patient")["y_true"].idxmin()].set_index("patient")[
+        "pathway"
+    ]
+    ranked = df.sort_values(["patient", "y_pred"], kind="stable")
+    ranked["rank"] = ranked.groupby("patient").cumcount()
+    ranked["want"] = ranked["patient"].map(best_pw)
+    scored = ranked[ranked["want"].notna()]
+    match = scored["pathway"].eq(scored["want"])  # type: ignore[attr-defined]
+    return {
+        k: float(
+            match.where(scored["rank"] < k, other=False)
+            .groupby(scored["patient"])
+            .any()
+            .mean()
+        )
+        for k in ks
+    }

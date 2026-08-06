@@ -5,9 +5,10 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
-from fmharness.moa import load_moa, normalize_drug, pathway_map
+from fmharness.moa import load_moa, moa_hit_rate_at_k, normalize_drug, pathway_map
 
 
 def test_normalize_drug_strips_case_and_punctuation() -> None:
@@ -159,3 +160,35 @@ def test_load_moa_invariant_to_row_order(tmp_path: Path) -> None:
     )
     # Verify it's the alphabetically-first one
     assert pathway_forward == "Other, kinases"
+
+
+def test_moa_hit_rate_at_k_counts_pathway_not_compound() -> None:
+    # Line A's true best is d_mek1 (MEK). The model ranks d_mek2 first -- wrong compound,
+    # right pathway -- so it is a hit at k=1. Line B's true best is d_mek1 too, but the
+    # model ranks the RTK compound first, so B only hits once k reaches 2.
+    preds = pd.DataFrame(
+        {
+            "patient": ["A", "A", "A", "B", "B", "B"],
+            "drug": ["d_mek1", "d_mek2", "d_rtk"] * 2,
+            "y_true": [0.1, 0.5, 0.9, 0.1, 0.5, 0.9],
+            "y_pred": [0.5, 0.1, 0.9, 0.5, 0.9, 0.1],
+        }
+    )
+    pathway = {"d_mek1": "ERK MAPK", "d_mek2": "ERK MAPK", "d_rtk": "RTK signalling"}
+    hits = moa_hit_rate_at_k(preds, pathway, ks=(1, 2))
+    assert np.isclose(hits[1], 0.5)  # A hits, B misses
+    assert np.isclose(hits[2], 1.0)  # both hit
+
+
+def test_moa_hit_rate_at_k_skips_unannotated_best_drug() -> None:
+    preds = pd.DataFrame(
+        {
+            "patient": ["A", "A", "B", "B"],
+            "drug": ["d_x", "d_mek1", "d_mek1", "d_mek2"],
+            "y_true": [0.1, 0.9, 0.1, 0.5],
+            "y_pred": [0.1, 0.9, 0.1, 0.5],
+        }
+    )
+    # A's true best (d_x) has no pathway -> A is skipped; only B counts, and B hits.
+    hits = moa_hit_rate_at_k(preds, {"d_mek1": "ERK MAPK", "d_mek2": "ERK MAPK"}, ks=(1,))
+    assert np.isclose(hits[1], 1.0)
