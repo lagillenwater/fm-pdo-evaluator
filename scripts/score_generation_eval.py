@@ -154,7 +154,9 @@ def _penalized_preds(
     training-fold lines' features vs AUC and predicts the held-fold lines; the StandardScaler is fit
     on the training lines only, so a single held line (true LOO) is scored leakage-free. All
     representations share one model class, so a difference is the representation, not the model.
-    Returns preds (patient, drug, y_true, y_pred); y_pred is an AUC estimate (same sign as y_true).
+    Returns preds (patient, drug, y_true, y_pred, y_prior); y_pred is an AUC estimate (same sign
+    as y_true), and y_prior is the training-fold mean AUC for that drug -- the same fitted model
+    with its coefficients zeroed.
     """
     auc_by_drug = {
         str(d): dict(zip(g["patient"].astype(str), g["y"], strict=False))
