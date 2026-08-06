@@ -8,7 +8,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fmharness.moa import load_moa, moa_hit_rate_at_k, normalize_drug, pathway_map
+from fmharness.moa import (
+    CYTOTOXIC_PATHWAYS,
+    interaction_by_moa_class,
+    load_moa,
+    moa_hit_rate_at_k,
+    normalize_drug,
+    pathway_map,
+    shuffled_hit_rate,
+)
 
 
 def test_normalize_drug_strips_case_and_punctuation() -> None:
@@ -192,3 +200,47 @@ def test_moa_hit_rate_at_k_skips_unannotated_best_drug() -> None:
     # A's true best (d_x) has no pathway -> A is skipped; only B counts, and B hits.
     hits = moa_hit_rate_at_k(preds, {"d_mek1": "ERK MAPK", "d_mek2": "ERK MAPK"}, ks=(1,))
     assert np.isclose(hits[1], 1.0)
+
+
+def test_cytotoxic_pathways_are_gdsc_spellings() -> None:
+    # These must match TARGET_PATHWAY values verbatim or the split silently empties.
+    assert "DNA replication" in CYTOTOXIC_PATHWAYS
+    assert "Mitosis" in CYTOTOXIC_PATHWAYS
+    assert "ERK MAPK signalling" not in CYTOTOXIC_PATHWAYS
+
+
+def test_interaction_by_moa_class_splits_the_panel() -> None:
+    # d_mek/d_rtk are targeted, d_dna is cytotoxic. The targeted subset is predicted with the
+    # correct line ordering; the cytotoxic subset is predicted backwards.
+    preds = pd.DataFrame(
+        {
+            "patient": ["A", "A", "A", "B", "B", "B", "C", "C", "C"],
+            "drug": ["d_mek", "d_rtk", "d_dna"] * 3,
+            "y_true": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            "y_pred": [0.1, 0.2, 0.9, 0.4, 0.5, 0.6, 0.7, 0.8, 0.3],
+        }
+    )
+    pathway = {
+        "d_mek": "ERK MAPK signalling",
+        "d_rtk": "RTK signalling",
+        "d_dna": "DNA replication",
+    }
+    out = interaction_by_moa_class(preds, pathway)
+    assert out["n_targeted"] == 2.0
+    assert out["n_cytotoxic"] == 1.0
+    assert np.isfinite(out["targeted"])
+
+
+def test_shuffled_hit_rate_is_a_base_rate_not_zero() -> None:
+    # Every drug shares one pathway, so a random shortlist always contains it: base rate 1.0.
+    preds = pd.DataFrame(
+        {
+            "patient": ["A", "A", "B", "B"],
+            "drug": ["d1", "d2", "d1", "d2"],
+            "y_true": [0.1, 0.2, 0.2, 0.1],
+            "y_pred": [0.1, 0.2, 0.2, 0.1],
+        }
+    )
+    pathway = {"d1": "ERK MAPK signalling", "d2": "ERK MAPK signalling"}
+    base = shuffled_hit_rate(preds, pathway, ks=(1,), n_perm=25)
+    assert np.isclose(base[1], 1.0)

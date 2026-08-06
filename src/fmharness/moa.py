@@ -16,8 +16,12 @@ import re
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
+from typing import cast
 
+import numpy as np
 import pandas as pd
+
+from fmharness.evaluation import interaction_rho
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
 
@@ -135,3 +139,65 @@ def moa_hit_rate_at_k(
         )
         for k in ks
     }
+
+
+# GDSC ``TARGET_PATHWAY`` values that denote broad cytotoxic mechanisms rather than a targeted
+# agent. Spelling must match the compound table verbatim; Task 6 Step 5 checks that against the
+# real file. Line-specific response is expected in the targeted classes and not here, so this
+# split is the mechanistic control on any claimed interaction.
+CYTOTOXIC_PATHWAYS = frozenset(
+    {
+        "DNA replication",
+        "Mitosis",
+        "Cytoskeleton",
+        "Genome integrity",
+        "Chromatin histone acetylation",
+        "Chromatin histone methylation",
+        "Chromatin other",
+    }
+)
+
+
+def interaction_by_moa_class(preds: pd.DataFrame, pathway: dict[str, str]) -> dict[str, float]:
+    """``interaction_rho`` over targeted drugs and over cytotoxic drugs separately.
+
+    Targeted agents are line-specific by biology; broad cytotoxics are not. A representation
+    whose interaction is real should concentrate its edge in the targeted subset. A flat split
+    means the signal is not tracking mechanism, which points away from a biological
+    explanation. Drugs with no pathway annotation are excluded from both subsets.
+    """
+    pw = preds["drug"].map(lambda d: pathway.get(d))
+    cyto = pw.isin(list(CYTOTOXIC_PATHWAYS))
+    targeted = cast("pd.DataFrame", preds[pw.notna() & ~cyto])
+    cytotoxic = cast("pd.DataFrame", preds[pw.notna() & cyto])
+    return {
+        "targeted": float(interaction_rho(targeted, "y_pred")) if len(targeted) else float("nan"),
+        "cytotoxic": float(interaction_rho(cytotoxic, "y_pred"))
+        if len(cytotoxic)
+        else float("nan"),
+        "n_targeted": float(targeted["drug"].nunique()),
+        "n_cytotoxic": float(cytotoxic["drug"].nunique()),
+    }
+
+
+def shuffled_hit_rate(
+    preds: pd.DataFrame,
+    pathway: dict[str, str],
+    ks: tuple[int, ...] = (1, 3, 5),
+    n_perm: int = 200,
+    seed: int = 0,
+) -> dict[int, float]:
+    """Mean hit-rate@k when each line's shortlist order is random: the pan-active base rate.
+
+    On a panel where a few compounds are potent almost everywhere, a random shortlist already
+    contains the right pathway a good fraction of the time. Reporting a raw hit-rate against
+    zero therefore reads saturation as skill; this is the number it has to beat.
+    """
+    rng = np.random.default_rng(seed)
+    draws = [
+        moa_hit_rate_at_k(
+            preds.assign(y_pred=rng.permutation(preds["y_pred"].to_numpy())), pathway, ks
+        )
+        for _ in range(n_perm)
+    ]
+    return {k: float(np.mean([d[k] for d in draws])) for k in ks}
