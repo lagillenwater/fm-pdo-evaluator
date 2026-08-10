@@ -19,7 +19,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 from anndata import AnnData
 
-from fmharness.models.adapter import as_dense_f32
+from fmharness.models.adapter import as_dense_f32, seeded_projection
 from fmharness.schema import ModelMetadata
 
 
@@ -40,9 +40,13 @@ class Encoder(Protocol):
         """(n_obs, embedding_dim), row-aligned to adata.obs_names. Deterministic."""
         ...
 
-    def metadata(self) -> ModelMetadata: ...
+    def metadata(self) -> ModelMetadata:
+        """Pretraining provenance for the leakage scan."""
+        ...
 
-    def version(self) -> str: ...
+    def version(self) -> str:
+        """Stable identifier, e.g. ``encoder@v1.0.0``. Embedded in PredictionRecord."""
+        ...
 
 
 @runtime_checkable
@@ -66,9 +70,13 @@ class Generator(Protocol):
         """
         ...
 
-    def metadata(self) -> ModelMetadata: ...
+    def metadata(self) -> ModelMetadata:
+        """Pretraining provenance for the leakage scan."""
+        ...
 
-    def version(self) -> str: ...
+    def version(self) -> str:
+        """Stable identifier, e.g. ``generator@v1.0.0``. Embedded in PredictionRecord."""
+        ...
 
 
 class MockGenerator:
@@ -104,9 +112,7 @@ class MockGenerator:
 
     def embed(self, adata: AnnData) -> np.ndarray:
         x = as_dense_f32(adata)
-        rng = np.random.default_rng(self.seed)
-        projection = rng.standard_normal((x.shape[1], self.embedding_dim)).astype(np.float32)
-        return np.ascontiguousarray(x @ projection, dtype=np.float32)
+        return seeded_projection(x, self.seed, self.embedding_dim)
 
     def context_coverage(self, perturbations: Iterable[str]) -> set[str]:
         return {p for p in perturbations if p in self.known_perturbations}

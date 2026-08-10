@@ -40,6 +40,18 @@ def as_dense_f32(adata: AnnData) -> np.ndarray:
     return np.ascontiguousarray(x, dtype=np.float32)
 
 
+def seeded_projection(x: np.ndarray, seed: int, embedding_dim: int) -> np.ndarray:
+    """Deterministic seeded random projection.
+
+    Projects input matrix through a frozen random projection matrix, seeded for
+    reproducibility. Used by MockAdapter and MockGenerator to ensure deterministic
+    embeddings across calls.
+    """
+    rng = np.random.default_rng(seed)
+    projection = rng.standard_normal((x.shape[1], embedding_dim)).astype(np.float32)
+    return np.ascontiguousarray(x @ projection, dtype=np.float32)
+
+
 @runtime_checkable
 class ModelAdapter(Protocol):
     """Wrap a foundation model (or baseline) so the harness can use it."""
@@ -100,9 +112,7 @@ class MockAdapter:
 
     def embed(self, adata: AnnData) -> np.ndarray:
         x = as_dense_f32(adata)
-        rng = np.random.default_rng(self.seed)
-        projection = rng.standard_normal((x.shape[1], self.embedding_dim)).astype(np.float32)
-        return np.ascontiguousarray(x @ projection, dtype=np.float32)
+        return seeded_projection(x, self.seed, self.embedding_dim)
 
     def predict_native(self, adata: AnnData, drug_ids: list[str]) -> np.ndarray | None:
         if not self.supports_native:
