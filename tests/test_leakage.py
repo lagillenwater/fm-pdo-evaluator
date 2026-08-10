@@ -17,8 +17,8 @@ class _KnownCorpusModel:
 
     def __init__(
         self,
-        lines: set[str],
-        drugs: set[str],
+        lines: set[str] | None,
+        drugs: set[str] | None,
         task_signal: str = "adjacent",
     ) -> None:
         self._lines = lines
@@ -65,7 +65,8 @@ def test_known_corpus_model_satisfies_leakage_queryable() -> None:
 def test_filter_leakage_drops_doubly_exposed_pairs_always() -> None:
     # L1 and d1 are both in the pretraining corpus; only (L1, d1) is doubly exposed.
     model = _KnownCorpusModel(lines={"L1"}, drugs={"d1"}, task_signal="adjacent")
-    filtered, profile = filter_leakage(_design(), model)
+    # _KnownCorpusModel satisfies Encoder structurally but pyright is conservative.
+    filtered, profile = filter_leakage(_design(), model)  # type: ignore[arg-type]
     assert not ((filtered["patient"] == "L1") & (filtered["drug"] == "d1")).any()
     assert len(filtered) == 5  # one row dropped
     assert profile.basis == "measured"
@@ -76,13 +77,15 @@ def test_filter_leakage_adjacent_signal_keeps_single_axis_overlap() -> None:
     # single-axis rows must NOT be dropped, or a broadly-pretrained model
     # becomes untestable on almost any cohort.
     model = _KnownCorpusModel(lines={"L1"}, drugs=set(), task_signal="adjacent")
-    filtered, _ = filter_leakage(_design(), model)
+    # _KnownCorpusModel satisfies Encoder structurally but pyright is conservative.
+    filtered, _ = filter_leakage(_design(), model)  # type: ignore[arg-type]
     assert len(filtered) == 6  # nothing dropped -- no doubly-exposed pairs exist
 
 
 def test_filter_leakage_direct_signal_drops_single_axis_overlap_too() -> None:
     model = _KnownCorpusModel(lines={"L1"}, drugs=set(), task_signal="direct")
-    filtered, _ = filter_leakage(_design(), model)
+    # _KnownCorpusModel satisfies Encoder structurally but pyright is conservative.
+    filtered, _ = filter_leakage(_design(), model)  # type: ignore[arg-type]
     assert not (filtered["patient"] == "L1").any()
     assert len(filtered) == 4  # both L1 rows dropped
 
@@ -99,3 +102,17 @@ def test_filter_leakage_works_for_generator_too() -> None:
     filtered, profile = filter_leakage(_design(), MockGenerator())
     pd.testing.assert_frame_equal(filtered, _design())
     assert profile.basis == "unknown"
+
+
+def test_filter_leakage_unknown_basis_when_implements_protocol_but_returns_none(
+    ) -> None:
+    # Model structurally satisfies LeakageQueryable (has the methods) but
+    # returns None from pretraining_lines, indicating corpus was not exposed.
+    design = _design()
+    model = _KnownCorpusModel(lines=None, drugs={"d1"})
+    # _KnownCorpusModel satisfies Encoder structurally but pyright is conservative.
+    filtered, profile = filter_leakage(design, model)  # type: ignore[arg-type]
+    pd.testing.assert_frame_equal(filtered, design)
+    assert profile.basis == "unknown"
+    assert profile.line_overlap_frac is None
+    assert profile.doubly_exposed_frac is None
