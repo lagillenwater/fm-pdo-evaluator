@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from datetime import date
 
 import pytest
 from hypothesis import given
@@ -14,6 +15,7 @@ from fmharness.schema import (
     DrugAssay,
     EnvironmentSnapshot,
     LeakageProfile,
+    ModelMetadata,
     Patient,
     Prediction,
     Sample,
@@ -199,3 +201,33 @@ def test_environment_snapshot_rejects_short_commit() -> None:
             cuda_deterministic=False,
             data_commit="b" * 64,
         )
+
+
+def test_model_metadata_requires_expected_input() -> None:
+    with pytest.raises(ValidationError):
+        ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+        )  # type: ignore[call-arg]
+
+
+def test_model_metadata_expected_input_rejects_unknown_value() -> None:
+    with pytest.raises(ValidationError):
+        ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+            expected_input="fpkm",  # type: ignore[arg-type]
+        )
+
+
+def test_model_metadata_expected_input_accepts_declared_values() -> None:
+    for value in ("raw_counts", "cpm", "log1p_cpm"):
+        m = ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+            expected_input=value,
+        )
+        assert m.expected_input == value

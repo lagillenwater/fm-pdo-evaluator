@@ -108,6 +108,7 @@ class MockAdapter:
             pretraining_corpus="none",
             pretraining_cutoff_date=date(1970, 1, 1),
             task_signal_in_pretrain="none",
+            expected_input="log1p_cpm",
         )
 
     def embed(self, adata: AnnData) -> np.ndarray:
