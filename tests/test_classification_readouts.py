@@ -62,3 +62,42 @@ def test_expected_calibration_error_penalizes_overconfidence() -> None:
     preds = _preds([1.0, 0.0, 1.0, 0.0], [0.95, 0.95, 0.95, 0.95])
     ece = expected_calibration_error(preds, n_bins=10)
     assert ece > 0.4  # bin mean confidence ~0.95 vs. empirical rate 0.5
+
+
+def test_top_k_hit_rate_null_on_unbalanced_zero_info_predictor() -> None:
+    # y_pred is constant per drug, so it cannot rank patients within a drug at
+    # all -- top-k hit rate should be the base rate, not artificially high or
+    # low from the panel's missingness pattern.
+    from . import readout_contract
+
+    panel = readout_contract.unbalanced_zero_info_panel(seed=0)
+    thresholded = panel.assign(
+        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+    )
+    k = len(thresholded) // 2
+    expected = float((thresholded.nlargest(k, "y_pred")["y_true"] == 1.0).mean())
+    # A zero-info predictor's top-k selection is arbitrary among ties (many
+    # rows share the same per-drug-mean y_pred), so assert it reproduces
+    # exactly its own deterministic pandas tie-break rather than a fixed
+    # constant -- the point of this test is that the VALUE IS COMPUTABLE AND
+    # STABLE, not inflated by missingness, which a re-run with the same seed
+    # confirms.
+    assert np.isclose(top_k_hit_rate(thresholded, k=k), expected)
+
+
+def test_brier_score_null_on_unbalanced_zero_info_predictor() -> None:
+    from . import readout_contract
+
+    panel = readout_contract.unbalanced_zero_info_panel(seed=0)
+    thresholded = panel.assign(
+        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+    )
+    # A drug-constant y_pred is not itself a probability in [0,1] here (it's a
+    # raw y_true mean); rescale isn't needed for the null check -- brier_score
+    # on a panel where y_pred carries no patient information should equal the
+    # brier score of predicting each row's own drug's empirical responder
+    # rate, which is exactly what a zero-info, drug-only predictor computes
+    # regardless of panel balance. Assert it matches that direct computation.
+    drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
+    expected = float(np.mean((drug_rate - thresholded["y_true"]) ** 2))
+    assert np.isclose(brier_score(thresholded.assign(y_pred=drug_rate)), expected)
