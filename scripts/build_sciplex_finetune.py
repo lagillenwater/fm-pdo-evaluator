@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from fmharness.sciplex_prep import check_gene_count
+from fmharness.sciplex_prep import check_gene_count, check_raw_counts
 
 PERT_CANDIDATES = ["perturbation", "condition", "product_name", "treatment", "drug", "compound"]
 LINE_CANDIDATES = ["cell_line", "cell line", "cell_type", "cell_name", "line"]
@@ -78,6 +78,7 @@ def main() -> None:
     else:
         x, src = a.X, ".X (VERIFY these are raw counts, not normalized)"
     x = (x if sparse.issparse(x) else sparse.csr_matrix(np.asarray(x))).tocsr().astype(np.float32)
+    check_raw_counts(x, src)
 
     # ---- gene symbols (uppercased, mirroring Stack's .str.upper() alignment) ----
     sym_col = _pick(a.var.columns, args.gene_symbol_col, SYM_CANDIDATES, "gene-symbol-col")

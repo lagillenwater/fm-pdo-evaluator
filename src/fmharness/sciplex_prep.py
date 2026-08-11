@@ -9,6 +9,9 @@ independently of the CLI script, which only orchestrates argument parsing and I/
 
 from __future__ import annotations
 
+import numpy as np
+from scipy import sparse
+
 
 def check_gene_count(n_vars: int, *, min_genes: int = 5000) -> None:
     """Raise if the input looks like a pre-subset HVG panel, not a near-full transcriptome.
@@ -25,4 +28,18 @@ def check_gene_count(n_vars: int, *, min_genes: int = 5000) -> None:
             "panel, not a near-full transcriptome. Stack's generation panel is 15,012 genes; "
             "fine-tuning on a much smaller subset would be a train/test mismatch. Use a "
             "full-gene source instead (see scripts/alpine/08_sciplex_prep.sbatch's SCIPLEX_URL)."
+        )
+
+
+def check_raw_counts(x: sparse.csr_matrix, source: str) -> None:
+    """Raise if ``x`` does not look like raw counts (Stack is a count model, NB likelihood).
+
+    Checked on ``x.data`` -- the flat array of stored (nonzero) values in the CSR structure
+    -- so this covers dense-then-sparsified input identically to native sparse input, with
+    no per-row/per-cell loop.
+    """
+    if x.data.size and (not np.all(x.data >= 0) or not np.allclose(x.data, np.round(x.data))):
+        raise SystemExit(
+            f"{source} does not look like raw counts (found negative or non-integer values); "
+            "pass --counts-layer to point at the correct layer"
         )
