@@ -10,6 +10,7 @@ independently of the CLI script, which only orchestrates argument parsing and I/
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 
@@ -42,4 +43,24 @@ def check_raw_counts(x: sparse.csr_matrix, source: str) -> None:
         raise SystemExit(
             f"{source} does not look like raw counts (found negative or non-integer values); "
             "pass --counts-layer to point at the correct layer"
+        )
+
+
+def check_perturbation_count(perturbations: pd.Series, *, expected_min_distinct: int = 100) -> None:
+    """Warn (not raise) if too few distinct perturbation names survived.
+
+    Upstream name truncation -- seen once already in the chemCPA sci-Plex release
+    ("AZ", "GSK", "ZM" from names cut at the first whitespace) -- silently collapses
+    distinct compounds into one label. sci-Plex 3 has ~188 published compounds;
+    ``expected_min_distinct=100`` is a loose floor. A warning, not a hard failure: the exact
+    expected count depends on which upstream release is in use and how doses/controls are
+    represented, so this flags a suspicious count for a human to check rather than blocking
+    on an assumption about the exact number.
+    """
+    n_distinct = perturbations.nunique()
+    if n_distinct < expected_min_distinct:
+        print(
+            f"WARNING: only {n_distinct} distinct perturbations found (expected ~188 for "
+            f"sci-Plex 3, floor {expected_min_distinct}) -- check for upstream name "
+            f"truncation/collisions before training on this data"
         )

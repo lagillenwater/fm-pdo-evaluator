@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from fmharness.sciplex_prep import check_gene_count, check_raw_counts
+from fmharness.sciplex_prep import check_gene_count, check_perturbation_count, check_raw_counts
 
 PERT_CANDIDATES = ["perturbation", "condition", "product_name", "treatment", "drug", "compound"]
 LINE_CANDIDATES = ["cell_line", "cell line", "cell_type", "cell_name", "line"]
@@ -88,6 +88,7 @@ def main() -> None:
 
     # ---- obs: pert_id, is_control, cell_line, dose ----
     pert = a.obs[pert_col].astype(str).to_numpy()
+    check_perturbation_count(pd.Series(pert))
     ctrl_col = next((c for c in CTRL_FLAG_CANDIDATES if c in a.obs.columns), None)
     if args.control_value is not None:
         is_ctl = pert == args.control_value
