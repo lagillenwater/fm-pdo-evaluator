@@ -80,9 +80,14 @@ def run_check1(
     (CPM-normalized query file vs. raw pseudobulk), matching score_generation_eval.py's own
     ``--context``/``--query-baseline`` split. ``pretraining_lines``/``pretraining_drugs``
     (both default ``None``) declare the Stack checkpoint's measured pretraining overlap with
-    this eval cohort, if known -- when given, ``filter_leakage`` drops the doubly-exposed
-    (line, drug) pairs from every source before scoring, matching the tiered rule the rest of
-    the harness already applies. When not given, the design is scored unfiltered.
+    this eval cohort, if known -- BOTH must be given together for filtering to activate;
+    giving only one is equivalent to giving neither, since ``filter_leakage`` itself requires
+    a measured declaration on both axes before it will drop anything (``basis="unknown"``
+    otherwise, unfiltered). When both are given, ``filter_leakage`` always drops the
+    doubly-exposed (line AND drug) pairs from every source before scoring; when
+    ``task_signal_in_pretrain="direct"`` (the checkpoint was trained on actual response
+    labels, not just the raw line/drug identities), it additionally drops single-axis overlap
+    (line OR drug) -- the tiered rule the rest of the harness already applies.
     """
     model = PregeneratedStackGenerator(
         generated_dir,
@@ -96,7 +101,16 @@ def run_check1(
     # original rows -- carry an explicit positional tag through it and select the delta by
     # POSITION, or the filtered key would be paired with the first N deltas (different lines).
     design = real_key.reset_index(drop=True).assign(**{_ROW: np.arange(len(real_key))})
-    filtered_design, _profile = filter_leakage(design, model)
+    filtered_design, profile = filter_leakage(design, model)
+    if profile.basis == "measured":
+        print(
+            f"Check-1 leakage filter: basis=measured, "
+            f"doubly_exposed_frac={profile.doubly_exposed_frac:.3f}, "
+            f"line_overlap_frac={profile.line_overlap_frac:.3f}, "
+            f"drug_overlap_fraction={profile.drug_overlap_fraction:.3f}"
+        )
+    else:
+        print(f"Check-1 leakage filter: basis={profile.basis} (no corpus declared -- unfiltered)")
     keep = filtered_design[_ROW].to_numpy()
     fd = real_delta.iloc[keep].reset_index(drop=True)
     fk = filtered_design.drop(columns=[_ROW]).reset_index(drop=True)
@@ -132,6 +146,17 @@ def run_check1(
     return pd.DataFrame(rows)
 
 
+def corpus_declared_partially(corpus_lines: str | None, corpus_drugs: str | None) -> bool:
+    """True iff exactly one of --corpus-lines/--corpus-drugs was given, not both, not neither.
+
+    filter_leakage only filters when it has a measured declaration on BOTH axes; a
+    half-declared corpus silently scores identically to an unfiltered run (basis="unknown"),
+    with no signal in the output that the declared corpus was ignored. main() rejects this
+    combination up front rather than letting it through.
+    """
+    return (corpus_lines is None) != (corpus_drugs is None)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--context", required=True, help="Tahoe context AnnData (build_tahoe_context)")
@@ -149,6 +174,12 @@ def main() -> None:
     ap.add_argument("--corpus-lines", default=None, help="comma-separated declared pretrain lines")
     ap.add_argument("--corpus-drugs", default=None, help="comma-separated declared pretrain drugs")
     args = ap.parse_args()
+
+    if corpus_declared_partially(args.corpus_lines, args.corpus_drugs):
+        ap.error(
+            "--corpus-lines and --corpus-drugs must both be given together (or neither, to "
+            "run unfiltered) -- giving only one silently disables leakage filtering"
+        )
 
     repo = Path(__file__).resolve().parent.parent
     real_delta, real_key, base = build_tahoe_deltas(ad.read_h5ad(args.context))

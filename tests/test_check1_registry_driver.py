@@ -7,9 +7,10 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import pytest
 
 # scripts/check1_registry_driver.py, importable via pytest's pythonpath = ["scripts"].
-from check1_registry_driver import run_check1
+from check1_registry_driver import corpus_declared_partially, run_check1
 
 
 def _write_adata(path: Path, x: list[list[float]], obs: list[str], var: list[str]) -> None:
@@ -163,3 +164,58 @@ def test_run_check1_keeps_delta_rows_aligned_to_the_filtered_key(tmp_path: Path)
     stack_row = table[table["source"] == "stack"].iloc[0]
     assert stack_row["n_pairs"] == 3
     assert stack_row["r"] > 0.9
+
+
+def test_corpus_declared_partially_rejects_a_half_declared_corpus() -> None:
+    # filter_leakage only filters when BOTH pretraining_lines and pretraining_drugs are given
+    # -- a half-declared corpus (e.g. only --corpus-lines) silently scores identically to an
+    # unfiltered run, with nothing in the output to show the declared corpus was ignored.
+    # main() must reject this combination via ap.error before it reaches filter_leakage.
+    assert corpus_declared_partially("L1", None) is True
+    assert corpus_declared_partially(None, "d1") is True
+    assert corpus_declared_partially("L1", "d1") is False
+    assert corpus_declared_partially(None, None) is False
+
+
+def test_run_check1_prints_the_leakage_basis_when_a_corpus_is_declared(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    real_delta, real_key, base, query_baseline, gdir, pert_to_drug = _fixture(tmp_path)
+    run_check1(
+        real_delta,
+        real_key,
+        base,
+        query_baseline=query_baseline,
+        generated_dir=gdir,
+        pert_to_drug=pert_to_drug,
+        checkpoint_label="test-checkpoint",
+        n_hvg=3,
+        k=1,
+        hallmark_path=_hallmark_gmt(tmp_path),
+        pretraining_lines={"L1"},
+        pretraining_drugs={"d1"},
+        task_signal_in_pretrain="adjacent",
+    )
+    out = capsys.readouterr().out
+    assert "basis=measured" in out
+    assert "doubly_exposed_frac" in out
+
+
+def test_run_check1_prints_unknown_basis_without_a_declared_corpus(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    real_delta, real_key, base, query_baseline, gdir, pert_to_drug = _fixture(tmp_path)
+    run_check1(
+        real_delta,
+        real_key,
+        base,
+        query_baseline=query_baseline,
+        generated_dir=gdir,
+        pert_to_drug=pert_to_drug,
+        checkpoint_label="test-checkpoint",
+        n_hvg=3,
+        k=1,
+        hallmark_path=_hallmark_gmt(tmp_path),
+    )
+    out = capsys.readouterr().out
+    assert "basis=unknown" in out
