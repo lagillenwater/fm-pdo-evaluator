@@ -34,9 +34,44 @@ def test_context_coverage_matches_the_declared_pert_map(tmp_path: Path) -> None:
 def test_generate_reads_the_matching_pregenerated_file(tmp_path: Path) -> None:
     _write_adata(tmp_path / "BRD-1.h5ad", [[1.0, 2.0]], ["o1"], ["A", "B"])
     gen = PregeneratedStackGenerator(tmp_path, {"BRD-1": "D1"}, checkpoint_label="test")
-    out = gen.generate(ad.AnnData(X=np.zeros((1, 2), dtype=np.float32)), "D1")
+    baseline = ad.AnnData(X=np.zeros((1, 2), dtype=np.float32))
+    baseline.obs_names = ["o1"]
+    out = gen.generate(baseline, "D1")
     assert list(out.obs_names) == ["o1"]
     assert np.allclose(np.asarray(out.X), [[1.0, 2.0]])
+
+
+def test_generate_restricts_to_the_intersection_of_baseline_and_file_obs_names(
+    tmp_path: Path,
+) -> None:
+    # the generated file covers every line Stack generated for this drug (o1, o2, o3),
+    # not just the ones this particular baseline call cares about (o2, o3) -- generate()
+    # must return only the rows the caller actually asked about, row-aligned to neither
+    # more nor fewer than that intersection.
+    _write_adata(
+        tmp_path / "BRD-1.h5ad",
+        [[1.0], [2.0], [3.0]],
+        ["o1", "o2", "o3"],
+        ["A"],
+    )
+    gen = PregeneratedStackGenerator(tmp_path, {"BRD-1": "D1"}, checkpoint_label="test")
+    baseline = ad.AnnData(X=np.zeros((2, 1), dtype=np.float32))
+    baseline.obs_names = ["o2", "o3"]
+    out = gen.generate(baseline, "D1")
+    assert set(out.obs_names) == {"o2", "o3"}
+    assert "o1" not in out.obs_names
+    assert np.allclose(sorted(np.asarray(out.X).ravel()), [2.0, 3.0])
+
+
+def test_generate_raises_when_baseline_shares_no_obs_names_with_the_file(
+    tmp_path: Path,
+) -> None:
+    _write_adata(tmp_path / "BRD-1.h5ad", [[1.0, 2.0]], ["o1"], ["A", "B"])
+    gen = PregeneratedStackGenerator(tmp_path, {"BRD-1": "D1"}, checkpoint_label="test")
+    baseline = ad.AnnData(X=np.zeros((1, 2), dtype=np.float32))
+    baseline.obs_names = ["0"]  # disjoint from the file's obs_names ("o1")
+    with pytest.raises(PerturbationNotInContext):
+        gen.generate(baseline, "D1")
 
 
 def test_generate_handles_space_sanitized_filenames(tmp_path: Path) -> None:
@@ -45,7 +80,9 @@ def test_generate_handles_space_sanitized_filenames(tmp_path: Path) -> None:
     gen = PregeneratedStackGenerator(
         tmp_path, {"Retinoic acid": "D1"}, checkpoint_label="test"
     )
-    out = gen.generate(ad.AnnData(X=np.zeros((1, 1), dtype=np.float32)), "D1")
+    baseline = ad.AnnData(X=np.zeros((1, 1), dtype=np.float32))
+    baseline.obs_names = ["o1"]
+    out = gen.generate(baseline, "D1")
     assert np.allclose(np.asarray(out.X), [[5.0]])
 
 

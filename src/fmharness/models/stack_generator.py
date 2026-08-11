@@ -26,6 +26,18 @@ from fmharness.schema import ModelMetadata, TaskSignal
 
 
 class PregeneratedStackGenerator:
+    """Row-aligns each pre-generated file to the caller's own ``baseline``.
+
+    One pre-generated ``<pert_id>.h5ad`` file covers every cell line Stack generated
+    for that drug, not just whichever ones a particular ``generate()`` call cares
+    about. ``generate()`` therefore intersects the loaded file's ``obs_names`` with
+    ``baseline.obs_names`` (the same restriction ``fmharness.deltas.build_generated_deltas``
+    already applies via ``base_df.index.intersection(g.index)``) and returns only those
+    rows -- never rows for lines the caller's ``baseline`` never asked about. An empty
+    intersection raises ``PerturbationNotInContext`` rather than returning an
+    unrelated/empty result silently.
+    """
+
     def __init__(
         self,
         generated_dir: Path,
@@ -71,7 +83,14 @@ class PregeneratedStackGenerator:
                 f"{perturbation!r} (pert_id {pert_id!r}) is declared but no matching file "
                 f"exists under {self.generated_dir}"
             )
-        return ad.read_h5ad(path)
+        gen = ad.read_h5ad(path)
+        shared = baseline.obs_names.intersection(gen.obs_names)
+        if len(shared) == 0:
+            raise PerturbationNotInContext(
+                f"{perturbation!r} (pert_id {pert_id!r}): baseline shares no cell lines "
+                f"with the generated file at {path}"
+            )
+        return gen[shared].copy()
 
     def _resolve_file(self, pert_id: str) -> Path | None:
         direct = self.generated_dir / f"{pert_id}.h5ad"
