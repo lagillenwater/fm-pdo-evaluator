@@ -39,6 +39,7 @@ from sklearn.preprocessing import StandardScaler
 
 from fmharness.data.loaders import load_tranche
 from fmharness.evaluation import build_sample_design
+from fmharness.signatures import load_hallmark
 
 PERT_INFO_URL = (
     "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/"
@@ -378,6 +379,82 @@ def build_knn_deltas(
     delta = pd.DataFrame(np.vstack(delta_blocks), columns=pd.Index(g))
     key = pd.DataFrame(keys, columns=pd.Index(["patient", "drug"]))
     return delta, key
+
+
+def loo_baseline_source(
+    kind: str,
+    real_delta: pd.DataFrame,
+    real_key: pd.DataFrame,
+    base: pd.DataFrame,
+    *,
+    k: int,
+    genes: pd.Index | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Leave-one-cell-line-out baseline deltas: for each line, rebuild the source from the
+    OTHER lines and predict the held-out line, so it never sees its own treated cells.
+
+    ``additive``/``knn`` use all genes; ``pca``/``nmf`` (``build_learned_deltas``) reduce on
+    the ``genes`` HVG panel, which keeps the per-line PCA/NMF fast and well-conditioned (49
+    lines vs ~50k genes is hopelessly p>>n; on ~2k informative genes it is sane).
+    """
+    pats = real_key["patient"].astype(str).to_numpy()
+    rdl = (
+        real_delta
+        if genes is None
+        else cast("pd.DataFrame", real_delta[[str(g) for g in genes if g in real_delta.columns]])
+    )
+    bl = (
+        base
+        if genes is None
+        else cast("pd.DataFrame", base[[str(g) for g in rdl.columns if g in base.columns]])
+    )
+    d_blocks: list[pd.DataFrame] = []
+    k_blocks: list[pd.DataFrame] = []
+    for line in [str(i) for i in base.index]:
+        tr = pats != line
+        if not tr.any():
+            continue
+        rd = real_delta.loc[tr].reset_index(drop=True)
+        rk = real_key.loc[tr].reset_index(drop=True)
+        if kind == "additive":
+            d, kk = build_additive_deltas(rd, rk, [line])
+        elif kind == "knn":
+            d, kk = build_knn_deltas(base.drop(index=line), rd, rk, base.loc[[line]], [line], k=k)
+        elif kind in ("pca", "nmf"):
+            d, kk = build_learned_deltas(
+                bl.drop(index=line),
+                rdl.loc[tr].reset_index(drop=True),
+                rk,
+                bl.loc[[line]],
+                [line],
+                reducer=kind,
+            )
+        else:
+            raise ValueError(f"unknown baseline source {kind!r}")
+        d_blocks.append(d)
+        k_blocks.append(kk)
+    if not d_blocks:
+        raise ValueError(f"no held-out lines produced a {kind} delta")
+    return pd.concat(d_blocks, ignore_index=True), pd.concat(k_blocks, ignore_index=True)
+
+
+def learned_gene_panel(
+    real_delta: pd.DataFrame, hallmark_path: Path, *, n_hvg: int = 2000
+) -> pd.Index:
+    """HVG-union-Hallmark gene panel for the ``pca``/``nmf`` delta sources.
+
+    The top ``n_hvg`` most-variable genes of the real delta, unioned with every gene named
+    in any Hallmark signature -- so the learned reducers see both the highest-signal genes
+    and the genes the fixed-signature readouts score on, keeping the two checks comparable.
+    """
+    hallmark = load_hallmark(hallmark_path)
+    sig_genes = pd.Index(sorted({g for genes, _ in hallmark.values() for g in genes}))
+    # DataFrame.var(axis=0) directly has an ambiguous pandas-stubs overload; go via numpy
+    # (ddof=1 matches pandas' default sample variance) so the result is unambiguously a Series.
+    var = real_delta.to_numpy(dtype=np.float64).var(axis=0, ddof=1)
+    var_s = pd.Series(var, index=real_delta.columns)
+    hvg = pd.Index(var_s.sort_values(ascending=False).index[:n_hvg])
+    return hvg.union(sig_genes)
 
 
 def build_l1000_gdsc_pairs(

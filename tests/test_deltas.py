@@ -7,6 +7,7 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import pytest
 
 from fmharness.deltas import (
     build_additive_deltas,
@@ -15,7 +16,9 @@ from fmharness.deltas import (
     build_learned_deltas,
     build_tahoe_deltas,
     drug_pert_maps,
+    learned_gene_panel,
     logcpm,
+    loo_baseline_source,
     pseudobulk_de_to_deltas,
 )
 
@@ -238,3 +241,49 @@ def test_pseudobulk_de_to_deltas_pools_doses_and_rekeys() -> None:
     # baseline = mean baseMean per line per gene; the dropped 'other' row does not affect ACH-2/A
     assert np.allclose(base.loc["ACH-1"].to_numpy(), [10.0, 20.0])
     assert np.allclose(base.loc["ACH-2"].to_numpy(), [5.0, 5.0])
+
+
+def test_loo_baseline_source_additive_never_sees_its_own_held_out_line() -> None:
+    # 3 lines, 1 drug each with a distinct delta value; additive's held-out prediction for
+    # each line must come only from the OTHER two lines' mean, never its own value.
+    real_delta = pd.DataFrame({"A": [10.0, 20.0, 30.0]})
+    real_key = pd.DataFrame({"patient": ["L1", "L2", "L3"], "drug": ["d1", "d1", "d1"]})
+    base = pd.DataFrame({"A": [0.0, 0.0, 0.0]}, index=pd.Index(["L1", "L2", "L3"]))
+
+    delta, key = loo_baseline_source("additive", real_delta, real_key, base, k=1)
+
+    assert len(delta) == 3
+    want = {"L1": (20.0 + 30.0) / 2, "L2": (10.0 + 30.0) / 2, "L3": (10.0 + 20.0) / 2}
+    for line, expected in want.items():
+        row = delta.loc[key["patient"].to_numpy() == line]
+        assert np.isclose(float(row["A"].iloc[0]), expected)
+
+
+def test_loo_baseline_source_raises_on_unknown_kind() -> None:
+    # 2 lines, so leaving one out still leaves training data behind -- with only 1 line the
+    # held-out line's training mask would be all-False and the loop would `continue` before
+    # ever reaching the kind dispatch, masking the intended error with a different one.
+    real_delta = pd.DataFrame({"A": [1.0, 2.0]})
+    real_key = pd.DataFrame({"patient": ["L1", "L2"], "drug": ["d1", "d1"]})
+    base = pd.DataFrame({"A": [0.0, 0.0]}, index=pd.Index(["L1", "L2"]))
+    with pytest.raises(ValueError, match="unknown baseline source"):
+        loo_baseline_source("bogus", real_delta, real_key, base, k=1)
+
+
+def test_learned_gene_panel_unions_hvgs_and_hallmark_genes(tmp_path: Path) -> None:
+    gmt = tmp_path / "hallmark.gmt"
+    # load_hallmark only keeps names in its fixed allow-list (see _HALLMARK_DIRECTION);
+    # an unrecognized set name would be silently dropped, so use a real one here.
+    gmt.write_text("HALLMARK_P53_PATHWAY\thttp://example\tSIGGENE1\tSIGGENE2\n")
+    # 4 genes, HVG1 has the highest variance (picked at n_hvg=1); SIGGENE1/SIGGENE2 come in
+    # from the hallmark set regardless of their own variance.
+    real_delta = pd.DataFrame(
+        {
+            "HVG1": [1.0, 100.0, -50.0],
+            "HVG2": [1.0, 1.0, 1.0],
+            "SIGGENE1": [1.0, 1.0, 1.0],
+            "SIGGENE2": [1.0, 1.0, 1.0],
+        }
+    )
+    panel = learned_gene_panel(real_delta, gmt, n_hvg=1)
+    assert set(panel) == {"HVG1", "SIGGENE1", "SIGGENE2"}

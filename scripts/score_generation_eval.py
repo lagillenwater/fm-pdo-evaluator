@@ -57,11 +57,10 @@ from sklearn.preprocessing import StandardScaler
 from fmharness.adapters import build_adapters
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
-    build_additive_deltas,
     build_generated_deltas,
-    build_knn_deltas,
-    build_learned_deltas,
     build_tahoe_deltas,
+    learned_gene_panel,
+    loo_baseline_source,
 )
 from fmharness.evaluation import build_sample_design, delta_fidelity, score_predictions
 from fmharness.signatures import load_hallmark, score_signatures
@@ -188,55 +187,6 @@ def _penalized_preds(
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 
-def _loo_baseline_source(
-    kind: str,
-    real_delta: pd.DataFrame,
-    real_key: pd.DataFrame,
-    base: pd.DataFrame,
-    *,
-    k: int,
-    genes: pd.Index | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Leave-one-cell-line-out baseline deltas: for each line, rebuild the source from the
-    OTHER lines and predict the held-out line, so it never sees its own treated cells.
-
-    ``additive``/``knn`` use all genes; ``pca``/``nmf`` (build_learned_deltas) reduce on the
-    ``genes`` HVG panel, which keeps the per-line PCA/NMF fast and well-conditioned (49 lines
-    vs ~50k genes is hopelessly p>>n; on ~2k informative genes it is sane)."""
-    pats = real_key["patient"].astype(str).to_numpy()
-    # for the learned sources, restrict the delta/baseline to the shared HVG panel up front.
-    rdl = real_delta if genes is None else real_delta[[g for g in genes if g in real_delta.columns]]
-    bl = base if genes is None else base[[g for g in rdl.columns if g in base.columns]]
-    d_blocks: list[pd.DataFrame] = []
-    k_blocks: list[pd.DataFrame] = []
-    for line in [str(i) for i in base.index]:
-        tr = pats != line
-        if not tr.any():
-            continue
-        rd = real_delta[tr].reset_index(drop=True)
-        rk = real_key[tr].reset_index(drop=True)
-        if kind == "additive":
-            d, kk = build_additive_deltas(rd, rk, [line])
-        elif kind == "knn":
-            d, kk = build_knn_deltas(base.drop(index=line), rd, rk, base.loc[[line]], [line], k=k)
-        elif kind in ("pca", "nmf"):
-            d, kk = build_learned_deltas(
-                bl.drop(index=line),
-                rdl[tr].reset_index(drop=True),
-                rk,
-                bl.loc[[line]],
-                [line],
-                reducer=kind,
-            )
-        else:
-            raise ValueError(f"unknown baseline source {kind!r}")
-        d_blocks.append(d)
-        k_blocks.append(kk)
-    if not d_blocks:
-        raise ValueError(f"no held-out lines produced a {kind} delta")
-    return pd.concat(d_blocks, ignore_index=True), pd.concat(k_blocks, ignore_index=True)
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--context", default=None, help="Tahoe context AnnData (build_tahoe_context)")
@@ -322,17 +272,18 @@ def main() -> None:
     # genes they are built on, so without the Hallmark genes a fixed readout would see an empty set
     # on those sources and score them zero (the bug that NaN'd pca/nmf x proliferation).
     hallmark = load_hallmark(repo / "data/static/hallmark_signatures.gmt")
-    sig_genes = pd.Index(sorted({g for genes, _ in hallmark.values() for g in genes}))
     hvg = pd.Index(real_delta.var(axis=0).sort_values(ascending=False).index[: args.n_hvg])
-    learned_genes = hvg.union(sig_genes)
+    learned_genes = learned_gene_panel(
+        real_delta, repo / "data/static/hallmark_signatures.gmt", n_hvg=args.n_hvg
+    )
 
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": _loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
-        "knn": _loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
-        "pca": _loo_baseline_source(
+        "additive": loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
+        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
+        "pca": loo_baseline_source(
             "pca", real_delta, real_key, base, k=args.k, genes=learned_genes
         ),
-        "nmf": _loo_baseline_source(
+        "nmf": loo_baseline_source(
             "nmf", real_delta, real_key, base, k=args.k, genes=learned_genes
         ),
     }
