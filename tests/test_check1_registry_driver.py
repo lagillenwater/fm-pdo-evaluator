@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 # scripts/check1_registry_driver.py, importable via pytest's pythonpath = ["scripts"].
-from check1_registry_driver import corpus_declared_partially, run_check1
+from check1_registry_driver import corpus_declared_partially, parse_corpus_set, run_check1
 
 
 def _write_adata(path: Path, x: list[list[float]], obs: list[str], var: list[str]) -> None:
@@ -164,6 +164,17 @@ def test_run_check1_keeps_delta_rows_aligned_to_the_filtered_key(tmp_path: Path)
     stack_row = table[table["source"] == "stack"].iloc[0]
     assert stack_row["n_pairs"] == 3
     assert stack_row["r"] > 0.9
+
+
+def test_parse_corpus_set_strips_whitespace_and_drops_empties() -> None:
+    # Task 9's workflow has a human copy-paste a comma-separated list into these flags --
+    # a stray space after a comma (or a trailing comma) must not produce a corpus entry
+    # like " B" or "" that can never match a real line/drug name.
+    assert parse_corpus_set(" A , B ,") == {"A", "B"}
+
+
+def test_parse_corpus_set_passes_none_through() -> None:
+    assert parse_corpus_set(None) is None
 
 
 def test_corpus_declared_partially_rejects_a_half_declared_corpus() -> None:

@@ -136,6 +136,20 @@ def corpus_declared_partially(corpus_lines: str | None, corpus_drugs: str | None
     return (corpus_lines is None) != (corpus_drugs is None)
 
 
+def parse_corpus_set(raw: str | None) -> set[str] | None:
+    """Parse a comma-separated ``--corpus-lines``/``--corpus-drugs`` value into a set.
+
+    Task 9's documented workflow has a human copy-paste a comma-separated list printed by
+    an earlier step into these flags -- strip whitespace around each entry and drop empty
+    entries, so a stray space after a comma (``"A, B, C"``) does not silently produce a
+    corpus entry (``" B"``) that can never match a real line/drug name and weakens the
+    leakage filter with no error. ``None`` (flag not given) stays ``None``.
+    """
+    if raw is None:
+        return None
+    return {s.strip() for s in raw.split(",") if s.strip()}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--context", required=True, help="Tahoe context AnnData (build_tahoe_context)")
@@ -174,8 +188,8 @@ def main() -> None:
         hallmark_path=repo / args.hallmark_path,
         n_hvg=args.n_hvg,
         k=args.k,
-        pretraining_lines=set(args.corpus_lines.split(",")) if args.corpus_lines else None,
-        pretraining_drugs=set(args.corpus_drugs.split(",")) if args.corpus_drugs else None,
+        pretraining_lines=parse_corpus_set(args.corpus_lines),
+        pretraining_drugs=parse_corpus_set(args.corpus_drugs),
         task_signal_in_pretrain="adjacent" if args.corpus_lines else "none",
     )
     print(table.to_string(index=False))
