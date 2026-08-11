@@ -39,7 +39,7 @@ def check_raw_counts(x: sparse.csr_matrix, source: str) -> None:
     -- so this covers dense-then-sparsified input identically to native sparse input, with
     no per-row/per-cell loop.
     """
-    if x.data.size and (not np.all(x.data >= 0) or not np.allclose(x.data, np.round(x.data))):
+    if x.data.size and (not np.all(x.data >= 0) or np.any(x.data != np.rint(x.data))):
         raise SystemExit(
             f"{source} does not look like raw counts (found negative or non-integer values); "
             "pass --counts-layer to point at the correct layer"
