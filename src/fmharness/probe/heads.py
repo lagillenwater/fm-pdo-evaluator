@@ -7,9 +7,18 @@ nonlinear kernel ridge without touching the harness. Both heads share the
 ``fit``/``predict_parts`` contract and the same PCA/NMF reduction, so the only
 thing that changes is the residual model -- the comparison stays apples-to-apples.
 
-The bilinear model is intentionally absent: it needs drug fingerprints ``g_d`` and
-operates on ``[z, g, z(x)g]``, so it does not satisfy the ``fit(emb, drugs, y)``
-contract. It contributes its row to the head-invariance table from its own script.
+The bilinear and biomarker models DO satisfy the same contract --
+``BilinearEstimator`` (``probe/bilinear_head.py``) and ``BiomarkerEstimator``
+(``probe/biomarker_head.py``) both implement the ``Estimator`` protocol
+(``probe/estimator.py``) -- but are intentionally absent from ``HEADS``/
+``make_head`` here. The registry's shape is a zero-arg factory configured by one
+uniform kwarg set (``n_components``, ``std_floor``, ``reducer``, ``per_drug``),
+and neither model fits it: bilinear additionally requires a drug-fingerprint
+lookup, biomarker a pre-specified rule table plus WES alteration calls and a
+gene-symbol map, none of which a ``--head`` flag can supply. Wiring them into a
+by-name factory is driver-integration work, explicitly out of scope for this
+plan; until then they are constructed directly and contribute their rows to the
+head-invariance table from their own scripts.
 """
 
 from __future__ import annotations

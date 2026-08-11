@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+LeakageBasis = Literal["measured", "declared", "unknown"]
 
 
 class LeakageProfile(BaseModel):
@@ -28,6 +31,9 @@ class LeakageProfile(BaseModel):
     declared_corpus_overlap: dict[str, float] | None = None
     subtype_prevalence: dict[str, float] = Field(default_factory=dict)
     generated_at: datetime
+    line_overlap_frac: float | None = Field(default=None, ge=0.0, le=1.0)
+    doubly_exposed_frac: float | None = Field(default=None, ge=0.0, le=1.0)
+    basis: LeakageBasis = "unknown"
 
 
 class EnvironmentSnapshot(BaseModel):

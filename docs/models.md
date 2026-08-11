@@ -22,8 +22,16 @@ are independent:
 Both heads share the per-drug mean and the PCA/NMF reduction
 ([`probe/base.py`](../src/fmharness/probe/base.py)) and the same `fit(emb, drugs, y)` /
 `predict_parts(emb, drugs) -> (base, residual)` contract, so any representation can be scored
-under either head apples-to-apples. The bilinear and biomarker models below are standalone
-(they do not use this head interface).
+under either head apples-to-apples. The bilinear and biomarker models below share that same
+contract — [`BilinearEstimator`](../src/fmharness/probe/bilinear_head.py) and
+[`BiomarkerEstimator`](../src/fmharness/probe/biomarker_head.py) both implement the
+[`Estimator`](../src/fmharness/probe/estimator.py) protocol — but are deliberately not
+registered in [`probe/heads.py`](../src/fmharness/probe/heads.py)'s `HEADS`/`make_head`, which
+stays `("linear", "kernel")`. `make_head` returns a zero-arg factory configured by one uniform
+kwarg set (`n_components`, `std_floor`, `reducer`, `per_drug`), and these two need constructor
+arguments it cannot supply: drug fingerprints for bilinear, a rule table plus WES alteration
+calls and a gene-symbol map for biomarker. Exposing them behind a `--head` flag is driver
+integration, out of scope here; they are constructed directly by their own scripts.
 
 ## Catalogue
 

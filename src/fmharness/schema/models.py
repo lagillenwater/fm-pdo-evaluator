@@ -19,6 +19,13 @@ from pydantic import BaseModel, ConfigDict, Field
 # perturbation response without the harness's specific drug-response readout).
 TaskSignal = Literal["none", "adjacent", "direct"]
 
+# The scale of gene expression data expected by the model. ``raw_counts`` is
+# integer read counts; ``cpm`` is counts per million; ``log1p_cpm`` is
+# log(1 + CPM). Foundation models are typically pretrained on one specific
+# scale, and the harness validates this boundary before dispatching to the
+# adapter to catch normalization mismatches early.
+ExpectedInput = Literal["raw_counts", "cpm", "log1p_cpm"]
+
 
 class ModelMetadata(BaseModel):
     """Pretraining provenance for one model adapter."""
@@ -28,5 +35,6 @@ class ModelMetadata(BaseModel):
     pretraining_corpus: str = Field(min_length=1)
     pretraining_cutoff_date: date
     task_signal_in_pretrain: TaskSignal
+    expected_input: ExpectedInput
     model_weights_hash: str | None = None
     container_digest: str | None = None

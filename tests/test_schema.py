@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from datetime import date
 
 import pytest
 from hypothesis import given
@@ -14,6 +15,7 @@ from fmharness.schema import (
     DrugAssay,
     EnvironmentSnapshot,
     LeakageProfile,
+    ModelMetadata,
     Patient,
     Prediction,
     Sample,
@@ -198,4 +200,76 @@ def test_environment_snapshot_rejects_short_commit() -> None:
             seed=0,
             cuda_deterministic=False,
             data_commit="b" * 64,
+        )
+
+
+def test_model_metadata_requires_expected_input() -> None:
+    with pytest.raises(ValidationError):
+        ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+        )  # type: ignore[call-arg]
+
+
+def test_model_metadata_expected_input_rejects_unknown_value() -> None:
+    with pytest.raises(ValidationError):
+        ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+            expected_input="fpkm",  # type: ignore[arg-type]
+        )
+
+
+def test_model_metadata_expected_input_accepts_declared_values() -> None:
+    for value in ("raw_counts", "cpm", "log1p_cpm"):
+        m = ModelMetadata(
+            pretraining_corpus="none",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain="none",
+            expected_input=value,
+        )
+        assert m.expected_input == value
+
+
+def test_leakage_profile_accepts_filtering_fields() -> None:
+    p = LeakageProfile(
+        tranche_id="t1",
+        model_version="mock@v1",
+        drug_overlap_fraction=0.2,
+        generated_at=dt.datetime(2026, 1, 1),
+        line_overlap_frac=0.1,
+        doubly_exposed_frac=0.02,
+        basis="measured",
+    )
+    assert p.basis == "measured"
+    assert p.line_overlap_frac == 0.1
+    assert p.doubly_exposed_frac == 0.02
+
+
+def test_leakage_profile_basis_unknown_allows_null_fractions() -> None:
+    p = LeakageProfile(
+        tranche_id="t1",
+        model_version="mock@v1",
+        drug_overlap_fraction=0.0,
+        generated_at=dt.datetime(2026, 1, 1),
+        line_overlap_frac=None,
+        doubly_exposed_frac=None,
+        basis="unknown",
+    )
+    assert p.basis == "unknown"
+    assert p.line_overlap_frac is None
+
+
+def test_leakage_profile_basis_rejects_unknown_literal() -> None:
+    with pytest.raises(ValidationError):
+        LeakageProfile(
+            tranche_id="t1",
+            model_version="mock@v1",
+            drug_overlap_fraction=0.0,
+            generated_at=dt.datetime(2026, 1, 1),
+            line_overlap_frac=None,
+            doubly_exposed_frac=None,
+            basis="probably_fine",  # type: ignore[arg-type]
         )

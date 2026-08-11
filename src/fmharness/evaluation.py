@@ -14,8 +14,8 @@ from typing import cast
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
-from sklearn.model_selection import GroupKFold
 
+from fmharness.cv import CVScheme, group_k_fold
 from fmharness.data.loaders import CoderDataBundle
 
 _MODEL_TYPE = {"organoid": "patient derived organoid", "tumor": "tumor"}
@@ -104,27 +104,44 @@ def grouped_cv_predict(
     x_df: pd.DataFrame,
     design: pd.DataFrame,
     *,
-    n_splits: int,
+    n_splits: int | None = None,
+    cv: CVScheme | None = None,
     seed: int = 0,
 ) -> pd.DataFrame:
-    """Grouped K-fold (split by patient). Fit a fresh probe per fold, collect
-    held-out (base, residual, prediction). ``probe_factory`` returns a probe
-    exposing ``fit(emb, drugs, y, groups)`` and ``predict_parts(emb, drugs)``.
+    """Fit a fresh probe per fold, collect held-out (base, residual, prediction).
+    ``probe_factory`` returns a probe exposing ``fit(emb, drugs, y, groups)``
+    and ``predict_parts(emb, drugs)``.
+
+    Exactly one of ``n_splits`` (grouped K-fold split by patient -- the
+    harness's original CV shape) or ``cv`` (any ``CVScheme``, e.g. from
+    ``fmharness.cv.resolve_cv`` or ``leave_subtype_out``) must be given.
+    ``cv`` is the harness's registry-driven path -- it composes with
+    ``Modality.recommended_cv()`` and with ``filter_leakage``'s
+    row-count-changing output without a second capping step; ``n_splits``
+    stays for existing callers that just want K folds by patient.
+
+    ``seed`` has no effect on the ``n_splits``/``group_k_fold`` path --
+    ``GroupKFold`` is a deterministic size-balancing assignment, not shuffled.
+    It is accepted for callers passing a ``cv`` that carries its own
+    randomness (e.g. ``leave_subtype_out(seed=...)``); seed that scheme
+    directly rather than relying on this parameter to reach it.
     """
-    patients = design["patient"].to_numpy()
-    k = min(n_splits, int(design["patient"].nunique()))
+    if (n_splits is None) == (cv is None):
+        raise ValueError("pass exactly one of n_splits or cv")
+    scheme = group_k_fold(n_splits) if n_splits is not None else cv
+    assert scheme is not None
     rows: list[dict[str, object]] = []
-    for tr, te in GroupKFold(n_splits=k).split(design, groups=patients):
+    for tr, te in scheme.splits(design):
         d_tr, d_te = design.iloc[tr], design.iloc[te]
         probe = probe_factory()
         probe.fit(  # type: ignore[attr-defined]
-            x_df.loc[d_tr["patient"]].to_numpy(),
+            x_df.loc[d_tr["patient"]],
             list(d_tr["drug"]),
             d_tr["y"].to_numpy(),
             groups=list(d_tr["patient"]),
         )
         base, resid = probe.predict_parts(  # type: ignore[attr-defined]
-            x_df.loc[d_te["patient"]].to_numpy(), list(d_te["drug"])
+            x_df.loc[d_te["patient"]], list(d_te["drug"])
         )
         for (_, r), b, rs in zip(d_te.iterrows(), base, resid, strict=True):
             rows.append(
