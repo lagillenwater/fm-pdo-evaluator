@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=stack-finetune
 #SBATCH --partition=aa100
-#SBATCH --qos=gpu-testing
+#SBATCH --qos=gpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
-#SBATCH --time=1:00:00              # training run; raise/lower once epoch time is known
+#SBATCH --time=8:00:00              # real run, 10 epochs; re-tune once epoch time is observed
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
@@ -41,7 +41,7 @@ stack-finetune \
     --replacement_ratio 0.1 \
     --batch_size 8 \
     --learning_rate 1e-4 \
-    --max_epochs 1 \
+    --max_epochs 10 \
     --precision bf16-mixed \
     --gpus 1 \
     --num_workers 8 \
