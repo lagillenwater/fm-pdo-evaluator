@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=tahoe-context
-#SBATCH --partition=amilan
-#SBATCH --qos=long                   # generous ceiling; the pushed-down read is typically ~1-2h
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-long                   # generous ceiling; the pushed-down read is typically ~1-2h
 #SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

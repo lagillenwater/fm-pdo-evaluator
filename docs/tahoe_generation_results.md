@@ -123,76 +123,132 @@ generally come from *different* penalties, so no single deployable model achieve
 Stack embedding.** Drug main effect (global) reaches ~0.5–0.64 for every representation, but the
 cell-line-specific interaction is ≈0 and non-significant for all except base-embedding ridge.
 
-> **Proposed — MOA-level interpretation of the shortlists.** Selection gap is drug-level and
-> mechanism-blind: representations can post the same ΔAUC while shortlisting mechanistically
-> different drugs, and the top-3 convergence is likely because the true-best drug for most of the
-> 50 lines is one of a few broadly-potent compounds (so every representation picks the same
-> pan-active MOAs — a saturated, low-power discriminator). Two mechanism-aware readouts to add:
-> (1) **MOA hit-rate@k** — does the top-k contain a drug sharing the true-best's pathway/target?
-> Me-too compounds collapse, it is the clinical question (right pathway, not right compound), and
-> the base embedding's positive interaction predicts it should hit more often than PCA at equal
-> ΔAUC. (2) **Stratify the interaction by MOA class** — targeted agents (MEK/PI3K/RTK/CDK…) are
-> line-specific by biology, broad cytotoxics are not, so base's edge should concentrate in
-> targeted MOAs and vanish in cytotoxics; if it does, that is mechanistic corroboration of the
-> 0.119 and ties to the driver-matching story, if not the signal is likely non-biological.
-> Caveats: 50 lines → per-MOA is illustrative not powered; control hit-rate against the pan-active
-> base rate (shuffled shortlist) so saturation does not read as skill. Needs GDSC2
-> `PATHWAY_NAME`/`PUTATIVE_TARGET` joined to the drug table (not in the current context map).
+### MOA-level interpretation of the shortlists
 
-> **Proposed — are all the models just picking the same few toxic drugs?** The direct way to
-> answer this is not another summary statistic; it is to look at the actual shortlists. For each
-> representation, write down the drug it ranks #1 for each of the ~50 cell lines, and put that
-> next to the drug that *actually* was best for that line:
->
-> | | distinct drugs ever picked #1 | most-picked drug, and its share of lines | share of #1 picks that are broadly active |
-> |---|---|---|---|
-> | observed best (the truth) | *reference* | *reference* | *reference* |
-> | potency prior (ignores the cell line) | 1 by construction | 100% | 100% |
-> | expr / pca / nmf / additive / knn | ? | ? | ? |
-> | stack (gen delta) | ? | ? | ? |
-> | base (embed) | ? | ? | ? |
->
-> "Broadly active" = a drug whose AUC is below the line's own median in most lines — i.e. the
-> compounds that work on nearly everything. Read the table like this: **if a representation picks
-> only 1–2 distinct drugs across all 50 lines, it is ranking toxicity and nothing else.** If its
-> pick distribution resembles the observed one, it is doing something cell-line-specific.
->
-> **The truth is itself concentrated, which is the trap.** Across 955 GDSC2 lines the observed
-> best drug is one of only 13 distinct compounds, and Staurosporine alone is best for 69% of
-> lines. So "picks toxic drugs" is partly *correct behaviour*, and a good gap@k does not by
-> itself indicate personalization. The question is whether the models are **more** concentrated
-> than the truth. On a 50-line panel the observed reference is ~6 distinct drugs (95% band 4–8)
-> with a modal share of ~0.69 (band 0.58–0.80).
->
-> **The one control that settles it.** Rank drugs purely by their mean AUC over the training
-> lines, ignoring the cell line entirely — the "potency prior". This is not an external baseline:
-> `_penalized_preds` fits per drug with `StandardScaler` on the training lines
-> (`score_generation_eval.py:179`) and `fit_intercept=True`, so the intercept already *is* that
-> training mean, and the prior is the same fitted model with its coefficients zeroed. Score it
-> with the same gap@k on the same folds. **If the models do not beat it, their shortlists carry
-> no cell-line information at all.** Two independent reconstructions put the prior at gap@1
-> ≈ 0.06–0.11 against 0.22–0.36 for every representation, so the expected result is that the
-> prior *wins* — a stronger statement than "confounded by toxicity".
->
-> **Why we cannot answer this today, and the fix.** `_penalized_preds` builds the per-(line, drug)
-> prediction frame, scores it, and discards it (`score_generation_eval.py:465-468`); nothing in
-> `results/` holds per-pair predictions, so the picks are unrecoverable. Emitting `y_prior` in the
-> fold loop and dumping `(source, penalty, patient, drug, y_true, y_pred, y_prior)` to
-> `results/check2_preds.parquet` is ~10 lines, after which the table above and the prior
-> comparison are a groupby. `_personalization` (`per_patient_eval.py:444`) already computes the
-> distinct-count and modal-share columns and already carries the observed row as its reference.
->
-> **If the answer comes back "yes, concentrated"**, the follow-up is to stop scoring selection in
-> raw AUC and score it in percentile-within-drug instead (each drug's out-of-fold rank among
-> training lines). That makes every drug's marginal uniform, so a pan-cytotoxic compound carries
-> zero advantage, random is exactly 1/(k+1), and the potency prior lands there by construction —
-> which is the property that deleting the toxic drugs from the panel was trying to buy, except
-> that deletion also collapses gap@k's per-line normalizer (the prior moves 0.061 → 0.508 with no
-> change in model quality) and conditions on the outcome, since the observed best drug is itself
-> a broadly-active one for 83–93% of lines.
->
-> This closes the loop on the MOA note above: its guess that the top-3 convergence comes from a
-> few broadly-potent compounds is exactly what the first table tests.
+Selection gap is drug-level and mechanism-blind: representations can post the same gap@k while
+shortlisting mechanistically different drugs. `scripts/check2_selection_audit.py` joins the
+check-2 shortlists to GDSC2's `TARGET` / `TARGET_PATHWAY` columns
+(`data/raw/gdsc2_sarcoma/gdsc2/screened_compounds_rel_8.5.csv`) — via
+`data/static/tahoe_pert_to_cid.tsv`, since the eval's drug key is a PubChem CID, not a name —
+and gets 30/30 drugs annotated. Two mechanism-aware readouts, on the 44-line, 30-drug check-2
+panel:
+
+**1. MOA hit-rate@k** — does the top-k shortlist contain a drug sharing the true-best drug's
+target pathway? Against a shuffled-shortlist base rate of moa@1=0.106 / moa@3=0.291 /
+moa@5=0.441 (what a random ranking already scores, since a handful of pathways cover much of
+this 30-drug panel):
+
+| representation (L2) | moa@1 | moa@3 | moa@5 |
+|---|---|---|---|
+| pca | 0.386 | 0.750 | 0.864 |
+| nmf | 0.386 | 0.773 | 0.864 |
+| base | 0.295 | 0.727 | 0.909 |
+| additive | 0.295 | 0.750 | 0.909 |
+| stack | 0.295 | 0.591 | 0.841 |
+| knn | 0.273 | 0.705 | 0.841 |
+| expr | 0.227 | 0.659 | 0.795 |
+| aligned | 0.205 | 0.705 | 0.909 |
+| potency prior | 0.318 | 0.750 | 0.886 |
+
+Every representation clears the shuffled floor, but so does the potency prior, and all nine
+rows sit in the same narrow band. MOA hit-rate@k does not separate the representations from
+each other, or from the line-blind prior, any more cleanly than gap@k does — it corroborates
+that this panel is pathway-saturated (few pathways cover most of the 30 drugs), not that any
+representation is picking better mechanisms.
+
+**2. Interaction stratified by MOA class** — targeted agents are line-specific by biology, broad
+cytotoxics are not:
+
+| representation (L2) | int. targeted | int. cytotoxic |
+|---|---|---|
+| base | **+0.134** | +0.051 |
+| aligned | +0.076 | −0.045 |
+| stack | +0.015 | −0.056 |
+| pca | 0.000 | +0.004 |
+| expr | −0.010 | +0.080 |
+| nmf | −0.015 | −0.071 |
+| knn | −0.067 | −0.059 |
+| additive | −0.086 | −0.191 |
+| potency prior | −0.215 | −0.357 |
+
+This is the mechanistic corroboration the original proposal asked for: **base is the only
+representation whose interaction concentrates in the targeted class** (+0.134 targeted vs +0.051
+cytotoxic), and it is the largest targeted interaction of any representation — consistent with
+the 0.119 headline and the driver-matching story. `aligned` shows the same direction more weakly
+(+0.076 / −0.045). Every other representation sits at or near zero in the targeted class (pca
+0.000, stack +0.015) or negative (expr, nmf, knn, additive); the potency prior is clearly
+negative in both classes, as expected from a predictor that carries no cell-line information at
+all.
+
+### Are the models just picking the same few toxic drugs? — measured
+
+For each representation, the drug ranked #1 for each of the 44 cell lines in the check-2 panel,
+against the drug that was *actually* best for that line ("observed"). "Broadly active" = a drug
+whose AUC is below the line's own median in most lines — the compounds that work on nearly
+everything.
+
+| representation (L2) | distinct drugs picked #1 | modal share | broadly active share |
+|---|---|---|---|
+| observed best (the truth) | 10 | 0.295 | 0.977 |
+| potency prior (ignores the cell line) | 3 | 0.909 | 1.000 |
+| additive | 3 | 0.864 | 1.000 |
+| nmf | 5 | 0.818 | 1.000 |
+| knn | 4 | 0.750 | 1.000 |
+| aligned | 6 | 0.750 | 1.000 |
+| pca | 6 | 0.705 | 1.000 |
+| base | 5 | 0.727 | 1.000 |
+| stack | 6 | 0.591 | 1.000 |
+| expr | 8 | 0.500 | 1.000 |
+
+**The models are more concentrated than the truth — unambiguously.** Across all 24
+(representation × penalty) combinations in `results/check2_selection_audit.csv`, distinct ranges
+3–8 and modal share ranges 0.500–0.886; every single one falls inside the observed row's 10
+distinct / 0.295 modal share. The truth itself is *not* concentrated on this 30-drug panel — 10
+of 30 drugs are somebody's actual best, and the most-picked truth-optimal drug wins under 30% of
+lines — a different picture from the 955-line, 621-compound GDSC2 catalog (13 distinct
+best-drugs, Staurosporine 69%) that motivated the original 4–8 / 0.58–0.80 expectation. On this
+panel the gap between truth and model is, if anything, larger than predicted: every
+representation collapses onto a handful of drugs the truth does not collapse onto.
+
+**The one control that settles it: the potency prior.** Rank drugs purely by their training-fold
+mean AUC, ignoring the cell line — `y_prior` in `results/check2_preds.parquet` (Task 3), scored
+with the identical `regret_norm_at_k` on the identical folds.
+
+| | gap@1 | pct_gap@1 |
+|---|---|---|
+| potency prior | 0.245 | **0.621 — worst of all 26 rows** |
+| best representation × penalty (pca, L1/L2) | **0.219** | — |
+| worst representation × penalty (expr, EN) | 0.393 | — |
+| range across all 24 representation × penalty combos | 0.219–0.393 | 0.478–0.608 |
+
+**In raw AUC, the prior does not lose.** Its gap@1 (0.245) sits inside the pack, not below it:
+only 5 of 24 representation × penalty combinations score lower (pca at all three penalties,
+`aligned` L1/EN), and by a margin of 0.001–0.026 — small next to the ~0.17 spread the
+representations show among themselves (0.219 to 0.393). The other 19 combinations, including
+every `expr` and `stack` row, score higher (worse) than the prior, several by 0.05–0.15. No
+representation clearly separates from the prior on this axis.
+
+**In within-drug percentile space, the picture inverts and resolves.** The prior's pct_gap@1
+(0.621) is the single worst value in the entire 26-row table — worse than every representation
+at every penalty, the closest being `aligned` L2 at 0.478, a 0.14 gap. Removing each drug's own
+location and scale is exactly what strips the prior of its advantage, and it does so cleanly,
+in the direction theory predicts.
+
+**The recorded metric decision: `pct_gap@k`, not raw-AUC `gap@k`.** The earlier prediction (two
+independent reconstructions, prior gap@1 ≈ 0.06–0.11 against 0.22–0.36 for the representations)
+was directionally right but numerically off — the measured prior (0.245) is far higher than
+predicted, and the raw-AUC gap between the prior and the representations turned out to be inside
+the noise rather than the wide margin expected. That makes the case for `pct_gap@k` stronger, not
+weaker: raw-AUC `gap@k` could not even cleanly separate a cell-line-blind ranking from the actual
+representations, so it was never a valid selection metric on this panel. `pct_gap@k` does
+separate them, correctly, with the line-blind prior scoring worst of all. **Phases 4–6 score
+selection with `pct_gap@k`.**
+
+This closes the loop on the MOA finding above: MOA hit-rate@k does not separate the
+representations from the prior either (potency prior 0.318 / 0.750 / 0.886 sits mid-pack against
+moa@k ranges of 0.205–0.386 / 0.591–0.773 / 0.795–0.909) — an independent confirmation that
+raw-AUC-adjacent selection metrics do not isolate per-line personalization on this panel. Only
+`pct_gap@k` and the interaction-by-MOA-class split (base's targeted-class edge) do.
 
 ## Ceilings — the most any predictor can score
 

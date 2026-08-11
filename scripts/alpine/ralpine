@@ -14,6 +14,7 @@
 #
 #   ralpine status                 # is the multiplexed connection up?
 #   ralpine sq                     # squeue for you
+#   ralpine parts                  # sinfo: partitions, availability, walltime, GPUs
 #   ralpine sacct [JOBID]          # accounting for today, or one job
 #   ralpine ls   <remote-path>
 #   ralpine tail <remote-path> [N]
@@ -87,7 +88,10 @@ case "$sub" in
       exit 1
     fi
     ;;
-  sq)      remote squeue -u "$(whoami)" -o '%.10i %.24j %.8T %.10M %.6D %R' ;;
+  # --me, not `-u $(whoami)`: whoami is the LOCAL username, which is not the Alpine
+  # account (lgillenwater@xsede.org) and made squeue fail with "Invalid user".
+  sq)      remote squeue --me -o '%.10i %.24j %.8T %.10M %.6D %R' ;;
+  parts)   remote sinfo -o '%.20P %.10a %.12l %.6D %.20G' ;;
   sacct)
     if [[ $# -gt 0 ]]; then
       remote sacct -j "$1" --format=JobID,JobName%24,State,Elapsed,MaxRSS,ExitCode

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=stack-score
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
 #SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
