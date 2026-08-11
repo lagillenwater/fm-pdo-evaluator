@@ -128,3 +128,33 @@ def test_brier_score_via_helper() -> None:
     readout_contract.assert_null_on_unbalanced_zero_info_predictor(
         brier_on_binary, expected_null
     )
+
+
+def test_expected_calibration_error_null_on_unbalanced_zero_info_predictor() -> None:
+    """ECE's equal-width binning must not manufacture miscalibration from an
+    uneven panel. Every row of a drug carries the same zero-info y_pred (that
+    drug's own responder rate), so all of a drug's rows land in one bin and each
+    bin is a union of whole drug groups -- making bin confidence identical to
+    bin empirical rate by construction. The null is therefore exactly 0.0, for
+    any n_bins; anything above it would be a binning/missingness artifact.
+    """
+    from . import readout_contract
+
+    def ece_on_binary(panel: pd.DataFrame) -> float:
+        panel = panel.assign(
+            y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+        )
+        drug_mean = panel.groupby("drug")["y_true"].transform("mean")
+        return expected_calibration_error(panel.assign(y_pred=drug_mean), n_bins=10)
+
+    # The null claim is verified directly before it is asserted through the helper.
+    panel = readout_contract.unbalanced_zero_info_panel(seed=0)
+    thresholded = panel.assign(
+        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+    )
+    drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
+    assert np.isclose(
+        expected_calibration_error(thresholded.assign(y_pred=drug_rate), n_bins=10), 0.0
+    )
+
+    readout_contract.assert_null_on_unbalanced_zero_info_predictor(ece_on_binary, 0.0)

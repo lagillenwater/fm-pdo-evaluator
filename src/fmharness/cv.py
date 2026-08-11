@@ -25,6 +25,21 @@ from fmharness.splits.lso import LeaveSubtypeOut, LSOGranularity
 
 @runtime_checkable
 class CVScheme(Protocol):
+    """Turn a design frame into train/test folds: design in, index pairs out.
+
+    A scheme takes the flat ``design[patient, drug, y]`` frame and yields
+    ``(train_idx, test_idx)`` pairs that must be disjoint *by patient*, not
+    merely by row -- one patient contributes many rows (one per drug), so a
+    row-wise split would put the same organoid on both sides and leak.
+
+    The indices are POSITIONAL (0..len(design)-1), matching sklearn's splitter
+    convention, not design-frame labels. Positional is the safe choice because
+    the frames these schemes see have usually been through
+    ``filter_leakage``, which returns a ``reset_index(drop=True)`` frame: its
+    labels are freshly renumbered and carry no meaning, so a label-based
+    contract would silently mean different rows before and after filtering.
+    """
+
     def splits(self, design: pd.DataFrame) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
         """Yield (train_row_idx, test_row_idx) into ``design``, disjoint by patient."""
         ...

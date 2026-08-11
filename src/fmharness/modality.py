@@ -23,6 +23,17 @@ TaskType = Literal["regression", "classification"]
 
 @runtime_checkable
 class Modality(Protocol):
+    """A swappable phenotype target: the label side of an evaluation.
+
+    A Modality owns only which dataset supplies the response, which metric it is
+    measured in, and which sign convention makes a value "good". It deliberately
+    does NOT own the substrate -- which RNA source feeds the representation
+    (tumor vs. organoid vs. cell-line RNA) is a Representation concern, so
+    "Soragni tumor RNA through Stack" and "Soragni organoid RNA through Stack"
+    are two representations aimed at this same Modality. Keeping that boundary
+    is what lets a representation sweep and a target sweep vary independently.
+    """
+
     def load(self, repo: Path) -> pd.DataFrame:
         """design[patient, drug, y] on this modality's native scale."""
         ...
@@ -39,9 +50,21 @@ class Modality(Protocol):
 
 
 class Gdsc2Auc:
-    """GDSC2 AUC. Lower AUC = more sensitive = better response."""
+    """GDSC2 AUC. Lower AUC = more sensitive = better response.
+
+    NOTE on ``cancer_type_filter``: it is NOT an arbitrary cancer-type slice. The
+    native GDSC2 loader supports one restriction -- sarcoma lineages -- and
+    ``load_tranche`` (``data/loaders/adapt.py``) treats any non-None value here
+    purely as the on/off signal for it, ignoring the list's contents. So
+    ``Gdsc2Auc(cancer_type_filter=["Lung"])`` returns SARCOMA lines, not lung
+    lines. Pass ``None`` (the default) for the full pan-cancer panel, or any
+    non-None value (e.g. ``["sarcoma"]``, for readability) for sarcoma only.
+    """
 
     def __init__(self, cancer_type_filter: list[str] | None = None) -> None:
+        """``cancer_type_filter``: non-None restricts to sarcoma lineages
+        regardless of its contents -- see the class docstring and
+        ``load_tranche``. None (default) keeps the full cell-line panel."""
         self.cancer_type_filter = cancer_type_filter
 
     def load(self, repo: Path) -> pd.DataFrame:
@@ -49,7 +72,6 @@ class Gdsc2Auc:
             load_tranche("gdscv2", repo, cancer_type_filter=self.cancer_type_filter)
         )
         _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        design = cast(pd.DataFrame, design.rename(columns={"y": "y"}))  # type: ignore[call-overload]
         return cast(pd.DataFrame, design[["patient", "drug", "y"]])
 
     def direction(self) -> Direction:
@@ -71,7 +93,6 @@ class CtrpAuc:
     def load(self, repo: Path) -> pd.DataFrame:
         bundle = cpm_bundle(load_tranche("ctrpv2", repo))
         _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        design = cast(pd.DataFrame, design.rename(columns={"y": "y"}))  # type: ignore[call-overload]
         return cast(pd.DataFrame, design[["patient", "drug", "y"]])
 
     def direction(self) -> Direction:
@@ -93,7 +114,6 @@ class PrismAuc:
     def load(self, repo: Path) -> pd.DataFrame:
         bundle = cpm_bundle(load_tranche("prism", repo))
         _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        design = cast(pd.DataFrame, design.rename(columns={"y": "y"}))  # type: ignore[call-overload]
         return cast(pd.DataFrame, design[["patient", "drug", "y"]])
 
     def direction(self) -> Direction:
@@ -118,7 +138,6 @@ class SoragniViability:
     def load(self, repo: Path) -> pd.DataFrame:
         bundle = cpm_bundle(load_tranche("sarcoma", repo))
         _, design = build_sample_design(bundle, self.rna_source, "viability")
-        design = cast(pd.DataFrame, design.rename(columns={"y": "y"}))  # type: ignore[call-overload]
         return cast(pd.DataFrame, design[["patient", "drug", "y"]])
 
     def direction(self) -> Direction:
@@ -161,7 +180,16 @@ class ThresholdedModality:
         return design
 
     def direction(self) -> Direction:
-        return self.base.direction()
+        """Always ``higher_is_better``: y is now 1 == responder.
+
+        The base's direction applies to its continuous scale (GDSC2 AUC is
+        lower_is_better), but thresholding has already absorbed that sign into
+        the label -- ``responder_is`` decides which tail becomes 1 -- so a higher
+        predicted responder probability is unconditionally the better outcome.
+        Delegating here would flip the sign of every metric on a
+        lower_is_better base.
+        """
+        return "higher_is_better"
 
     def recommended_cv(self) -> str:
         return self.base.recommended_cv()
@@ -170,4 +198,6 @@ class ThresholdedModality:
         return "classification"
 
     def name(self) -> str:
-        return f"{self.base.name()}_responder_{self.threshold:g}"
+        """Includes ``responder_is``: the same base and threshold with opposite
+        tails are semantically opposite targets and must not share a name."""
+        return f"{self.base.name()}_responder_{self.responder_is}_{self.threshold:g}"

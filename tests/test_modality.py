@@ -8,9 +8,11 @@ import pandas as pd
 import pytest
 
 from fmharness.modality import (
+    CtrpAuc,
     Direction,
     Gdsc2Auc,
     Modality,
+    PrismAuc,
     SoragniViability,
     TaskType,
     ThresholdedModality,
@@ -69,10 +71,62 @@ def test_thresholded_modality_emits_binary_y_above() -> None:
     }
 
 
-def test_thresholded_modality_delegates_direction_and_cv() -> None:
-    wrapped = ThresholdedModality(_FakeAucModality(), threshold=50.0, responder_is="below")
-    assert wrapped.direction() == "lower_is_better"
-    assert wrapped.recommended_cv() == "5fold"
+def test_thresholded_modality_direction_is_higher_is_better_and_cv_delegates() -> None:
+    # Thresholding absorbs the base's sign convention into the label (y == 1 is
+    # the responder either way), so a higher predicted probability is always
+    # better -- delegating direction() would flip every metric on a
+    # lower_is_better base. recommended_cv, in contrast, is a property of the
+    # cohort's size and rightly delegates.
+    for responder_is in ("below", "above"):
+        wrapped = ThresholdedModality(
+            _FakeAucModality(), threshold=50.0, responder_is=responder_is
+        )
+        assert wrapped.direction() == "higher_is_better"
+        assert wrapped.recommended_cv() == "5fold"
+        assert wrapped.task_type() == "classification"
+    # Also true when wrapping a real modality whose own direction is the opposite.
+    assert Gdsc2Auc().direction() == "lower_is_better"
+    assert (
+        ThresholdedModality(Gdsc2Auc(), threshold=0.8, responder_is="below").direction()
+        == "higher_is_better"
+    )
+
+
+def test_thresholded_modality_name_distinguishes_responder_tail() -> None:
+    # Same base and threshold, opposite tails: semantically opposite targets that
+    # must not collide in a results table keyed by name.
+    below = ThresholdedModality(_FakeAucModality(), threshold=50.0, responder_is="below")
+    above = ThresholdedModality(_FakeAucModality(), threshold=50.0, responder_is="above")
+    assert below.name() != above.name()
+    assert below.name() == "fake_auc_responder_below_50"
+    assert above.name() == "fake_auc_responder_above_50"
+
+
+def test_concrete_modality_metadata_without_data() -> None:
+    # The two tests that load real data both skip without local raw files, which
+    # left every concrete Modality's metadata unexecuted -- exactly how a wrong
+    # direction() or a colliding name() goes unnoticed. These need no repo access.
+    expected: list[tuple[Modality, Direction, str, TaskType, str]] = [
+        (Gdsc2Auc(), "lower_is_better", "5fold", "regression", "gdsc2_auc"),
+        (CtrpAuc(), "lower_is_better", "5fold", "regression", "ctrp_auc"),
+        (PrismAuc(), "lower_is_better", "5fold", "regression", "prism_auc"),
+        (
+            SoragniViability(),
+            "lower_is_better",
+            "loo",  # n=17 organoids: leave-one-out, not 5-fold
+            "regression",
+            "soragni_viability_tumor",
+        ),
+    ]
+    for modality, direction, cv, task, name in expected:
+        assert isinstance(modality, Modality)
+        assert modality.direction() == direction, name
+        assert modality.recommended_cv() == cv, name
+        assert modality.task_type() == task, name
+        assert modality.name() == name
+    # The rna_source is the substrate, and it must show up in the name so tumor-
+    # and organoid-RNA runs against the same target stay distinguishable.
+    assert SoragniViability(rna_source="organoid").name() == "soragni_viability_organoid"
 
 
 def test_thresholded_modality_satisfies_protocol() -> None:
