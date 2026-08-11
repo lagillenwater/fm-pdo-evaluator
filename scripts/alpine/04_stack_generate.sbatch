@@ -32,6 +32,7 @@ cd "$REPO"
 module purge
 module load anaconda
 conda activate stack        # <-- CHANGE to your Stack env
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix
 export HF_HOME="/scratch/alpine/$USER/hf"
 
 TASK="${SLURM_ARRAY_TASK_ID:-0}"

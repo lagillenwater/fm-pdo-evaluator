@@ -27,6 +27,7 @@ cd "$REPO"
 
 module load anaconda
 conda activate stack
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix
 
 SCIPLEX="/scratch/alpine/$USER/sciplex/sciplex_finetune.h5ad"   # from 08
 SAVE_DIR="/scratch/alpine/$USER/sciplex_finetune"
