@@ -68,7 +68,12 @@ class PregeneratedStackGenerator:
         )
 
     def context_coverage(self, perturbations: object) -> set[str]:
-        return {p for p in perturbations if p in self.drug_to_pert}  # type: ignore[attr-defined]
+        return {
+            p
+            for p in perturbations  # type: ignore[attr-defined]
+            if (pert_id := self.drug_to_pert.get(p)) is not None
+            and self._resolve_file(pert_id) is not None
+        }
 
     def generate(self, baseline: ad.AnnData, perturbation: str) -> ad.AnnData:
         pert_id = self.drug_to_pert.get(perturbation)

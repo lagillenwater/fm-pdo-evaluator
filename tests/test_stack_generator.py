@@ -25,10 +25,23 @@ def test_satisfies_generator_protocol(tmp_path: Path) -> None:
 
 
 def test_context_coverage_matches_the_declared_pert_map(tmp_path: Path) -> None:
+    # both declared drugs have a file on disk, matching what generate() would find.
+    _write_adata(tmp_path / "BRD-1.h5ad", [[1.0]], ["o1"], ["A"])
+    _write_adata(tmp_path / "BRD-2.h5ad", [[1.0]], ["o1"], ["A"])
     gen = PregeneratedStackGenerator(
         tmp_path, {"BRD-1": "D1", "BRD-2": "D2"}, checkpoint_label="test"
     )
     assert gen.context_coverage(["D1", "D2", "D3"]) == {"D1", "D2"}
+
+
+def test_context_coverage_excludes_declared_drugs_with_no_file_on_disk(tmp_path: Path) -> None:
+    _write_adata(tmp_path / "BRD-1.h5ad", [[1.0]], ["o1"], ["A"])
+    gen = PregeneratedStackGenerator(
+        tmp_path, {"BRD-1": "D1", "BRD-2": "D2"}, checkpoint_label="test"
+    )
+    # D1 has a file (BRD-1.h5ad); D2 is declared in pert_to_drug but has no file --
+    # context_coverage must exclude it, matching what generate() would actually do.
+    assert gen.context_coverage(["D1", "D2", "D3"]) == {"D1"}
 
 
 def test_generate_reads_the_matching_pregenerated_file(tmp_path: Path) -> None:
