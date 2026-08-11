@@ -8,9 +8,11 @@ import pandas as pd
 import pytest
 
 from fmharness.modality import (
+    Direction,
     Gdsc2Auc,
     Modality,
     SoragniViability,
+    TaskType,
     ThresholdedModality,
 )
 
@@ -27,13 +29,13 @@ class _FakeAucModality:
             }
         )
 
-    def direction(self) -> str:
+    def direction(self) -> Direction:
         return "lower_is_better"
 
     def recommended_cv(self) -> str:
         return "5fold"
 
-    def task_type(self) -> str:
+    def task_type(self) -> TaskType:
         return "regression"
 
     def name(self) -> str:
