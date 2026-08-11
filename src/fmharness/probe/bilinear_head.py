@@ -64,6 +64,11 @@ class BilinearEstimator(ProbeBase):
         emb, _drug_arr, residual, k = self._prepare_fit(embeddings, drug_ids, y)
         g, known = self._stack_fingerprints(drug_ids)
         self._reduce = self._ridge = None
+        # _prepare_fit caps k against ALL rows, but the reducer below is fit on
+        # emb[known] alone, so the rank ceiling is that subset's size. Without
+        # this recap, sparse fingerprint coverage (a few known drugs in a large
+        # panel) asks PCA for more components than the subset can support.
+        k = min(k, max(0, int(known.sum()) - 1))
         if known.any() and k > 0:
             self._reduce = Pipeline(self._reducer_steps(k))
             z = self._reduce.fit_transform(emb[known])
