@@ -1,7 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=sciplex-prep
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
+# amem, not acpu (Alpine's amilan partition was retired) -- acpu's MaxMemPerCPU=3840MB caps
+# an 8-cpu job at ~30GB, below the 128G the full-gene sci-Plex source needs; amem's
+# MaxMemPerCPU=21333MB covers it at the same cpu count.
+#SBATCH --partition=amem
+#SBATCH --qos=mem-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
