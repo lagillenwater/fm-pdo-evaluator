@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 import pandas as pd
+import pytest
 
-from fmharness.evaluation import delta_fidelity, regret_norm_at_k, score_predictions
+from fmharness.cv import group_k_fold
+from fmharness.evaluation import (
+    delta_fidelity,
+    grouped_cv_predict,
+    regret_norm_at_k,
+    score_predictions,
+)
+from fmharness.probe import SimpleProbe
+from fmharness.probe.biomarker_head import BiomarkerEstimator
 
 
 def test_regret_norm_at_k() -> None:
@@ -80,3 +91,83 @@ def test_score_predictions_reports_interaction_and_null() -> None:
     assert 0.0 <= s["p_label"] <= 0.2
     assert s["n"] == 15.0
     assert "regret@1" in s and "global" in s
+
+
+def test_grouped_cv_predict_drives_biomarker_estimator() -> None:
+    # BiomarkerEstimator.fit/predict_parts require a DataFrame indexed by
+    # patient_id (biomarker lookup keys off patient identity, not row
+    # position) -- grouped_cv_predict must hand it one, not a bare ndarray.
+    patients = [f"p{i}" for i in range(8)]
+    x_log = pd.DataFrame(
+        {"100": [2.0, 0.0, 2.0, 0.0, 2.0, 0.0, 2.0, 0.0]}, index=pd.Index(patients)
+    )
+    rows_patient = patients * 2
+    rows_drug = ["drugA"] * 8 + ["drugB"] * 8
+    rows_y = list(np.linspace(10.0, 70.0, 16))
+    design = pd.DataFrame({"patient": rows_patient, "drug": rows_drug, "y": rows_y})
+    biomarkers = [{"drug": "drugA", "gene": "GENE100", "kind": "expr", "direction": "sensitize"}]
+    alt: dict[str, dict[str, set[str]]] = {"mut": {}, "amp": {}, "del": {}}
+    sym2ent = {"GENE100": 100}
+
+    factory = partial(BiomarkerEstimator, biomarkers, alt, set(patients), sym2ent)
+    preds = grouped_cv_predict(factory, x_log, design, n_splits=4, seed=0)
+    assert len(preds) == len(design)
+    assert np.isfinite(preds["y_pred"]).all()
+
+
+def _design_and_x(n_patients: int = 6) -> tuple[pd.DataFrame, pd.DataFrame]:
+    patients = [f"p{i}" for i in range(n_patients)]
+    rng = np.random.default_rng(0)
+    x_df = pd.DataFrame(
+        rng.standard_normal((n_patients, 4)),
+        index=pd.Index(patients),
+        columns=pd.Index(list("abcd")),
+    )
+    rows_patient = [p for p in patients for _ in range(2)]
+    rows_drug = ["d1", "d2"] * n_patients
+    design = pd.DataFrame(
+        {"patient": rows_patient, "drug": rows_drug, "y": rng.standard_normal(n_patients * 2)}
+    )
+    return x_df, design
+
+
+def test_grouped_cv_predict_rejects_both_n_splits_and_cv() -> None:
+    x_df, design = _design_and_x()
+    factory = partial(SimpleProbe, n_components=2)
+    with pytest.raises(ValueError, match="exactly one"):
+        grouped_cv_predict(factory, x_df, design, n_splits=3, cv=group_k_fold(3))
+
+
+def test_grouped_cv_predict_rejects_neither_n_splits_nor_cv() -> None:
+    x_df, design = _design_and_x()
+    factory = partial(SimpleProbe, n_components=2)
+    with pytest.raises(ValueError, match="exactly one"):
+        grouped_cv_predict(factory, x_df, design)
+
+
+def test_grouped_cv_predict_with_cv_matches_equivalent_n_splits() -> None:
+    # A CVScheme built from group_k_fold(k) must drive grouped_cv_predict to
+    # the exact same predictions as the original n_splits=k path -- cv= is a
+    # generalization, not a different CV shape, for this equivalent case.
+    x_df, design = _design_and_x()
+    factory = partial(SimpleProbe, n_components=2, per_drug=True)
+    via_n_splits = grouped_cv_predict(factory, x_df, design, n_splits=3, seed=0)
+    via_cv = grouped_cv_predict(factory, x_df, design, cv=group_k_fold(3), seed=0)
+    pd.testing.assert_frame_equal(
+        via_n_splits.sort_values(["patient", "drug"]).reset_index(drop=True),
+        via_cv.sort_values(["patient", "drug"]).reset_index(drop=True),
+    )
+
+
+def test_grouped_cv_predict_with_leave_subtype_out_cv() -> None:
+    # A non-GroupKFold CVScheme (leave_subtype_out) must also drive
+    # grouped_cv_predict correctly -- cv= is not special-cased to GroupKFold.
+    from fmharness.cv import leave_subtype_out
+
+    x_df, design = _design_and_x(n_patients=4)
+    subtypes = {"p0": "A", "p1": "A", "p2": "B", "p3": "B"}
+    factory = partial(SimpleProbe, n_components=2)
+    preds = grouped_cv_predict(
+        factory, x_df, design, cv=leave_subtype_out(subtypes, seed=0), seed=0
+    )
+    assert len(preds) == len(design)

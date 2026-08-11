@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 from anndata import AnnData
 
-from fmharness.schema import ModelMetadata
+from fmharness.schema import ModelMetadata, TaskSignal
 
 
 class GenePanelMismatch(ValueError):
@@ -120,3 +120,46 @@ class MockAdapter:
             return None
         rng = np.random.default_rng(self.seed + 1)
         return rng.random((adata.n_obs, len(drug_ids)), dtype=np.float32)
+
+
+class KnownCorpusAdapter(MockAdapter):
+    """MockAdapter with a declared pretraining corpus.
+
+    Plain ``MockAdapter`` deliberately does NOT satisfy ``LeakageQueryable``
+    (``leakage.py``) -- a model that has not declared its corpus should not
+    silently look queryable. This subclass is for the opposite, equally real
+    case: a driver that knows (or wants to simulate knowing) exactly which
+    lines and drugs a model saw during pretraining, and needs a concrete,
+    non-test-file class to construct ``filter_leakage`` against -- until a
+    real model's own adapter can report this from its actual training
+    manifest.
+    """
+
+    def __init__(
+        self,
+        pretraining_lines: set[str],
+        pretraining_drugs: set[str],
+        *,
+        task_signal_in_pretrain: TaskSignal = "adjacent",
+        embedding_dim: int = 8,
+        seed: int = 0,
+        supports_native: bool = False,
+    ) -> None:
+        super().__init__(embedding_dim=embedding_dim, seed=seed, supports_native=supports_native)
+        self._pretraining_lines = pretraining_lines
+        self._pretraining_drugs = pretraining_drugs
+        self._task_signal_in_pretrain: TaskSignal = task_signal_in_pretrain
+
+    def metadata(self) -> ModelMetadata:
+        return ModelMetadata(
+            pretraining_corpus="declared",
+            pretraining_cutoff_date=date(1970, 1, 1),
+            task_signal_in_pretrain=self._task_signal_in_pretrain,
+            expected_input="log1p_cpm",
+        )
+
+    def pretraining_lines(self) -> set[str] | None:
+        return self._pretraining_lines
+
+    def pretraining_drugs(self) -> set[str] | None:
+        return self._pretraining_drugs

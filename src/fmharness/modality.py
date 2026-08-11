@@ -38,6 +38,17 @@ class Modality(Protocol):
         """design[patient, drug, y] on this modality's native scale."""
         ...
 
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """(features, design) from a single underlying load.
+
+        ``load()`` alone only needs the design, but a driver that also needs
+        the expression matrix (fitting an Estimator on it) would otherwise have
+        to load and renormalize the same tranche a second time by hand. This
+        returns both from one internal load; ``load()`` is a thin wrapper over
+        this method's design half.
+        """
+        ...
+
     def direction(self) -> Direction: ...
 
     def recommended_cv(self) -> str:
@@ -67,12 +78,15 @@ class Gdsc2Auc:
         ``load_tranche``. None (default) keeps the full cell-line panel."""
         self.cancer_type_filter = cancer_type_filter
 
-    def load(self, repo: Path) -> pd.DataFrame:
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         bundle = cpm_bundle(
             load_tranche("gdscv2", repo, cancer_type_filter=self.cancer_type_filter)
         )
-        _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        return cast(pd.DataFrame, design[["patient", "drug", "y"]])
+        x_df, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
+        return cast(pd.DataFrame, x_df), cast(pd.DataFrame, design[["patient", "drug", "y"]])
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         return "lower_is_better"
@@ -90,10 +104,13 @@ class Gdsc2Auc:
 class CtrpAuc:
     """CTRPv2 AUC via CoderData (``data/raw/coderdata``). Lower = more sensitive."""
 
-    def load(self, repo: Path) -> pd.DataFrame:
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         bundle = cpm_bundle(load_tranche("ctrpv2", repo))
-        _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        return cast(pd.DataFrame, design[["patient", "drug", "y"]])
+        x_df, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
+        return cast(pd.DataFrame, x_df), cast(pd.DataFrame, design[["patient", "drug", "y"]])
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         return "lower_is_better"
@@ -111,10 +128,13 @@ class CtrpAuc:
 class PrismAuc:
     """PRISM AUC via CoderData (``data/raw/coderdata``). Lower = more sensitive."""
 
-    def load(self, repo: Path) -> pd.DataFrame:
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         bundle = cpm_bundle(load_tranche("prism", repo))
-        _, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
-        return cast(pd.DataFrame, design[["patient", "drug", "y"]])
+        x_df, design = build_sample_design(bundle, "all", "auc", drug_key="pubchem_cid")
+        return cast(pd.DataFrame, x_df), cast(pd.DataFrame, design[["patient", "drug", "y"]])
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         return "lower_is_better"
@@ -135,10 +155,13 @@ class SoragniViability:
     def __init__(self, rna_source: Literal["tumor", "organoid", "all"] = "tumor") -> None:
         self.rna_source = rna_source
 
-    def load(self, repo: Path) -> pd.DataFrame:
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
         bundle = cpm_bundle(load_tranche("sarcoma", repo))
-        _, design = build_sample_design(bundle, self.rna_source, "viability")
-        return cast(pd.DataFrame, design[["patient", "drug", "y"]])
+        x_df, design = build_sample_design(bundle, self.rna_source, "viability")
+        return cast(pd.DataFrame, x_df), cast(pd.DataFrame, design[["patient", "drug", "y"]])
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         return "lower_is_better"
@@ -171,13 +194,17 @@ class ThresholdedModality:
         self.threshold = threshold
         self.responder_is = responder_is
 
-    def load(self, repo: Path) -> pd.DataFrame:
-        design = self.base.load(repo).copy()
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+        x_df, design = self.base.load_with_features(repo)
+        design = design.copy()
         if self.responder_is == "below":
             design["y"] = (design["y"] < self.threshold).astype(float)
         else:
             design["y"] = (design["y"] > self.threshold).astype(float)
-        return design
+        return x_df, design
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         """Always ``higher_is_better``: y is now 1 == responder.

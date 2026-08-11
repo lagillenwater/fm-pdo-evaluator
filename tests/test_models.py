@@ -14,7 +14,9 @@ import numpy as np
 import pytest
 from scipy import sparse
 
+from fmharness.leakage import LeakageQueryable
 from fmharness.models import (
+    KnownCorpusAdapter,
     LinearBaselineAdapter,
     MockAdapter,
     ModelAdapter,
@@ -128,3 +130,48 @@ def test_as_dense_f32_rejects_none() -> None:
     a.X = None
     with pytest.raises(ValueError, match=r"adata\.X is None"):
         as_dense_f32(a)
+
+
+# --- KnownCorpusAdapter -----------------------------------------------------
+
+
+def test_known_corpus_adapter_satisfies_leakage_queryable_and_encoder() -> None:
+    # Plain MockAdapter deliberately does NOT satisfy LeakageQueryable (it
+    # hasn't declared a corpus) -- that must stay true; KnownCorpusAdapter is
+    # the opposite case, for drivers that DO know what a model saw.
+    assert not isinstance(MockAdapter(), LeakageQueryable)
+    adapter = KnownCorpusAdapter(pretraining_lines={"L1"}, pretraining_drugs={"d1"})
+    assert isinstance(adapter, ModelAdapter)
+    assert isinstance(adapter, LeakageQueryable)
+    assert adapter.pretraining_lines() == {"L1"}
+    assert adapter.pretraining_drugs() == {"d1"}
+
+
+def test_known_corpus_adapter_embed_matches_mock_adapter() -> None:
+    # Subclasses MockAdapter -- same deterministic projection, same behavior,
+    # only the declared corpus is new.
+    a = _adata(n_obs=4)
+    expected = MockAdapter(embedding_dim=6, seed=3).embed(a)
+    actual = KnownCorpusAdapter(
+        pretraining_lines=set(), pretraining_drugs=set(), embedding_dim=6, seed=3
+    ).embed(a)
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_known_corpus_adapter_metadata_reflects_declared_task_signal() -> None:
+    adapter = KnownCorpusAdapter(
+        pretraining_lines=set(), pretraining_drugs=set(), task_signal_in_pretrain="direct"
+    )
+    assert adapter.metadata().task_signal_in_pretrain == "direct"
+
+
+def test_known_corpus_adapter_forwards_supports_native() -> None:
+    a = _adata(n_obs=4)
+    off = KnownCorpusAdapter(pretraining_lines=set(), pretraining_drugs=set())
+    assert off.predict_native(a, ["d1"]) is None
+    on = KnownCorpusAdapter(
+        pretraining_lines=set(), pretraining_drugs=set(), supports_native=True
+    )
+    out = on.predict_native(a, ["d1", "d2"])
+    assert out is not None
+    assert out.shape == (4, 2)

@@ -12,12 +12,13 @@ splitter logic (``LeaveSubtypeOut``) and translates its output into the
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import NamedTuple, Protocol, cast, runtime_checkable
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+from sklearn.model_selection import GroupKFold
 
 from fmharness.splits.base import SplittablePatient
 from fmharness.splits.lso import LeaveSubtypeOut, LSOGranularity
@@ -104,3 +105,55 @@ def leave_subtype_out(
     return _LeaveSubtypeOutScheme(
         patient_subtypes, seed=seed, granularity=granularity, subtype_map=subtype_map
     )
+
+
+class _GroupKFoldScheme:
+    def __init__(self, n_splits: int | None) -> None:
+        self.n_splits = n_splits
+
+    def splits(
+        self, design: pd.DataFrame
+    ) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
+        patients = design["patient"].to_numpy()
+        n_unique = int(design["patient"].nunique())
+        # None means true leave-one-patient-out: one fold per patient, not a
+        # fixed count. GroupKFold also raises if asked for more splits than
+        # groups exist, so a requested n_splits is capped the same way
+        # grouped_cv_predict already caps it -- same shape, same reason.
+        k = n_unique if self.n_splits is None else min(self.n_splits, n_unique)
+        yield from GroupKFold(n_splits=k).split(design, groups=patients)
+
+
+def group_k_fold(n_splits: int | None) -> CVScheme:
+    """Grouped K-fold, split by patient -- the CV shape ``grouped_cv_predict``
+    already uses internally, exposed as a standalone ``CVScheme`` so it can be
+    looked up by name (see ``resolve_cv``) instead of re-derived per script.
+
+    ``n_splits=None`` is true leave-one-patient-out: one fold per patient,
+    rather than a fixed split count. A requested ``n_splits`` larger than the
+    number of patients in the design is capped down to it, matching
+    ``grouped_cv_predict``'s existing behavior.
+    """
+    return _GroupKFoldScheme(n_splits)
+
+
+_CV_REGISTRY: dict[str, Callable[[], CVScheme]] = {
+    "5fold": lambda: group_k_fold(n_splits=5),
+    "loo": lambda: group_k_fold(n_splits=None),
+}
+
+
+def resolve_cv(key: str) -> CVScheme:
+    """Resolve a ``Modality.recommended_cv()`` key to a fresh ``CVScheme``.
+
+    ``Modality`` only names a CV shape ("5fold", "loo"); it does not carry the
+    subtype labels ``leave_subtype_out`` needs, so this registry covers the two
+    keys every concrete ``Modality`` in this harness currently recommends. The
+    registry stores factories, not instances, so two callers never share the
+    same scheme object -- ``group_k_fold``'s scheme is stateless past
+    construction today, but a shared singleton would silently become an
+    aliasing bug the moment a future scheme carries per-call state.
+    """
+    if key not in _CV_REGISTRY:
+        raise ValueError(f"unknown recommended_cv key {key!r}; choose from {sorted(_CV_REGISTRY)}")
+    return _CV_REGISTRY[key]()

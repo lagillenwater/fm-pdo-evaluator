@@ -22,14 +22,19 @@ from fmharness.modality import (
 class _FakeAucModality:
     """A minimal regression Modality for testing the wrapper, no real data."""
 
-    def load(self, repo: Path) -> pd.DataFrame:
-        return pd.DataFrame(
+    def load_with_features(self, repo: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+        x_df = pd.DataFrame({"gene1": [1.0, 2.0]}, index=pd.Index(["p1", "p2"]))
+        design = pd.DataFrame(
             {
                 "patient": ["p1", "p1", "p2", "p2"],
                 "drug": ["d1", "d2", "d1", "d2"],
                 "y": [10.0, 60.0, 30.0, 80.0],
             }
         )
+        return x_df, design
+
+    def load(self, repo: Path) -> pd.DataFrame:
+        return self.load_with_features(repo)[1]
 
     def direction(self) -> Direction:
         return "lower_is_better"
@@ -155,3 +160,72 @@ def test_soragni_viability_loads_real_data() -> None:
     design = SoragniViability().load(_REPO)
     assert {"patient", "drug", "y"} <= set(design.columns)
     assert design["patient"].nunique() == 17
+
+
+@pytest.mark.skipif(
+    not (_REPO / "data/raw/gdsc2_sarcoma/gdsc2/GDSC2_fitted_dose_response_27Oct23.xlsx").exists(),
+    reason="requires local GDSC2 raw data",
+)
+def test_gdsc2_auc_load_with_features_matches_load() -> None:
+    modality = Gdsc2Auc(cancer_type_filter=["sarcoma"])
+    x_df, design = modality.load_with_features(_REPO)
+    design_only = modality.load(_REPO)
+    pd.testing.assert_frame_equal(design, design_only)
+    # x_df is indexed by patient; build_sample_design filters design down to
+    # patients with an assay of the chosen metric but does not filter x_df
+    # back, so design's patients are a subset of x_df's index, not necessarily
+    # equal (a patient can have expression with no matching drug-response row).
+    assert set(design["patient"]) <= set(x_df.index.astype(str))
+
+
+@pytest.mark.skipif(
+    not (_REPO / "data/raw/soragni").exists(),
+    reason="requires local Soragni raw data",
+)
+def test_soragni_viability_load_with_features_matches_load() -> None:
+    modality = SoragniViability()
+    x_df, design = modality.load_with_features(_REPO)
+    design_only = modality.load(_REPO)
+    pd.testing.assert_frame_equal(design, design_only)
+    assert set(x_df.index.astype(str)) == set(design["patient"])
+
+
+@pytest.mark.skipif(
+    not (_REPO / "data/raw/soragni").exists(),
+    reason="requires local Soragni raw data",
+)
+def test_soragni_viability_load_with_features_loads_the_tranche_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The bug this fixes: a caller needing both design and features used to
+    # call Modality.load() (one full tranche load) and then reconstruct
+    # features by hand (a second, redundant tranche load). load_with_features
+    # must get both out of a single underlying load.
+    import fmharness.modality as modality_module
+
+    real_load_tranche = modality_module.load_tranche
+    call_count = 0
+
+    def counting_load_tranche(*args: object, **kwargs: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        return real_load_tranche(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(modality_module, "load_tranche", counting_load_tranche)
+    SoragniViability().load_with_features(_REPO)
+    assert call_count == 1
+
+
+def test_thresholded_modality_load_with_features_delegates_and_thresholds_y_only() -> None:
+    wrapped = ThresholdedModality(_FakeAucModality(), threshold=50.0, responder_is="below")
+    x_df, design = wrapped.load_with_features(Path("."))
+    # x_df is untouched -- thresholding only transforms the label.
+    pd.testing.assert_frame_equal(x_df, _FakeAucModality().load_with_features(Path("."))[0])
+    assert design.set_index(["patient", "drug"])["y"].to_dict() == {
+        ("p1", "d1"): 1.0,
+        ("p1", "d2"): 0.0,
+        ("p2", "d1"): 1.0,
+        ("p2", "d2"): 0.0,
+    }
+    # load() and load_with_features() agree.
+    pd.testing.assert_frame_equal(design, wrapped.load(Path(".")))

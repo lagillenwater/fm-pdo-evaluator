@@ -8,7 +8,7 @@ import pandas as pd
 
 from fmharness.leakage import LeakageQueryable, filter_leakage
 from fmharness.model_protocols import MockGenerator
-from fmharness.models.adapter import MockAdapter
+from fmharness.models.adapter import KnownCorpusAdapter, MockAdapter
 from fmharness.schema import ModelMetadata
 
 
@@ -116,3 +116,19 @@ def test_filter_leakage_unknown_basis_when_implements_protocol_but_returns_none(
     assert profile.basis == "unknown"
     assert profile.line_overlap_frac is None
     assert profile.doubly_exposed_frac is None
+
+
+def test_known_corpus_adapter_drives_filter_leakage_end_to_end() -> None:
+    # KnownCorpusAdapter is a real (non-test-file) class a driver script can
+    # construct -- proving filter_leakage has a genuine, non-test caller path,
+    # not just the test-only _KnownCorpusModel double above.
+    adapter = KnownCorpusAdapter(
+        pretraining_lines={"L1"}, pretraining_drugs={"d1"}, task_signal_in_pretrain="adjacent"
+    )
+    filtered, profile = filter_leakage(_design(), adapter)
+    # (L1, d1) is the only doubly-exposed pair -- always dropped, regardless
+    # of task_signal_in_pretrain.
+    assert not ((filtered["patient"] == "L1") & (filtered["drug"] == "d1")).any()
+    assert len(filtered) == len(_design()) - 1
+    assert profile.basis == "measured"
+    assert profile.doubly_exposed_frac == 1 / 6

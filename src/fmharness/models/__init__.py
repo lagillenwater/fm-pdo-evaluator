@@ -8,6 +8,7 @@ wrappers live under ``fmharness.models.wrappers``. See
 
 from fmharness.models.adapter import (
     GenePanelMismatch,
+    KnownCorpusAdapter,
     MockAdapter,
     ModelAdapter,
     as_dense_f32,
@@ -16,6 +17,7 @@ from fmharness.models.wrappers.linear_baseline import LinearBaselineAdapter
 
 __all__ = [
     "GenePanelMismatch",
+    "KnownCorpusAdapter",
     "LinearBaselineAdapter",
     "MockAdapter",
     "ModelAdapter",
