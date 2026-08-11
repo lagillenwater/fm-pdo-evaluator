@@ -40,6 +40,7 @@ from fmharness.evaluation import (
     within_drug_rho,
 )
 from fmharness.probe import SimpleProbe
+from fmharness.probe.biomarker_head import biomarker_series as _biomarker_series
 
 SEED = 0
 
@@ -96,21 +97,6 @@ def _wes_alterations(repo: Path) -> tuple[dict[str, dict[str, set[str]]], set[st
         for s in pd.concat([snv["Sample_ID"], cnv["Sample_ID"]]).astype(str)
     }
     return alt, wes
-
-
-def _biomarker_series(
-    bm: dict, x_log: pd.DataFrame, alt: dict, wes: set[str], sym2ent: dict[str, int]
-) -> pd.Series | None:
-    """Per-organoid biomarker value (index = patient); None if unavailable."""
-    if bm["kind"] == "expr":
-        ent = sym2ent.get(bm["gene"])
-        col = str(ent) if ent is not None else None
-        if col is None or col not in x_log.columns:
-            return None
-        v = x_log[col]
-        return (v - v.mean()) / (v.std() or 1.0)  # z-score across organoids
-    positive = alt[bm["kind"]].get(bm["gene"], set())
-    return pd.Series({p: float(p in positive) for p in sorted(wes)})
 
 
 def main() -> None:
