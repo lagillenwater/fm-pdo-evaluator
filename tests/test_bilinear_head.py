@@ -65,3 +65,16 @@ def test_bilinear_estimator_recovers_signal_better_than_drug_mean_alone() -> Non
     mse_fitted = float(np.mean((base + residual - y) ** 2))
     mse_drug_mean_only = float(np.mean((base - y) ** 2))
     assert mse_fitted < mse_drug_mean_only * 0.5
+
+
+def test_bilinear_estimator_handles_empty_fingerprints_gracefully() -> None:
+    # An empty fingerprint dict should degrade gracefully to drug-mean baseline
+    # without crashing with StopIteration
+    emb, drugs, y, groups, _ = _synthetic()
+    est = BilinearEstimator({}, n_components=3, seed=0).fit(emb, drugs, y, groups)
+    base, residual = est.predict_parts(emb, drugs)
+    # All residuals should be zero (no fingerprints known)
+    assert np.all(residual == 0.0)
+    # Base should be the per-drug mean
+    assert base.shape == (len(y),)
+    assert not np.all(base == 0.0)  # not all zeros, should have drug means

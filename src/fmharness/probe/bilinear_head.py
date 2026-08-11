@@ -44,7 +44,7 @@ class BilinearEstimator(ProbeBase):
     def _stack_fingerprints(
         self, drug_ids: Sequence[str]
     ) -> tuple[NDArray[np.float64], NDArray[np.bool_]]:
-        dim = len(next(iter(self.drug_fingerprints.values())))
+        dim = 0 if not self.drug_fingerprints else len(next(iter(self.drug_fingerprints.values())))
         g = np.zeros((len(drug_ids), dim), dtype=np.float64)
         known = np.zeros(len(drug_ids), dtype=bool)
         for i, d in enumerate(drug_ids):
