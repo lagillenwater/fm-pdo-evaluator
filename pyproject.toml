@@ -72,6 +72,9 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 include = ["src", "tests"]
+# so tests importing a scripts/ driver resolve (scripts/ itself stays outside `include`,
+# i.e. analyzed for types but not strict-checked, matching how it is run).
+extraPaths = ["scripts"]
 strictListInference = true
 strictDictionaryInference = true
 strictSetInference = true
@@ -90,3 +93,6 @@ reportUnknownParameterType = "none"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
+# scripts/ is not an installed package, but its script/library split (a testable `run_*`
+# function plus a thin `main()` CLI wrapper) is meant to be exercised directly by tests.
+pythonpath = ["scripts"]
