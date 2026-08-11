@@ -17,6 +17,7 @@ from fmharness.deltas import (
     build_tahoe_deltas,
     drug_pert_maps,
     learned_gene_panel,
+    load_pert_map,
     logcpm,
     loo_baseline_source,
     pseudobulk_de_to_deltas,
@@ -54,6 +55,18 @@ def test_drug_pert_maps_cid_and_inchikey() -> None:
     assert drug2pert["777"] == "BRD-C"  # matched by 14-char InChIKey prefix
     assert "999999" not in drug2pert  # no CID / InChIKey match
     assert pert2drug["BRD-A"] == "123"
+
+
+def test_load_pert_map_reads_tab_separated_pert_id_to_cid(tmp_path: Path) -> None:
+    p = tmp_path / "pert_map.tsv"
+    p.write_text("BRD-1\tD1\nBRD-2\tD2\n")
+    assert load_pert_map(p) == {"BRD-1": "D1", "BRD-2": "D2"}
+
+
+def test_load_pert_map_skips_blank_or_malformed_lines(tmp_path: Path) -> None:
+    p = tmp_path / "pert_map.tsv"
+    p.write_text("BRD-1\tD1\n\nBRD-2\t\n\tD3\n")
+    assert load_pert_map(p) == {"BRD-1": "D1"}
 
 
 def _write_adata(path: Path, x: list[list[float]], obs: list[str], var: list[str]) -> None:

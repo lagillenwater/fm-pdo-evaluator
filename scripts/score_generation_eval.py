@@ -60,9 +60,10 @@ from fmharness.deltas import (
     build_generated_deltas,
     build_tahoe_deltas,
     learned_gene_panel,
+    load_pert_map,
     loo_baseline_source,
 )
-from fmharness.evaluation import build_sample_design, delta_fidelity, score_predictions
+from fmharness.evaluation import build_sample_design, score_delta_sources, score_predictions
 from fmharness.signatures import load_hallmark, score_signatures
 
 # The Hallmark proliferation sets -- the two that cleared the gate's random-gene-set control
@@ -91,20 +92,6 @@ def _rel(repo: Path, p: str) -> Path:
     """Resolve ``p`` against the repo root unless it is already absolute."""
     q = Path(p)
     return q if q.is_absolute() else repo / q
-
-
-def _load_pert_map(path: Path) -> dict[str, str]:
-    """Read a ``pert_id<TAB>cid`` TSV into ``{pert_id: cid}`` for build_generated_deltas.
-
-    The generated files are named by Tahoe pert_id (drug name); this maps each back to
-    the PubChem CID the real deltas / designs are keyed by. Written by 03's context split.
-    """
-    m: dict[str, str] = {}
-    for line in path.read_text().splitlines():
-        pert, _, cid = line.partition("\t")
-        if pert.strip() and cid.strip():
-            m[pert.strip()] = cid.strip()
-    return m
 
 
 def _load_line_matrix(path: Path) -> pd.DataFrame:
@@ -296,25 +283,13 @@ def main() -> None:
         sources["stack"] = build_generated_deltas(
             _rel(repo, args.generated_dir),
             _rel(repo, args.query_baseline),
-            _load_pert_map(_rel(repo, args.pert_map)),
+            load_pert_map(_rel(repo, args.pert_map)),
         )
 
     # Check 1 -- generation quality vs the real Tahoe delta.
-    fid_rows: list[dict[str, object]] = []
-    for name, (d, kk) in sources.items():
-        f = delta_fidelity(d, kk, real_delta, real_key, n_hvg=args.n_hvg)
-        fid_rows.append(
-            {
-                "source": name,
-                "r": round(float(f["r"].mean()), 3),
-                "r_offdiag": round(float(f["r_offdiag"].mean()), 3),
-                "rank": round(float(f["rank"].mean()), 3),
-                "n_pairs": len(f),
-                "n_genes": int(f["n_genes"].iloc[0]),
-            }
-        )
+    fid_table = score_delta_sources(sources, real_delta, real_key, n_hvg=args.n_hvg)
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
-    print(pd.DataFrame(fid_rows).to_string(index=False))
+    print(fid_table.to_string(index=False))
 
     # Labels for the gate and check 2 (hallmark was loaded above for the learned-source panel).
     _, design = build_sample_design(

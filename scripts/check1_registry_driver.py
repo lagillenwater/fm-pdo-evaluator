@@ -36,23 +36,15 @@ from fmharness.deltas import (
     build_generated_deltas,
     build_tahoe_deltas,
     learned_gene_panel,
+    load_pert_map,
     loo_baseline_source,
 )
-from fmharness.evaluation import delta_fidelity
+from fmharness.evaluation import score_delta_sources
 from fmharness.leakage import filter_leakage
 from fmharness.models.stack_generator import PregeneratedStackGenerator
 from fmharness.schema import TaskSignal
 
 _ROW = "_row"  # positional tag carried through filter_leakage so the delta stays row-aligned
-
-
-def _load_pert_map(path: Path) -> dict[str, str]:
-    m: dict[str, str] = {}
-    for line in path.read_text().splitlines():
-        pert, _, cid = line.partition("\t")
-        if pert.strip() and cid.strip():
-            m[pert.strip()] = cid.strip()
-    return m
 
 
 def run_check1(
@@ -124,26 +116,13 @@ def run_check1(
         "stack": build_generated_deltas(generated_dir, query_baseline, pert_to_drug),
     }
 
-    rows: list[dict[str, object]] = []
-    for name, (d, kk) in sources.items():
-        # delta_fidelity inner-joins pred_key/real_key on (patient, drug) itself (evaluation.py's
-        # own pk.merge(rk, on=["patient","drug"], how="inner")) -- the stack source's key (built
-        # from the full generated directory, independent of the leakage filter above) is
-        # automatically restricted to fk's already-filtered pairs by that join; no separate
-        # pre-filter is needed here, and adding one would just duplicate delta_fidelity's own
-        # contract.
-        f = delta_fidelity(d, kk, fd, fk, n_hvg=n_hvg)
-        rows.append(
-            {
-                "source": name,
-                "r": round(float(f["r"].mean()), 3),
-                "r_offdiag": round(float(f["r_offdiag"].mean()), 3),
-                "rank": round(float(f["rank"].mean()), 3),
-                "n_pairs": len(f),
-                "n_genes": int(f["n_genes"].iloc[0]),
-            }
-        )
-    return pd.DataFrame(rows)
+    # delta_fidelity (inside score_delta_sources) inner-joins pred_key/real_key on
+    # (patient, drug) itself (evaluation.py's own pk.merge(rk, on=["patient","drug"],
+    # how="inner")) -- the stack source's key (built from the full generated directory,
+    # independent of the leakage filter above) is automatically restricted to fk's
+    # already-filtered pairs by that join; no separate pre-filter is needed here, and
+    # adding one would just duplicate delta_fidelity's own contract.
+    return score_delta_sources(sources, fd, fk, n_hvg=n_hvg)
 
 
 def corpus_declared_partially(corpus_lines: str | None, corpus_drugs: str | None) -> bool:
@@ -183,7 +162,7 @@ def main() -> None:
 
     repo = Path(__file__).resolve().parent.parent
     real_delta, real_key, base = build_tahoe_deltas(ad.read_h5ad(args.context))
-    pert_to_drug = _load_pert_map(Path(args.pert_map))
+    pert_to_drug = load_pert_map(Path(args.pert_map))
     table = run_check1(
         real_delta,
         real_key,

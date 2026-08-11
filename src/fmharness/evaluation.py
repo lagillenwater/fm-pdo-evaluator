@@ -372,3 +372,35 @@ def delta_fidelity(
             "n_genes": int(p.shape[1]),
         }
     )
+
+
+def score_delta_sources(
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    real_delta: pd.DataFrame,
+    real_key: pd.DataFrame,
+    *,
+    n_hvg: int | None = 2000,
+) -> pd.DataFrame:
+    """Check-1 table: one row per delta source, scored against the same real Tahoe delta.
+
+    ``sources`` maps a source name (``"additive"``, ``"stack"``, ...) to its own
+    ``(delta, key)`` pair, exactly as produced by ``loo_baseline_source`` /
+    ``build_generated_deltas``. Each is scored independently via ``delta_fidelity``
+    against the same ``real_delta``/``real_key`` -- the shared scoring step both
+    ``scripts/score_generation_eval.py`` and ``scripts/check1_registry_driver.py``
+    need, kept here so the two never drift on how a row is built.
+    """
+    rows: list[dict[str, object]] = []
+    for name, (d, kk) in sources.items():
+        f = delta_fidelity(d, kk, real_delta, real_key, n_hvg=n_hvg)
+        rows.append(
+            {
+                "source": name,
+                "r": round(float(f["r"].mean()), 3),
+                "r_offdiag": round(float(f["r_offdiag"].mean()), 3),
+                "rank": round(float(f["rank"].mean()), 3),
+                "n_pairs": len(f),
+                "n_genes": int(f["n_genes"].iloc[0]),
+            }
+        )
+    return pd.DataFrame(rows)

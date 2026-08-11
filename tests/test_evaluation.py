@@ -13,6 +13,7 @@ from fmharness.evaluation import (
     delta_fidelity,
     grouped_cv_predict,
     regret_norm_at_k,
+    score_delta_sources,
     score_predictions,
 )
 from fmharness.probe import SimpleProbe
@@ -71,6 +72,32 @@ def test_delta_fidelity_restricts_to_hvgs() -> None:
     key = pd.DataFrame({"patient": ["P1", "P2"], "drug": ["d", "d"]})
     out = delta_fidelity(real.copy(), key, real, key, n_hvg=2)
     assert (out["n_genes"] == 2).all()
+
+
+def test_score_delta_sources_builds_one_row_per_source() -> None:
+    # two sources scored against the same real delta: "good" reconstructs it exactly
+    # (matched r = 1 per pair), "bad" is its exact negation (matched r = -1 per pair) --
+    # one row per source name, and the near-perfect source scores higher.
+    genes = pd.Index(list("abcde"))
+    real_delta = pd.DataFrame(
+        [
+            [3.0, 1.0, -1.0, -2.0, -1.0],  # (P1, d1)
+            [-1.0, -2.0, 3.0, 1.0, -1.0],  # (P2, d1)
+        ],
+        columns=genes,
+    )
+    real_key = pd.DataFrame({"patient": ["P1", "P2"], "drug": ["d1", "d1"]})
+
+    sources = {
+        "good": (real_delta.copy(), real_key.copy()),
+        "bad": (-real_delta, real_key.copy()),
+    }
+    table = score_delta_sources(sources, real_delta, real_key, n_hvg=None)
+    assert set(table["source"]) == {"good", "bad"}
+    by_source = table.set_index("source")
+    assert by_source.loc["good", "r"] > by_source.loc["bad", "r"]
+    assert by_source.loc["good", "r"] == 1.0
+    assert by_source.loc["bad", "r"] == -1.0
 
 
 def test_score_predictions_reports_interaction_and_null() -> None:

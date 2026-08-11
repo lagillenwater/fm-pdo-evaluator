@@ -121,6 +121,20 @@ def soragni_pert_map(repo: Path) -> dict[str, str]:
     return pert2drug
 
 
+def load_pert_map(path: Path) -> dict[str, str]:
+    """Read a ``pert_id<TAB>cid`` TSV into ``{pert_id: cid}`` for build_generated_deltas.
+
+    The generated files are named by Tahoe pert_id (drug name); this maps each back to
+    the PubChem CID the real deltas / designs are keyed by. Written by 03's context split.
+    """
+    m: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        pert, _, cid = line.partition("\t")
+        if pert.strip() and cid.strip():
+            m[pert.strip()] = cid.strip()
+    return m
+
+
 def _drug_of(path: Path, gen: ad.AnnData, valid: set[str]) -> str:
     """Find the pert_id a generated file corresponds to (Stack writes
     ``generated/<pert_id>.h5ad``)."""
