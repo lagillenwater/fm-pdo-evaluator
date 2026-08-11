@@ -451,7 +451,11 @@ def learned_gene_panel(
     sig_genes = pd.Index(sorted({g for genes, _ in hallmark.values() for g in genes}))
     # DataFrame.var(axis=0) directly has an ambiguous pandas-stubs overload; go via numpy
     # (ddof=1 matches pandas' default sample variance) so the result is unambiguously a Series.
-    var = real_delta.to_numpy(dtype=np.float64).var(axis=0, ddof=1)
+    # np.nanvar (not ndarray.var) so a NaN in one row doesn't propagate and zero out a gene's
+    # variance -- matches pandas' default skipna=True, which is what real_delta.var(axis=0)
+    # (the original inline code, and the still-standalone hvg line in
+    # scripts/score_generation_eval.py) does.
+    var = np.nanvar(real_delta.to_numpy(dtype=np.float64), axis=0, ddof=1)
     var_s = pd.Series(var, index=real_delta.columns)
     hvg = pd.Index(var_s.sort_values(ascending=False).index[:n_hvg])
     return hvg.union(sig_genes)

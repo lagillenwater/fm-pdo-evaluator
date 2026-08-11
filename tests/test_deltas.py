@@ -287,3 +287,26 @@ def test_learned_gene_panel_unions_hvgs_and_hallmark_genes(tmp_path: Path) -> No
     )
     panel = learned_gene_panel(real_delta, gmt, n_hvg=1)
     assert set(panel) == {"HVG1", "SIGGENE1", "SIGGENE2"}
+
+
+def test_learned_gene_panel_ranks_variance_skipping_nan(tmp_path: Path) -> None:
+    gmt = tmp_path / "hallmark.gmt"
+    gmt.write_text("HALLMARK_P53_PATHWAY\thttp://example\tSIGGENE1\tSIGGENE2\n")
+    # NANVAR has one NaN row but is otherwise the highest-variance column among its non-NaN
+    # values; LOWVAR1/2 are constant (zero variance). A naive numpy ndarray.var() propagates the
+    # NaN into NANVAR's overall variance (making it NaN, which pandas sort_values pushes to the
+    # bottom regardless of ascending=), knocking it out of an n_hvg=1 panel. Pandas' skipna
+    # variance -- what the original inline code and the still-standalone hvg line in
+    # scripts/score_generation_eval.py both use -- ranks NANVAR first despite the missing value;
+    # learned_gene_panel must match that.
+    real_delta = pd.DataFrame(
+        {
+            "NANVAR": [1.0, 1000.0, np.nan],
+            "LOWVAR1": [5.0, 5.0, 5.0],
+            "LOWVAR2": [3.0, 3.0, 3.0],
+            "SIGGENE1": [1.0, 1.0, 1.0],
+            "SIGGENE2": [1.0, 1.0, 1.0],
+        }
+    )
+    panel = learned_gene_panel(real_delta, gmt, n_hvg=1)
+    assert set(panel) == {"NANVAR", "SIGGENE1", "SIGGENE2"}
