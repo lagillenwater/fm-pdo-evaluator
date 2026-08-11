@@ -1,8 +1,9 @@
 """Shared test contract every Readout must satisfy: null behavior on an
-unbalanced, zero-information panel. See tests/test_evaluation.py's
-test_interaction_rho_ignores_drug_only_signal_on_an_unbalanced_panel for the
-precedent -- interaction_rho's missingness artifact shipped because no test
-like this existed before it was found and fixed.
+unbalanced, zero-information panel. This pattern prevents the class of bug
+where a readout's missingness artifact goes undetected because it was only
+tested on balanced synthetic panels. A predictor with zero patient-level
+information must score at its null value even when observations are
+unevenly distributed across drugs.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import pandas as pd
 def unbalanced_zero_info_panel(seed: int = 0) -> pd.DataFrame:
     """4 patients x 5 drugs, ~30% of cells missing at random, y_pred carries
     zero patient-level information (constant per drug -- the drug's own mean
-    y_true), the exact shape of predictor that exposed the interaction_rho bug.
+    y_true), the exact shape of predictor that exposes missingness artifacts.
     """
     rng = np.random.default_rng(seed)
     patients = [f"p{i}" for i in range(4)]

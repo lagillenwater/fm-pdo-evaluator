@@ -101,3 +101,30 @@ def test_brier_score_null_on_unbalanced_zero_info_predictor() -> None:
     drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
     expected = float(np.mean((drug_rate - thresholded["y_true"]) ** 2))
     assert np.isclose(brier_score(thresholded.assign(y_pred=drug_rate)), expected)
+
+
+def test_brier_score_via_helper() -> None:
+    """Verify the helper itself works by having brier_score use it."""
+    from . import readout_contract
+
+    # Create a readout function that applies brier_score to a binarized panel.
+    # The null value is the MSE when y_pred is the drug mean of binarized y_true.
+    def brier_on_binary(panel: pd.DataFrame) -> float:
+        panel = panel.assign(
+            y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+        )
+        drug_mean = panel.groupby("drug")["y_true"].transform("mean")
+        return brier_score(panel.assign(y_pred=drug_mean))
+
+    # Compute expected null value: MSE of drug mean predictions.
+    panel = readout_contract.unbalanced_zero_info_panel(seed=0)
+    thresholded = panel.assign(
+        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
+    )
+    drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
+    expected_null = float(np.mean((drug_rate - thresholded["y_true"]) ** 2))
+
+    # Verify via the helper.
+    readout_contract.assert_null_on_unbalanced_zero_info_predictor(
+        brier_on_binary, expected_null
+    )
