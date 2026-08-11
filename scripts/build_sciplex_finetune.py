@@ -27,6 +27,8 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from fmharness.sciplex_prep import check_gene_count
+
 PERT_CANDIDATES = ["perturbation", "condition", "product_name", "treatment", "drug", "compound"]
 LINE_CANDIDATES = ["cell_line", "cell line", "cell_type", "cell_name", "line"]
 DOSE_CANDIDATES = ["dose_value", "dose", "dose_val", "dose_uM", "dose_unit"]
@@ -61,6 +63,7 @@ def main() -> None:
     args = ap.parse_args()
 
     a = ad.read_h5ad(args.input)
+    check_gene_count(a.n_vars)
     pert_col = _pick(a.obs.columns, args.pert_col, PERT_CANDIDATES, "pert-col")
     line_col = _pick(a.obs.columns, args.cell_line_col, LINE_CANDIDATES, "cell-line-col")
     dose_col = _pick(a.obs.columns, args.dose_col, DOSE_CANDIDATES, "dose-col")

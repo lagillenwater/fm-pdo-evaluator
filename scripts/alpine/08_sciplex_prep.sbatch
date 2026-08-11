@@ -27,8 +27,11 @@ SCIPLEX_DIR="/scratch/alpine/$USER/sciplex"
 mkdir -p "$SCIPLEX_DIR"
 RAW="$SCIPLEX_DIR/sciplex3_raw.h5ad"
 
-# 1. Download the sci-Plex 3 AnnData (chemCPA's processed h5ad). Override SCIPLEX_URL to swap it.
-SCIPLEX_URL="${SCIPLEX_URL:-https://f003.backblazeb2.com/file/chemCPA-datasets/sciplex_complete_middle_subset.h5ad}"
+# 1. Download the sci-Plex 3 AnnData (scPerturb's full-gene h5ad, Zenodo record 13350497 --
+#    see the chemCPA "middle_subset" alternative below for the pre-subset-to-2000-genes
+#    version this replaces; the full-gene version is what Stack's generation panel needs).
+#    Override SCIPLEX_URL to swap it.
+SCIPLEX_URL="${SCIPLEX_URL:-https://zenodo.org/records/13350497/files/SrivatsanTrapnell2020_sciplex3.h5ad?download=1}"
 [[ -f "$RAW" ]] || wget -O "$RAW" "$SCIPLEX_URL"
 
 # 2. Reformat to stack-finetune's layout: raw counts, gene symbols, pert_id/is_control/cell_line/dose.
