@@ -18,7 +18,13 @@
 # --dataset_configs for a DRUG dataset (parse_dataset_configs, finetune/utils.py) is colon-separated:
 #   drug:PATH:condition_col:cell_line_col:control_condition[:filter_organism[:gene_name_col]]
 # controls are identified by a VALUE in the condition column -- 08's prep normalizes them to "control"
-# and writes gene symbols to var["feature_name"], so the config below is exact. Other knobs:
+# and writes gene symbols to var["feature_name"], so the config below is exact except
+# filter_organism=false: sci-Plex 3 is human-only (A549/K562/MCF7) and 08's prep writes no
+# "organism" obs column at all, so filter_organism=true made the loader's own "'organism' column
+# not found, skipping" check silently drop the file -- caught in production 2026-08-12 (job
+# 31162775: the directory fix worked, "Processing sciplex_finetune.h5ad..." printed, but the
+# very next line was that skip, netting 0 cells and crashing downstream on an empty DataLoader).
+# Other knobs:
 #   * --sample_size 512 must match generation's set size; --replacement_ratio = 1 - n_kept/512.
 #   * checkpoint out lands under --save_dir; feed it to 04 as CKPT=<that>.ckpt for generation.
 set -euo pipefail
@@ -39,7 +45,7 @@ mkdir -p "$SAVE_DIR"
 stack-finetune \
     --checkpoint_path stack-large/bc_large.ckpt \
     --genelist_path stack-large/basecount_1000per_15000max.pkl \
-    --dataset_configs "drug:$SCIPLEX:pert_id:cell_line:control:true:feature_name" \
+    --dataset_configs "drug:$SCIPLEX:pert_id:cell_line:control:false:feature_name" \
     --sample_size 512 \
     --replacement_ratio 0.1 \
     --batch_size 8 \
