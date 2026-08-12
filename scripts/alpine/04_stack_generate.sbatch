@@ -45,14 +45,18 @@ echo "task $TASK -> pert '$PERT' ($SHARD)"
 
 QUERY="tahoe_query.h5ad"              # cell-line control baselines (written by 03); 50 cells
 # Env-overridable so the base (unaligned) checkpoint can be A/B'd against the aligned one, e.g.:
-#   CKPT=stack-large/bc_large.ckpt GENELIST=stack-large/basecount_1000per_15000max.pkl \
-#   OUTDIR=generated_base sbatch --array=3 scripts/alpine/04_stack_generate.sbatch
+#   sbatch --export=CKPT=stack-large/bc_large.ckpt,GENELIST=stack-large/basecount_1000per_15000max.pkl,OUTDIR=generated_base \
+#       --array=3 scripts/alpine/04_stack_generate.sbatch
 # `VAR=val sbatch ...` prefix assignment does NOT reach this script on Alpine's Slurm config --
-# it must be `sbatch --export=ALL,VAR=val,... script` or these silently fall back to the aligned
-# defaults below. Caught in production 2026-08-12: a prefix-assigned CKPT/OUTDIR both silently
-# no-op'd, regenerating the cytokine-aligned checkpoint's output into the default generated/ dir
-# instead of the intended drug-aligned run -- logged loudly here so it's the first thing in every
-# array task's log, not something to notice 30 lines in.
+# it must be `sbatch --export=VAR=val,... script`, WITHOUT "ALL": --export=ALL propagates the
+# submitting shell's entire environment (including $MODULEPATH/Lmod state), which broke `module
+# load anaconda` outright ("unknown module") in production 2026-08-12. Plain --export=VAR=val,...
+# (no ALL) gives the job a clean environment plus just the named vars, matching this script's own
+# `module purge; module load anaconda` expectations. Also caught 2026-08-12: a prefix-assigned
+# CKPT/OUTDIR (no --export at all) silently no-op'd, regenerating the cytokine-aligned
+# checkpoint's output into the default generated/ dir instead of the intended drug-aligned run --
+# logged loudly here so a repeat is the first thing in every array task's log, not something to
+# notice 30 lines in.
 CKPT="${CKPT:-stack-aligned/bc_large_aligned.ckpt}"
 GENELIST="${GENELIST:-stack-aligned/basecount_1000per_15000max.pkl}"
 OUTDIR="${OUTDIR:-generated}"
