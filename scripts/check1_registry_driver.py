@@ -14,9 +14,13 @@ not the swappable dimension this proves -- they stay exactly as score_generation
 already builds them.
 
 Run (once Alpine has produced the inputs -- see the implementation plan's Task 9 for the
-exact `ralpine pull` commands and real-data invocation):
+exact `ralpine pull` commands and real-data invocation). Prefer --deltas-bundle over --context
+unless you have specifically verified the two agree: a live --context rebuild is a snapshot of
+whatever Tahoe context currently sits on Alpine, which is NOT guaranteed to match the bundle
+docs/tahoe_generation_results.md's published table was actually computed from (confirmed to
+diverge in production 2026-08-12 -- see --deltas-bundle's own --help text):
   uv run python scripts/check1_registry_driver.py \\
-      --context tahoe_context.h5ad \\
+      --deltas-bundle tahoe_deltas \\
       --query-baseline tahoe_query.h5ad \\
       --generated-dir generated \\
       --pert-map context_by_drug/pert_to_cid.tsv \\
@@ -136,6 +140,21 @@ def corpus_declared_partially(corpus_lines: str | None, corpus_drugs: str | None
     return (corpus_lines is None) != (corpus_drugs is None)
 
 
+def ground_truth_source_declared_ambiguously(
+    context: str | None, deltas_bundle: str | None
+) -> bool:
+    """True iff --context/--deltas-bundle are both given or both omitted.
+
+    Exactly one must select the ground-truth (real_delta, real_key, base) source: --context
+    rebuilds it live from a single-cell AnnData, --deltas-bundle reads a precomputed pseudobulk
+    parquet bundle. The two are not interchangeable in practice -- a live --context rebuild is
+    whatever Tahoe context snapshot currently sits on Alpine, not necessarily the one a
+    published table was computed from (see --deltas-bundle's own --help text) -- so main()
+    rejects an ambiguous combination rather than silently picking one.
+    """
+    return (context is None) == (deltas_bundle is None)
+
+
 def parse_corpus_set(raw: str | None) -> set[str] | None:
     """Parse a comma-separated ``--corpus-lines``/``--corpus-drugs`` value into a set.
 
@@ -152,7 +171,18 @@ def parse_corpus_set(raw: str | None) -> set[str] | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--context", required=True, help="Tahoe context AnnData (build_tahoe_context)")
+    ap.add_argument("--context", default=None, help="Tahoe context AnnData (build_tahoe_context)")
+    ap.add_argument(
+        "--deltas-bundle",
+        default=None,
+        help="dir of real_delta.parquet/real_key.parquet/base.parquet (pseudobulk shortcut, "
+        "matching score_generation_eval.py's own --deltas-bundle) -- provide this OR --context, "
+        "not both. A live single-cell --context rebuild is NOT guaranteed to match a bundle "
+        "built earlier from a different Tahoe context snapshot: caught in production 2026-08-12,"
+        " where a --context rebuild (dated after the bundle) gave baselines ~2.4x the published"
+        " table's values despite identical code -- --deltas-bundle tahoe_deltas is what actually"
+        " reproduces docs/tahoe_generation_results.md.",
+    )
     ap.add_argument(
         "--query-baseline", required=True, help="AnnData fed to stack-generation as --test-adata"
     )
@@ -173,9 +203,18 @@ def main() -> None:
             "--corpus-lines and --corpus-drugs must both be given together (or neither, to "
             "run unfiltered) -- giving only one silently disables leakage filtering"
         )
+    if ground_truth_source_declared_ambiguously(args.context, args.deltas_bundle):
+        ap.error("provide exactly one of --context (single-cell) or --deltas-bundle (pseudobulk)")
 
     repo = Path(__file__).resolve().parent.parent
-    real_delta, real_key, base = build_tahoe_deltas(ad.read_h5ad(args.context))
+    if args.deltas_bundle:
+        bdir = Path(args.deltas_bundle)
+        bdir = bdir if bdir.is_absolute() else repo / bdir
+        real_delta = pd.read_parquet(bdir / "real_delta.parquet")
+        real_key = pd.read_parquet(bdir / "real_key.parquet")
+        base = pd.read_parquet(bdir / "base.parquet")
+    else:
+        real_delta, real_key, base = build_tahoe_deltas(ad.read_h5ad(args.context))
     pert_to_drug = load_pert_map(Path(args.pert_map))
     table = run_check1(
         real_delta,

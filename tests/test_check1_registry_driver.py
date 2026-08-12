@@ -10,7 +10,12 @@ import pandas as pd
 import pytest
 
 # scripts/check1_registry_driver.py, importable via pytest's pythonpath = ["scripts"].
-from check1_registry_driver import corpus_declared_partially, parse_corpus_set, run_check1
+from check1_registry_driver import (
+    corpus_declared_partially,
+    ground_truth_source_declared_ambiguously,
+    parse_corpus_set,
+    run_check1,
+)
 
 
 def _write_adata(path: Path, x: list[list[float]], obs: list[str], var: list[str]) -> None:
@@ -186,6 +191,16 @@ def test_corpus_declared_partially_rejects_a_half_declared_corpus() -> None:
     assert corpus_declared_partially(None, "d1") is True
     assert corpus_declared_partially("L1", "d1") is False
     assert corpus_declared_partially(None, None) is False
+
+
+def test_ground_truth_source_declared_ambiguously_requires_exactly_one() -> None:
+    # a live --context rebuild is not guaranteed to match a --deltas-bundle built from an
+    # earlier Tahoe context snapshot (confirmed diverging in production 2026-08-12) -- exactly
+    # one must be given, not both (ambiguous which wins) and not neither (nothing to score).
+    assert ground_truth_source_declared_ambiguously(None, None) is True
+    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", "tahoe_deltas") is True
+    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", None) is False
+    assert ground_truth_source_declared_ambiguously(None, "tahoe_deltas") is False
 
 
 def test_run_check1_prints_the_leakage_basis_when_a_corpus_is_declared(
