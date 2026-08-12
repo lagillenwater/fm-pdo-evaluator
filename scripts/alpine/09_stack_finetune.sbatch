@@ -29,7 +29,10 @@ module load anaconda
 conda activate stack
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix
 
-SCIPLEX="/scratch/alpine/$USER/sciplex/sciplex_finetune.h5ad"   # from 08
+# stack-finetune globs this path for *.h5ad/*.h5 (Path(path).glob(...)), not a direct file read --
+# it must be a directory containing ONLY the finetune-ready file, or it silently also picks up
+# 08's raw download / any stale cache sitting alongside it. 08 writes here for exactly this reason.
+SCIPLEX="/scratch/alpine/$USER/sciplex/finetune_input"
 SAVE_DIR="/scratch/alpine/$USER/sciplex_finetune"
 mkdir -p "$SAVE_DIR"
 

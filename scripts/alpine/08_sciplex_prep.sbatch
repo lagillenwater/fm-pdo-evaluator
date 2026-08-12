@@ -44,7 +44,15 @@ RAW="$SCIPLEX_DIR/$(basename "${SCIPLEX_URL%%\?*}")"
 # 2. Reformat to stack-finetune's layout: raw counts, gene symbols, pert_id/is_control/cell_line/dose.
 #    build_sciplex_finetune.py auto-detects the obs/layer names and prints what it picked -- check
 #    that line in the log; override --pert-col/--cell-line-col/--dose-col/--counts-layer if wrong.
+#    Written to its own subdirectory, not loose in $SCIPLEX_DIR: stack-finetune's --dataset_configs
+#    path arg is glob'd (Path(path).glob("*.h5ad")), not read as a direct file path -- a bare
+#    directory here would also glob-match RAW and any other .h5ad left in $SCIPLEX_DIR (both the
+#    raw download and a stale prior-URL cache sit there today), silently feeding the wrong obs
+#    schema into fine-tuning. Caught in production 2026-08-12 (job 31159439 loaded 0 cells because
+#    09 originally pointed --dataset_configs at the *file*, which glob() also treats as empty).
+FINETUNE_DIR="$SCIPLEX_DIR/finetune_input"
+mkdir -p "$FINETUNE_DIR"
 python scripts/build_sciplex_finetune.py \
     --input "$RAW" \
-    --out "$SCIPLEX_DIR/sciplex_finetune.h5ad" \
+    --out "$FINETUNE_DIR/sciplex_finetune.h5ad" \
     --min-cells-per-cond 50
