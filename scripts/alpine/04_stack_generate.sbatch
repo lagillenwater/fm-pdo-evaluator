@@ -47,9 +47,16 @@ QUERY="tahoe_query.h5ad"              # cell-line control baselines (written by 
 # Env-overridable so the base (unaligned) checkpoint can be A/B'd against the aligned one, e.g.:
 #   CKPT=stack-large/bc_large.ckpt GENELIST=stack-large/basecount_1000per_15000max.pkl \
 #   OUTDIR=generated_base sbatch --array=3 scripts/alpine/04_stack_generate.sbatch
+# `VAR=val sbatch ...` prefix assignment does NOT reach this script on Alpine's Slurm config --
+# it must be `sbatch --export=ALL,VAR=val,... script` or these silently fall back to the aligned
+# defaults below. Caught in production 2026-08-12: a prefix-assigned CKPT/OUTDIR both silently
+# no-op'd, regenerating the cytokine-aligned checkpoint's output into the default generated/ dir
+# instead of the intended drug-aligned run -- logged loudly here so it's the first thing in every
+# array task's log, not something to notice 30 lines in.
 CKPT="${CKPT:-stack-aligned/bc_large_aligned.ckpt}"
 GENELIST="${GENELIST:-stack-aligned/basecount_1000per_15000max.pkl}"
 OUTDIR="${OUTDIR:-generated}"
+echo "Resolved: CKPT=$CKPT GENELIST=$GENELIST OUTDIR=$OUTDIR"
 mkdir -p "$OUTDIR"
 
 # Stack splits its 512-cell set as n_test = int(512*(1 - prompt_ratio - context_ratio)), rest base.
