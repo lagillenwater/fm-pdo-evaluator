@@ -49,7 +49,7 @@ CHECK2_RIDGE = {
 }
 # Selection gap@k, lowest across the L1/L2/EN sweep (each k minimized independently).
 SEL_GAP = {
-    "expr": (0.360, 0.114),
+    "expr": (0.354, 0.119),
     "additive": (0.264, 0.091),
     "knn": (0.250, 0.101),
     "pca": (0.219, 0.102),

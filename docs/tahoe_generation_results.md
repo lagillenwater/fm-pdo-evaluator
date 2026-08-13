@@ -81,9 +81,9 @@ aligned = cytokine-aligned checkpoint embedding, encoder-stripped):
 
 | representation | L2 global / int | L1 global / int | EN global / int | sel. gap@1 | sel. gap@3 |
 |---|---|---|---|---|---|
-| expr | 0.475 / −0.037 | 0.598 / −0.105 | 0.605 / −0.121 | 0.360 | 0.114 |
-| additive | 0.628 / −0.095 | 0.603 / −0.159 | 0.601 / −0.151 | 0.264 | 0.091 |
-| knn | 0.547 / −0.068 | 0.617 / −0.171 | 0.618 / −0.168 | 0.250 | 0.101 |
+| expr | 0.475 / −0.037 | 0.599 / −0.108 | 0.604 / −0.123 | 0.354 | 0.119 |
+| additive | 0.628 / −0.095 | 0.603 / −0.159 | 0.601 / −0.155 | 0.264 | 0.091 |
+| knn | 0.547 / −0.068 | 0.617 / −0.171 | 0.618 / −0.169 | 0.250 | 0.101 |
 | pca | 0.585 / +0.007 | 0.634 / −0.108 | 0.634 / −0.103 | 0.219 | 0.102 |
 | nmf | 0.550 / +0.007 | 0.610 / −0.198 | 0.614 / −0.178 | 0.251 | 0.082 |
 | stack (gen, cytokine-aligned) | 0.539 / −0.003 | 0.568 / −0.182 | 0.574 / −0.164 | 0.320 | 0.144 |
@@ -107,8 +107,8 @@ training — full per-source table, all three Stack checkpoint variants):
 |---|---|---|---|---|---|---|---|
 | additive | hallmark | 0.088 | −0.063 | −0.033 | 0.855 | 0.579 | 0.979 |
 | additive | proliferation | 0.097 | −0.016 | −0.035 | 0.585 | 0.547 | 0.884 |
-| knn | hallmark | 0.080 | 0.022 | −0.008 | 0.788 | 0.587 | 0.219 |
-| knn | proliferation | 0.092 | 0.015 | 0.063 | 0.628 | 0.415 | 0.358 |
+| knn | hallmark | 0.080 | 0.022 | −0.008 | 0.788 | 0.587 | 0.220 |
+| knn | proliferation | 0.092 | 0.015 | 0.063 | 0.628 | 0.415 | 0.360 |
 | pca | hallmark | 0.089 | −0.075 | 0.053 | 0.855 | 0.579 | 0.985 |
 | pca | proliferation | 0.123 | −0.010 | 0.049 | 0.585 | 0.535 | 0.848 |
 | nmf | hallmark | 0.077 | −0.068 | −0.072 | 0.855 | 0.579 | 0.981 |
@@ -142,7 +142,7 @@ p_label 0.001) — where expression, PCA, NMF, and every generated delta sit at 
 non-significant. Two features sharpen the reading:
 - **Dense, not sparse.** The signal is spread across many correlated embedding dimensions:
   L1/EN sparsify it away (interaction −0.17). The opposite of raw expression, where L1 *helps*
-  (global 0.475 → 0.598) by selecting informative genes.
+  (global 0.475 → 0.599) by selecting informative genes.
 - **Alignment does not transfer.** base > aligned on every interaction metric (aligned L2 int
   0.045, n.s. p = 0.175). Cytokine-domain alignment adds nothing to — and slightly dilutes —
   the drug-response signal.
@@ -156,8 +156,8 @@ not yet the single best drug pick.
 nmf 0.251 / additive 0.264 / base 0.273 span 0.054, against a minimum detectable difference of
 0.047–0.106 at n = 50 lines — and ≈0.028 of that span is the min-over-{L1,L2,EN} operator, which
 buys that much pure selection optimism even on zero-signal models. Those six are mutually
-indistinguishable. Only expr (0.360) and stack (0.320) plausibly separate, and both are
-borderline once the 0.028 is subtracted. Note also that the reported gap@1 and gap@3 for a row
+indistinguishable. Only expr (0.354) and the stack variants (0.320–0.343) plausibly separate,
+and all are borderline once the 0.028 is subtracted. Note also that the reported gap@1 and gap@3 for a row
 generally come from *different* penalties, so no single deployable model achieves both.
 
 **Overall potency is solved (~0.6) by everything; personalization is captured only by the base

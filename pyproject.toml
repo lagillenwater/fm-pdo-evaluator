@@ -31,6 +31,8 @@ ml = [
 ]
 viz = [
     "matplotlib>=3.8",
+    "pillow>=10.0",
+    "python-pptx>=1.0",
 ]
 stack = [
     "arc-stack @ git+https://github.com/ArcInstitute/stack.git",
