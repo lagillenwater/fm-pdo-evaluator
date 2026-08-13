@@ -104,3 +104,43 @@ def filter_leakage(
         basis="measured",
     )
     return filtered, profile
+
+
+def corpus_declared_partially(corpus_lines: str | None, corpus_drugs: str | None) -> bool:
+    """True iff exactly one of --corpus-lines/--corpus-drugs was given, not both, not neither.
+
+    filter_leakage only filters when it has a measured declaration on BOTH axes; a
+    half-declared corpus silently scores identically to an unfiltered run (basis="unknown"),
+    with no signal in the output that the declared corpus was ignored. A driver's main()
+    should reject this combination up front rather than letting it through.
+    """
+    return (corpus_lines is None) != (corpus_drugs is None)
+
+
+def ground_truth_source_declared_ambiguously(
+    context: str | None, deltas_bundle: str | None
+) -> bool:
+    """True iff --context/--deltas-bundle are both given or both omitted.
+
+    Exactly one must select the ground-truth (real_delta, real_key, base) source: --context
+    rebuilds it live from a single-cell AnnData, --deltas-bundle reads a precomputed pseudobulk
+    parquet bundle. The two are not interchangeable in practice -- a live --context rebuild is
+    whatever Tahoe context snapshot currently sits on Alpine, not necessarily the one a
+    published table was computed from -- so a driver's main() should reject an ambiguous
+    combination rather than silently picking one.
+    """
+    return (context is None) == (deltas_bundle is None)
+
+
+def parse_corpus_set(raw: str | None) -> set[str] | None:
+    """Parse a comma-separated --corpus-lines/--corpus-drugs value into a set.
+
+    The documented workflow has a human copy-paste a comma-separated list printed by an
+    earlier step into these flags -- strip whitespace around each entry and drop empty
+    entries, so a stray space after a comma ("A, B, C") does not silently produce a corpus
+    entry (" B") that can never match a real line/drug name and weakens the leakage filter
+    with no error. ``None`` (flag not given) stays ``None``.
+    """
+    if raw is None:
+        return None
+    return {s.strip() for s in raw.split(",") if s.strip()}

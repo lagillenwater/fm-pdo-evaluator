@@ -6,7 +6,13 @@ from datetime import date
 
 import pandas as pd
 
-from fmharness.leakage import LeakageQueryable, filter_leakage
+from fmharness.leakage import (
+    LeakageQueryable,
+    corpus_declared_partially,
+    filter_leakage,
+    ground_truth_source_declared_ambiguously,
+    parse_corpus_set,
+)
 from fmharness.model_protocols import MockGenerator
 from fmharness.models.adapter import KnownCorpusAdapter, MockAdapter
 from fmharness.schema import ModelMetadata
@@ -132,3 +138,36 @@ def test_known_corpus_adapter_drives_filter_leakage_end_to_end() -> None:
     assert len(filtered) == len(_design()) - 1
     assert profile.basis == "measured"
     assert profile.doubly_exposed_frac == 1 / 6
+
+
+def test_parse_corpus_set_strips_whitespace_and_drops_empties() -> None:
+    # The documented workflow has a human copy-paste a comma-separated list into these flags --
+    # a stray space after a comma (or a trailing comma) must not produce a corpus entry like
+    # " B" or "" that can never match a real line/drug name.
+    assert parse_corpus_set(" A , B ,") == {"A", "B"}
+
+
+def test_parse_corpus_set_passes_none_through() -> None:
+    assert parse_corpus_set(None) is None
+
+
+def test_corpus_declared_partially_rejects_a_half_declared_corpus() -> None:
+    # filter_leakage only filters when BOTH pretraining_lines and pretraining_drugs are given
+    # -- a half-declared corpus (e.g. only --corpus-lines) silently scores identically to an
+    # unfiltered run, with nothing in the output to show the declared corpus was ignored. A
+    # driver's main() must reject this combination via ap.error before it reaches
+    # filter_leakage.
+    assert corpus_declared_partially("L1", None) is True
+    assert corpus_declared_partially(None, "d1") is True
+    assert corpus_declared_partially("L1", "d1") is False
+    assert corpus_declared_partially(None, None) is False
+
+
+def test_ground_truth_source_declared_ambiguously_requires_exactly_one() -> None:
+    # a live --context rebuild is not guaranteed to match a --deltas-bundle built from an
+    # earlier Tahoe context snapshot (confirmed diverging in production 2026-08-12) -- exactly
+    # one must be given, not both (ambiguous which wins) and not neither (nothing to score).
+    assert ground_truth_source_declared_ambiguously(None, None) is True
+    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", "tahoe_deltas") is True
+    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", None) is False
+    assert ground_truth_source_declared_ambiguously(None, "tahoe_deltas") is False

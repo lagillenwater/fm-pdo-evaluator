@@ -10,12 +10,7 @@ import pandas as pd
 import pytest
 
 # scripts/check1_registry_driver.py, importable via pytest's pythonpath = ["scripts"].
-from check1_registry_driver import (
-    corpus_declared_partially,
-    ground_truth_source_declared_ambiguously,
-    parse_corpus_set,
-    run_check1,
-)
+from check1_registry_driver import run_check1
 
 
 def _write_adata(path: Path, x: list[list[float]], obs: list[str], var: list[str]) -> None:
@@ -170,37 +165,6 @@ def test_run_check1_keeps_delta_rows_aligned_to_the_filtered_key(tmp_path: Path)
     assert stack_row["n_pairs"] == 3
     assert stack_row["r"] > 0.9
 
-
-def test_parse_corpus_set_strips_whitespace_and_drops_empties() -> None:
-    # Task 9's workflow has a human copy-paste a comma-separated list into these flags --
-    # a stray space after a comma (or a trailing comma) must not produce a corpus entry
-    # like " B" or "" that can never match a real line/drug name.
-    assert parse_corpus_set(" A , B ,") == {"A", "B"}
-
-
-def test_parse_corpus_set_passes_none_through() -> None:
-    assert parse_corpus_set(None) is None
-
-
-def test_corpus_declared_partially_rejects_a_half_declared_corpus() -> None:
-    # filter_leakage only filters when BOTH pretraining_lines and pretraining_drugs are given
-    # -- a half-declared corpus (e.g. only --corpus-lines) silently scores identically to an
-    # unfiltered run, with nothing in the output to show the declared corpus was ignored.
-    # main() must reject this combination via ap.error before it reaches filter_leakage.
-    assert corpus_declared_partially("L1", None) is True
-    assert corpus_declared_partially(None, "d1") is True
-    assert corpus_declared_partially("L1", "d1") is False
-    assert corpus_declared_partially(None, None) is False
-
-
-def test_ground_truth_source_declared_ambiguously_requires_exactly_one() -> None:
-    # a live --context rebuild is not guaranteed to match a --deltas-bundle built from an
-    # earlier Tahoe context snapshot (confirmed diverging in production 2026-08-12) -- exactly
-    # one must be given, not both (ambiguous which wins) and not neither (nothing to score).
-    assert ground_truth_source_declared_ambiguously(None, None) is True
-    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", "tahoe_deltas") is True
-    assert ground_truth_source_declared_ambiguously("tahoe_context.h5ad", None) is False
-    assert ground_truth_source_declared_ambiguously(None, "tahoe_deltas") is False
 
 
 def test_run_check1_prints_the_leakage_basis_when_a_corpus_is_declared(
