@@ -51,10 +51,16 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
-from sklearn.preprocessing import StandardScaler
 
 from fmharness.adapters import build_adapters
+from fmharness.check2 import (
+    FIXED_READOUTS,
+    PENALTY_NAMES,
+    PROLIFERATION,
+    load_line_matrix,
+    penalized_preds,
+    repr_by_drug,
+)
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     build_generated_deltas,
@@ -66,112 +72,11 @@ from fmharness.deltas import (
 from fmharness.evaluation import build_sample_design, score_delta_sources, score_predictions
 from fmharness.signatures import load_hallmark, score_signatures
 
-# The Hallmark proliferation sets -- the two that cleared the gate's random-gene-set control
-# (G2M clearly, E2F marginally); the death sets (P53, apoptosis) add only noise on Tahoe. A
-# ``proliferation`` readout scores just these, so a real but weak signal is not diluted away.
-PROLIFERATION = ("HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT")
-FIXED_READOUTS = ("hallmark", "proliferation")  # fixed-signature readouts, applied to delta sources
-PENALTY_NAMES = ("l2", "l1", "en")  # penalized regressions for the representation-controlled grid
-
-
-def _make_penalty(name: str) -> object:
-    """A fresh ALPHA-CV-TUNED penalized model: l2=RidgeCV (efficient GCV), l1=LassoCV, en=
-    ElasticNetCV (both inner 3-fold on the training lines). Tuning the penalty per representation
-    makes the grid model-fair -- a fixed alpha over-/under-regularizes some representations and
-    flips the ranking (Kurilov 2020)."""
-    if name == "l2":
-        return RidgeCV(alphas=np.logspace(-2, 3, 12))
-    if name == "l1":
-        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)
-    if name == "en":
-        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)
-    raise ValueError(f"unknown penalty {name!r}")
-
 
 def _rel(repo: Path, p: str) -> Path:
     """Resolve ``p`` against the repo root unless it is already absolute."""
     q = Path(p)
     return q if q.is_absolute() else repo / q
-
-
-def _load_line_matrix(path: Path) -> pd.DataFrame:
-    """Load a per-cell-line feature matrix (index = line id) for the check-2 grid, from a
-    ``.h5ad`` (X + obs_names), ``.parquet``, or ``.csv``. Used to fold a precomputed FM
-    embedding (one vector per line) in head-to-head with expr/pca."""
-    if path.suffix == ".h5ad":
-        a = ad.read_h5ad(path)
-        x = a.X.toarray() if hasattr(a.X, "toarray") else np.asarray(a.X)
-        return pd.DataFrame(x, index=pd.Index([str(o) for o in a.obs_names])).astype(float)
-    df = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path, index_col=0)
-    df.index = pd.Index([str(i) for i in df.index])
-    return df.astype(float)
-
-
-def _repr_by_drug(
-    delta: pd.DataFrame, key: pd.DataFrame, genes: pd.Index
-) -> dict[str, pd.DataFrame]:
-    """Split a delta source into ``{drug: DataFrame[line x genes]}`` for per-drug regression."""
-    d = delta.reindex(columns=genes).fillna(0.0)
-    pat = key["patient"].astype(str).to_numpy()
-    drg = key["drug"].astype(str).to_numpy()
-    out: dict[str, pd.DataFrame] = {}
-    for drug in pd.unique(drg):
-        m = d[drg == drug]
-        m.index = pd.Index(pat[drg == drug])
-        out[str(drug)] = m
-    return out
-
-
-def _penalized_preds(
-    feat: dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame],
-    design: pd.DataFrame,
-    fold_of: dict[str, int],
-    n_folds: int,
-    uniq_lines: list[str],
-    penalty: str,
-    *,
-    min_lines: int = 8,
-    min_train: int = 5,
-) -> pd.DataFrame:
-    """Per-drug penalized regression (representation -> AUC), leave-cell-line-out by fold.
-
-    ``feat`` maps a drug to a (line x gene) frame -- a dict for a delta source, or a callable for a
-    drug-independent representation (baseline expression). For each drug the model is fit on the
-    training-fold lines' features vs AUC and predicts the held-fold lines; the StandardScaler is fit
-    on the training lines only, so a single held line (true LOO) is scored leakage-free. All
-    representations share one model class, so a difference is the representation, not the model.
-    Returns preds (patient, drug, y_true, y_pred); y_pred is an AUC estimate (same sign as y_true).
-    """
-    auc_by_drug = {
-        str(d): dict(zip(g["patient"].astype(str), g["y"], strict=False))
-        for d, g in design.groupby("drug")
-    }
-    rows: list[tuple[str, str, float, float]] = []
-    for drug, auc in auc_by_drug.items():
-        fdf = feat(drug) if callable(feat) else feat.get(drug)
-        if fdf is None or fdf.empty:
-            continue
-        fdf = fdf.copy()
-        fdf.index = pd.Index([str(i) for i in fdf.index])
-        lines_d = [ln for ln in fdf.index if ln in auc]
-        if len(lines_d) < min_lines:
-            continue
-        for f in range(n_folds):
-            held = {ln for ln in uniq_lines if fold_of[ln] == f}
-            tr = [ln for ln in lines_d if ln not in held]
-            te = [ln for ln in lines_d if ln in held]
-            if len(tr) < min_train or not te:
-                continue
-            sc = StandardScaler().fit(fdf.loc[tr].to_numpy(dtype=np.float64))
-            model = _make_penalty(penalty).fit(
-                sc.transform(fdf.loc[tr].to_numpy(dtype=np.float64)), [auc[ln] for ln in tr]
-            )
-            pred = model.predict(sc.transform(fdf.loc[te].to_numpy(dtype=np.float64)))
-            rows.extend(
-                (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
-            )
-    cols = ["patient", "drug", "y_true", "y_pred"]
-    return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 
 def main() -> None:
@@ -376,7 +281,7 @@ def main() -> None:
         "expr": lambda _drug: base_hvg
     }
     for name, (d, kk) in sources.items():
-        representations[name] = _repr_by_drug(d, kk, hvg)
+        representations[name] = repr_by_drug(d, kk, hvg)
     # precomputed FM embeddings (base / aligned Stack) as drug-independent representations --
     # one vector per line, scored in the SAME penalized grid as expr/pca (head-to-head). The base
     # checkpoint has no generation head, so this is how it enters the comparison at all.
@@ -384,11 +289,11 @@ def main() -> None:
         label, _, p = spec.partition("=")
         if not (label.strip() and p.strip()):
             ap.error(f"--stack-emb expects 'label=path', got {spec!r}")
-        emb = _load_line_matrix(_rel(repo, p.strip()))
+        emb = load_line_matrix(_rel(repo, p.strip()))
         representations[label.strip()] = (lambda e: lambda _drug: e)(emb)
     for repr_name, feat in representations.items():
         for pen in penalties:
-            preds = _penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
+            preds = penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
             if preds.empty:
                 continue
             s = score_predictions(preds, n_perm=args.n_permutations)
