@@ -17,7 +17,8 @@ per-line control baseline. Every delta source is judged on equal footing:
   label reproducibility (independent viability screens).
 
 Delta sources: `additive` (drug-mean, line-independent floor), `knn`, `pca`, `nmf` (baselines,
-rebuilt leave-one-line-out), and `stack` (Stack-Large-**Aligned** generated delta).
+rebuilt leave-one-line-out), and `stack` (Stack-Large generated delta), evaluated on **three**
+checkpoint variants: cytokine-aligned, drug-aligned-unfiltered, and drug-aligned-leak-excluded.
 
 ---
 
@@ -32,6 +33,12 @@ rebuilt leave-one-line-out), and `stack` (Stack-Large-**Aligned** generated delt
 | **stack (gen, cytokine-aligned)** | **0.012** | −0.002 | 0.644 | 1568 |
 | stack (gen, drug-aligned, unfiltered) | 0.021 | 0.006 | 0.665 | 1568 |
 | stack (gen, drug-aligned, leak-excluded) | 0.021 | 0.006 | 0.665 | 1563 |
+
+**Pairs are not all from the same run.** Baseline rows (additive/knn/pca/nmf) are scored on the
+unfiltered 1,600-pair design; the stack rows use Stack's own coverage (1,568), and the
+leak-excluded stack row further drops the 5 doubly-exposed A549/drug pairs (1,563). None of this
+changes any conclusion (~5/1300–1600 pairs is tiny) — noted here since it isn't visible from the
+table alone.
 
 Ceiling (delta reproducibility, Tahoe plate split-half): **0.30 raw / 0.46 Spearman-Brown.**
 
@@ -77,7 +84,8 @@ line's observed AUC range** (`regret_norm_at_k`, `evaluation.py:224`) — so it 
 Because GDSC2 panels are right-skewed, a **random** ranking scores ≈0.70 here, not 0.50.
 
 **Baseline, generated-delta, and embedding ladder** (base = unaligned `bc_large` embedding;
-aligned = cytokine-aligned checkpoint embedding, encoder-stripped):
+aligned = cytokine-aligned checkpoint embedding, encoder-stripped; baseline/embedding rows are
+scored on the unfiltered ~1,313-pair design, the leak-excluded stack row on ~1,308):
 
 | representation | L2 global / int | L1 global / int | EN global / int | sel. gap@1 | sel. gap@3 |
 |---|---|---|---|---|---|
@@ -101,7 +109,8 @@ scores, so the same 5 doubly-exposed pairs Check 1 finds land on a ~90x larger d
 round to 0.000 at 3 decimals.)
 
 **Fixed-signature readouts** (Hallmark gene sets scored directly on each delta source — no
-training — full per-source table, all three Stack checkpoint variants):
+training — full per-source table, all three Stack checkpoint variants; baseline rows are scored
+on the unfiltered ~1,313-pair design, the leak-excluded stack rows on ~1,308):
 
 | source | method | global | interaction | per-drug | sel. gap@1 | sel. gap@3 | p_label |
 |---|---|---|---|---|---|---|---|
@@ -127,6 +136,14 @@ fits — its *interaction* term is slightly positive (proliferation +0.08, p_lab
 leakage filtering moves it only marginally (interaction 0.019→0.021 hallmark, 0.081→0.082
 proliferation), the same near-independence Check 1 found. The other (non-Stack) deltas sit at
 global ~0.08–0.12 regardless of checkpoint.
+
+**This does not overturn "only the base embedding" (Findings below).** The same drug-aligned,
+leak-excluded delta, scored through the **trained** ridge fit instead of this fixed readout,
+gives interaction **−0.079** with p_label **0.987** (see the ladder table above) — opposite sign,
+non-significant. The fixed and trained readouts disagree on this representation. And p_label
+0.004 is one of 28 fixed-readout comparisons in this table (7 sources × 2 methods × the
+checkpoint variants); it does not survive even a Bonferroni correction (0.05/28 ≈ 0.0018). Read
+this row as readout-fragile, not as evidence against the base-embedding-only finding.
 
 Per-drug ranking and label-permutation significance — the two columns the ladder omits, for the
 ridge (L2) fits that carry the embedding signal:
@@ -207,16 +224,16 @@ cell-line-specific interaction is ≈0 and non-significant for all except base-e
 >
 > **The one control that settles it.** Rank drugs purely by their mean AUC over the training
 > lines, ignoring the cell line entirely — the "potency prior". This is not an external baseline:
-> `_penalized_preds` fits per drug with `StandardScaler` on the training lines
-> (`score_generation_eval.py:179`) and `fit_intercept=True`, so the intercept already *is* that
+> `fmharness.check2.penalized_preds` fits per drug with `StandardScaler` on the training lines
+> and `fit_intercept=True`, so the intercept already *is* that
 > training mean, and the prior is the same fitted model with its coefficients zeroed. Score it
 > with the same gap@k on the same folds. **If the models do not beat it, their shortlists carry
 > no cell-line information at all.** Two independent reconstructions put the prior at gap@1
 > ≈ 0.06–0.11 against 0.22–0.36 for every representation, so the expected result is that the
 > prior *wins* — a stronger statement than "confounded by toxicity".
 >
-> **Why we cannot answer this today, and the fix.** `_penalized_preds` builds the per-(line, drug)
-> prediction frame, scores it, and discards it (`score_generation_eval.py:465-468`); nothing in
+> **Why we cannot answer this today, and the fix.** `fmharness.check2.penalized_preds` builds the
+> per-(line, drug) prediction frame, scores it, and discards it; nothing in
 > `results/` holds per-pair predictions, so the picks are unrecoverable. Emitting `y_prior` in the
 > fold loop and dumping `(source, penalty, patient, drug, y_true, y_pred, y_prior)` to
 > `results/check2_preds.parquet` is ~10 lines, after which the table above and the prior
@@ -292,14 +309,16 @@ embedding clears significance while PCA/expression sit at null, a sharper margin
 incremental FM-vs-PCA gaps typical of the paper's embedding tables. Both are consistent in
 *direction* with the preprint; neither is directly stated by it.
 
-## In progress
+## Completed since the previous checkpoint
 
-- **sci-Plex drug-aligned generation** — fine-tune the base on sci-Plex 3 (GSE139944) single-cell
-  drug perturbations (disjoint from Tahoe), then generate + score — `08_sciplex_prep.sbatch`
-  → `09_stack_finetune.sbatch` (running) → `04` (CKPT override) → score. Tests whether the
-  Check-1 null is specifically the cytokine alignment (fixable by drug-aligning the gen head) or
-  intrinsic to generation mode. Given finding 4, this is confirmatory: the embedding story holds
-  either way.
+- **sci-Plex drug-aligned generation — done, answered.** Fine-tuned the base on sci-Plex 3
+  (GSE139944) single-cell drug perturbations (disjoint from Tahoe), then generated + scored —
+  `08_sciplex_prep.sbatch` → `09_stack_finetune.sbatch` → `04` (CKPT override) → score. This
+  tested whether the Check-1 null is specifically the cytokine alignment (fixable by
+  drug-aligning the gen head) or intrinsic to generation mode. **Answer: intrinsic to generation
+  mode.** Drug alignment moves Check-1 r from 0.012 to 0.021 (see the Check 1 table above) —
+  still null either way, both far below the additive floor (0.225) and the 0.46 ceiling.
+  Consistent with finding 4: the embedding story holds regardless of checkpoint.
 
 ## Reproducibility
 

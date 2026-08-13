@@ -126,8 +126,9 @@ def panel_check1(ax) -> None:
 def panel_toxic_share(ax) -> None:
     """How often a pan-toxic drug is in the top k -- for the truth and for a line-blind ranker.
 
-    The model bars are deliberately absent: `_penalized_preds` discards its per-pair predictions,
-    so no representation's shortlist is recoverable from anything in `results/` yet.
+    The model bars are deliberately absent: `fmharness.check2.penalized_preds` discards its
+    per-pair predictions, so no representation's shortlist is recoverable from anything in
+    `results/` yet.
     """
     ks = (1, 3)
     x = np.arange(len(ks))

@@ -45,7 +45,9 @@ CHECK1_ROWS = [
 ]
 CHECK1_TAKEAWAY = (
     "Stack generation is null: r = 0.012, off-diagonal ~ 0, specificity rank 0.64 (random ~ 0.5) — "
-    "below the line-independent additive floor (0.225) and far below the 0.46 reproducibility ceiling."
+    "below the line-independent additive floor (0.225) and far below the 0.46 reproducibility ceiling. "
+    "Drug alignment roughly doubles the correlation (0.012 to 0.021) but both variants stay null, "
+    "still far below the additive floor."
 )
 
 # --- Hallmark gate ------------------------------------------------------------------------
@@ -108,7 +110,9 @@ LADDER_TAKEAWAY = (
     "response: interaction +0.119, per-drug +0.200, p_label 0.001 under ridge, where expression, PCA, NMF "
     "and every generated delta sit at ~0 and non-significant. The signal is dense — L1/EN sparsify it away "
     "(interaction ~ -0.17) — and cytokine alignment does not transfer (base > aligned on every interaction "
-    "metric). Overall potency (~0.6) is solved by everything; the interaction ceiling is 0.31-0.47."
+    "metric). Overall potency (~0.6) is solved by everything; the interaction ceiling is 0.31-0.47. The "
+    "drug-aligned checkpoint flips sign between the fixed-signature and trained-ridge readouts (see the "
+    "results doc); it does not change this conclusion."
 )
 
 
@@ -220,23 +224,26 @@ def build_slide5(slide) -> None:
         "(1,600 line-drug pairs; 1,568 for Stack — top 2,000 variable genes)",
         left=0.40, top=1.02, width=12.50, height=0.31, size=12.5, bold=True,
     )
+    # CHECK1 table: col0 widened to 4.45in so the long "stack (gen, drug-aligned, ...)" labels
+    # fit on a single line at body_size=16 (verified with font-metric measurement — see the
+    # fix-round report). row_height (0.34) is unchanged; 8 rows (7 data + header) -> bottom 4.14.
     _add_table(
         slide, CHECK1_HEAD, CHECK1_ROWS,
-        left=0.40, top=1.42, widths=[2.3, 2.2, 1.9, 1.9, 0.9], row_height=0.34,
+        left=0.40, top=1.42, widths=[4.45, 2.10, 1.55, 1.65, 0.70], row_height=0.34,
         head_size=14, body_size=16,
     )
-    _textbox(slide, CHECK1_TAKEAWAY, left=0.40, top=3.52, width=12.50, height=0.60, size=12.5, color=CAPTION_FG)
+    _textbox(slide, CHECK1_TAKEAWAY, left=0.40, top=4.20, width=12.50, height=0.55, size=12.5, color=CAPTION_FG)
     _textbox(
         slide,
         "Is the readout powered? The real Tahoe change scored through Hallmark sets vs random gene sets",
-        left=0.40, top=4.20, width=12.50, height=0.31, size=12.5, bold=True,
+        left=0.40, top=4.81, width=12.50, height=0.31, size=12.5, bold=True,
     )
     _add_table(
         slide, GATE_HEAD, GATE_ROWS,
-        left=0.40, top=4.58, widths=[2.6, 1.65, 1.5, 1.75, 1.7], row_height=0.34,
+        left=0.40, top=5.18, widths=[2.6, 1.65, 1.5, 1.75, 1.7], row_height=0.32,
         head_size=12, body_size=14,
     )
-    _textbox(slide, GATE_TAKEAWAY, left=0.40, top=6.42, width=12.50, height=0.60, size=12.5, color=CAPTION_FG)
+    _textbox(slide, GATE_TAKEAWAY, left=0.40, top=6.84, width=12.50, height=0.55, size=12.5, color=CAPTION_FG)
 
 
 def build_slide6(slide) -> None:
@@ -271,26 +278,35 @@ def build_slide7(slide) -> None:
     )
     _textbox(
         slide,
-        "Fixed-signature readouts on the delta sources  (n = 1,313 pairs)",
+        "Fixed-signature readouts on the delta sources  (n = 1,313 pairs; 1,308 for the leak-excluded row)",
         left=0.40, top=1.40, width=12.50, height=0.28, size=11, bold=True,
     )
+    # SIG table: col0 widened (1.55 -> 3.00) so the long "stack (gen, drug-aligned, ...)" labels
+    # fit on a single line at body_size=8.5; other columns trimmed from their original oversized
+    # widths to compensate (verified with font-metric measurement). row_height trimmed
+    # (0.20 -> 0.16) to fit both grown tables (15 + 11 rows) on one slide; still > the measured
+    # single-line minimum for 8.5pt text (~0.142in) -- see the fix-round report.
     _add_table(
         slide, SIG_HEAD, SIG_ROWS,
-        left=0.40, top=1.70, widths=[1.55, 1.55, 1.35, 1.55, 1.35, 1.40, 1.40, 1.35], row_height=0.20,
+        left=0.40, top=1.70, widths=[3.00, 1.20, 0.80, 1.10, 1.00, 1.10, 1.10, 0.90], row_height=0.16,
         head_size=8.5, body_size=8.5,
     )
     _textbox(
         slide,
-        "Trained penalized models — representation-controlled  (n = 1,303 pairs; L2 = ridge, "
-        "L1 = lasso, EN = elastic-net; per-drug and p_label from the L2 fit; folds grouped by cell line, so no line is in both train and test)",
-        left=0.40, top=4.00, width=12.50, height=0.28, size=11, bold=True,
+        "Trained penalized models — representation-controlled  (n = 1,303 pairs; 1,298 for the "
+        "leak-excluded row; L2 = ridge, L1 = lasso, EN = elastic-net; per-drug and p_label from the L2 "
+        "fit; folds grouped by cell line, so no line is in both train and test)",
+        left=0.40, top=4.16, width=12.50, height=0.44, size=11, bold=True,
     )
+    # LADDER table: col0 widened (1.85 -> 3.00, matching SIG's col0 for visual alignment) so the
+    # long labels fit on one line at body_size=9; row_height trimmed (0.22 -> 0.17), still > the
+    # measured single-line minimum for 9pt text (~0.150in).
     _add_table(
         slide, LADDER_HEAD, LADDER_ROWS,
-        left=0.40, top=4.30, widths=[1.85, 1.80, 1.80, 1.80, 1.15, 1.15, 0.98, 0.97], row_height=0.22,
+        left=0.40, top=4.66, widths=[3.00, 1.15, 1.15, 1.20, 1.05, 0.95, 0.90, 0.90], row_height=0.17,
         head_size=9, body_size=9,
     )
-    _textbox(slide, LADDER_TAKEAWAY, left=0.40, top=6.36, width=12.50, height=0.90, size=11, color=CAPTION_FG)
+    _textbox(slide, LADDER_TAKEAWAY, left=0.40, top=6.59, width=12.50, height=0.80, size=11, color=CAPTION_FG)
 
 
 def main() -> None:
