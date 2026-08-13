@@ -58,7 +58,7 @@ def test_load_line_matrix_reads_h5ad(tmp_path: Path) -> None:
 
 def test_load_line_matrix_reads_csv(tmp_path: Path) -> None:
     path = tmp_path / "emb.csv"
-    pd.DataFrame({"a": [1.0, 3.0], "b": [2.0, 4.0]}, index=["L1", "L2"]).to_csv(path)
+    pd.DataFrame({"a": [1.0, 3.0], "b": [2.0, 4.0]}, index=pd.Index(["L1", "L2"])).to_csv(path)
     df = load_line_matrix(path)
     assert list(df.index) == ["L1", "L2"]
     assert np.allclose(df.to_numpy(), [[1.0, 2.0], [3.0, 4.0]])
@@ -66,7 +66,7 @@ def test_load_line_matrix_reads_csv(tmp_path: Path) -> None:
 
 def test_load_line_matrix_reads_parquet(tmp_path: Path) -> None:
     path = tmp_path / "emb.parquet"
-    pd.DataFrame({"a": [1.0, 3.0], "b": [2.0, 4.0]}, index=["L1", "L2"]).to_parquet(path)
+    pd.DataFrame({"a": [1.0, 3.0], "b": [2.0, 4.0]}, index=pd.Index(["L1", "L2"])).to_parquet(path)
     df = load_line_matrix(path)
     assert list(df.index) == ["L1", "L2"]
     assert np.allclose(df.to_numpy(), [[1.0, 2.0], [3.0, 4.0]])

@@ -13,10 +13,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import anndata as ad
 import numpy as np
 import pandas as pd
+from scipy.sparse import issparse, spmatrix
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.preprocessing import StandardScaler
 
@@ -36,9 +38,9 @@ def make_penalty(name: str) -> object:
     if name == "l2":
         return RidgeCV(alphas=np.logspace(-2, 3, 12))
     if name == "l1":
-        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)
+        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
     if name == "en":
-        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)
+        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
     raise ValueError(f"unknown penalty {name!r}")
 
 
@@ -48,7 +50,9 @@ def load_line_matrix(path: Path) -> pd.DataFrame:
     embedding (one vector per line) in head-to-head with expr/pca."""
     if path.suffix == ".h5ad":
         a = ad.read_h5ad(path)
-        x = a.X.toarray() if hasattr(a.X, "toarray") else np.asarray(a.X)
+        # scipy.sparse type stubs don't expose .toarray() on spmatrix base class even though
+        # it's guaranteed present at runtime when issparse(a.X) is True.
+        x = cast(spmatrix, a.X).toarray() if issparse(a.X) else np.asarray(a.X)  # type: ignore[attr-defined]
         return pd.DataFrame(x, index=pd.Index([str(o) for o in a.obs_names])).astype(float)
     df = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path, index_col=0)
     df.index = pd.Index([str(i) for i in df.index])
@@ -64,8 +68,9 @@ def repr_by_drug(
     drg = key["drug"].astype(str).to_numpy()
     out: dict[str, pd.DataFrame] = {}
     for drug in pd.unique(drg):
-        m = d[drg == drug]
-        m.index = pd.Index(pat[drg == drug])
+        mask = drg == drug
+        m = d.loc[mask]
+        m.index = pd.Index(pat[mask])
         out[str(drug)] = m
     return out
 
@@ -121,5 +126,5 @@ def penalized_preds(
             rows.extend(
                 (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
             )
-    cols = ["patient", "drug", "y_true", "y_pred"]
+    cols = pd.Index(["patient", "drug", "y_true", "y_pred"])
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
