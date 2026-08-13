@@ -45,22 +45,12 @@ both checks identically to the baselines.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
 from pathlib import Path
 
 import anndata as ad
-import numpy as np
 import pandas as pd
 
-from fmharness.adapters import build_adapters
-from fmharness.check2 import (
-    FIXED_READOUTS,
-    PENALTY_NAMES,
-    PROLIFERATION,
-    load_line_matrix,
-    penalized_preds,
-    repr_by_drug,
-)
+from fmharness.check2 import FIXED_READOUTS, PENALTY_NAMES, load_line_matrix, score_check2
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     build_generated_deltas,
@@ -69,7 +59,7 @@ from fmharness.deltas import (
     load_pert_map,
     loo_baseline_source,
 )
-from fmharness.evaluation import build_sample_design, score_delta_sources, score_predictions
+from fmharness.evaluation import build_sample_design, score_delta_sources
 from fmharness.signatures import load_hallmark, score_signatures
 
 
@@ -225,82 +215,30 @@ def main() -> None:
     #      every delta source, each fed to the SAME L1/L2/elastic-net models (per-drug, fit on that
     #      representation), so a difference is the representation, not the model (Kurilov 2020). A
     #      delta source earns its keep only if it beats `expr`. --folds >= #lines gives true LOO.
-    fixed_methods = [m.strip() for m in args.methods.split(",") if m.strip()]
-    penalties = [p.strip() for p in args.penalties.split(",") if p.strip()]
-    fixed_sigs = {
-        "hallmark": hallmark,
-        "proliferation": {n: hallmark[n] for n in PROLIFERATION if n in hallmark},
-    }
-    fixed_readouts = {
-        m: build_adapters(["hallmark"], signatures=fixed_sigs[m])[0]
-        for m in fixed_methods
-        if m in fixed_sigs
-    }
-    uniq_lines = sorted(set(real_key["patient"].astype(str)))
-    n_folds = max(1, min(args.folds, len(uniq_lines)))
-    fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}  # deterministic line -> fold
-    target_drugs = set(real_key["drug"].astype(str))
-    design_target = design[design["drug"].astype(str).isin(target_drugs)]
-
-    def _row(s: dict[str, float]) -> dict[str, object]:
-        return {
-            "global": s["global"],
-            "interaction": s["interaction"],
-            "perdrug": s["perdrug"],
-            "p_label": s["p_label"],
-            "regret@1": s["regret@1"],
-            "regret@3": s["regret@3"],
-            "n": int(s["n"]),
-        }
-
-    out: list[dict[str, object]] = []
-
-    # (a) fixed-signature readouts on the delta sources (sensitivity -> -y_pred vs AUC).
-    for name, (d, kk) in sources.items():
-        for method, adapter in fixed_readouts.items():
-            sens = np.asarray(adapter.predict(d), dtype=float)
-            merged = pd.DataFrame(
-                {"patient": kk["patient"].to_numpy(), "drug": kk["drug"].to_numpy(), "_s": sens}
-            ).merge(design.rename(columns={"y": "y_true"}), on=["patient", "drug"], how="inner")
-            if merged.empty:
-                continue
-            preds = pd.DataFrame(
-                {
-                    "patient": merged["patient"],
-                    "drug": merged["drug"],
-                    "y_true": merged["y_true"].to_numpy(),
-                    "y_pred": -merged["_s"].to_numpy(),
-                }
-            )
-            s = score_predictions(preds, n_perm=args.n_permutations)
-            out.append({"source": name, "method": method, **_row(s)})
-
-    # (b) representation-controlled penalized regression: baseline expression + every delta source.
-    base_hvg = base.reindex(columns=hvg).fillna(0.0)
-    representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
-        "expr": lambda _drug: base_hvg
-    }
-    for name, (d, kk) in sources.items():
-        representations[name] = repr_by_drug(d, kk, hvg)
-    # precomputed FM embeddings (base / aligned Stack) as drug-independent representations --
-    # one vector per line, scored in the SAME penalized grid as expr/pca (head-to-head). The base
-    # checkpoint has no generation head, so this is how it enters the comparison at all.
+    stack_emb_map: dict[str, pd.DataFrame] = {}
     for spec in args.stack_emb or []:
         label, _, p = spec.partition("=")
         if not (label.strip() and p.strip()):
             ap.error(f"--stack-emb expects 'label=path', got {spec!r}")
-        emb = load_line_matrix(_rel(repo, p.strip()))
-        representations[label.strip()] = (lambda e: lambda _drug: e)(emb)
-    for repr_name, feat in representations.items():
-        for pen in penalties:
-            preds = penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
-            if preds.empty:
-                continue
-            s = score_predictions(preds, n_perm=args.n_permutations)
-            out.append({"source": repr_name, "method": pen, **_row(s)})
+        stack_emb_map[label.strip()] = load_line_matrix(_rel(repo, p.strip()))
 
+    fixed_methods = tuple(m.strip() for m in args.methods.split(",") if m.strip())
+    penalties = tuple(p.strip() for p in args.penalties.split(",") if p.strip())
+    out_df = score_check2(
+        sources,
+        real_key,
+        base,
+        hvg,
+        design,
+        hallmark=hallmark,
+        fixed_methods=fixed_methods,
+        penalties=penalties,
+        folds=args.folds,
+        stack_emb=stack_emb_map,
+        n_permutations=args.n_permutations,
+    )
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")
-    print(pd.DataFrame(out).to_string(index=False) if out else "(no scored pairs)")
+    print(out_df.to_string(index=False) if not out_df.empty else "(no scored pairs)")
 
 
 if __name__ == "__main__":

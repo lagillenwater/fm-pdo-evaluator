@@ -10,7 +10,13 @@ import pandas as pd
 import pytest
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 
-from fmharness.check2 import load_line_matrix, make_penalty, penalized_preds, repr_by_drug
+from fmharness.check2 import (
+    load_line_matrix,
+    make_penalty,
+    penalized_preds,
+    repr_by_drug,
+    score_check2,
+)
 
 
 def test_make_penalty_returns_the_named_sklearn_model() -> None:
@@ -92,3 +98,59 @@ def test_penalized_preds_skips_a_drug_below_min_lines() -> None:
     fold_of = {"L1": 0, "L2": 1}
     preds = penalized_preds(feat, design, fold_of, 2, ["L1", "L2"], "l2", min_lines=8)
     assert preds.empty
+
+
+def _check2_fixture() -> tuple[
+    dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.Index,
+    pd.DataFrame,
+    dict[str, tuple[tuple[str, ...], int]],
+]:
+    # 10 lines, 1 drug ("d1"), 2 genes -- 10 lines so the representation grid's default
+    # min_lines=8/min_train=5 are both satisfiable with folds=2 (5 train / 5 test per fold).
+    genes = pd.Index(["A", "B"])
+    lines = [f"L{i}" for i in range(10)]
+    rng = np.random.default_rng(0)
+    delta = pd.DataFrame(rng.standard_normal((10, 2)) + 1.0, columns=genes)
+    key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 10})
+    base = pd.DataFrame(rng.standard_normal((10, 2)) + 5.0, columns=genes, index=pd.Index(lines))
+    sources = {"additive": (delta, key)}
+    # (genes, direction) -- the same shape load_hallmark returns ((tuple[str, ...], int));
+    # "HALLMARK_TEST" is not in PROLIFERATION, so it only feeds the "hallmark" fixed readout,
+    # leaving "proliferation" to score against an empty signature set (a zero predictor) --
+    # exercising that path too.
+    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("A",), 1)}
+    design = pd.DataFrame(
+        {"patient": lines, "drug": ["d1"] * 10, "y": rng.standard_normal(10).tolist()}
+    )
+    return sources, key, base, genes, design, hallmark
+
+
+def test_score_check2_reports_fixed_readout_and_representation_grid_rows() -> None:
+    sources, real_key, base, hvg, design, hallmark = _check2_fixture()
+    table = score_check2(
+        sources, real_key, base, hvg, design, hallmark=hallmark, folds=2,
+    )
+    assert not table.empty
+    assert {"source", "method", "global", "interaction", "perdrug", "p_label", "n"} <= set(
+        table.columns
+    )
+    # fixed-signature readout rows (method in hallmark/proliferation) score the "additive"
+    # delta source; representation-grid rows (method in l2/l1/en) additionally include "expr".
+    assert {"hallmark", "proliferation"} <= set(table["method"])
+    assert {"l2", "l1", "en"} <= set(table["method"])
+    assert "expr" in set(table["source"])
+
+
+def test_score_check2_includes_a_stack_emb_representation_when_given() -> None:
+    sources, real_key, base, hvg, design, hallmark = _check2_fixture()
+    emb = pd.DataFrame(
+        {"x": range(10), "y": range(10, 20)}, index=pd.Index([f"L{i}" for i in range(10)])
+    )
+    table = score_check2(
+        sources, real_key, base, hvg, design, hallmark=hallmark, folds=2,
+        stack_emb={"base_embed": emb},
+    )
+    assert "base_embed" in set(table["source"])

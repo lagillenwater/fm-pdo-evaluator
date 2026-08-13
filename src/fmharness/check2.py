@@ -22,6 +22,9 @@ from scipy.sparse import issparse, spmatrix
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.preprocessing import StandardScaler
 
+from fmharness.adapters import build_adapters
+from fmharness.evaluation import score_predictions
+
 # The Hallmark proliferation sets -- the two that cleared the gate's random-gene-set control
 # (G2M clearly, E2F marginally); the death sets (P53, apoptosis) add only noise on Tahoe. A
 # ``proliferation`` readout scores just these, so a real but weak signal is not diluted away.
@@ -128,3 +131,100 @@ def penalized_preds(
             )
     cols = pd.Index(["patient", "drug", "y_true", "y_pred"])
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+
+
+def score_check2(
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    real_key: pd.DataFrame,
+    base: pd.DataFrame,
+    hvg: pd.Index,
+    design: pd.DataFrame,
+    *,
+    hallmark: dict[str, tuple[tuple[str, ...], int]],
+    fixed_methods: tuple[str, ...] = FIXED_READOUTS,
+    penalties: tuple[str, ...] = PENALTY_NAMES,
+    folds: int = 5,
+    stack_emb: dict[str, pd.DataFrame] | None = None,
+    n_permutations: int = 1000,
+) -> pd.DataFrame:
+    """Check-2 table: fixed-signature readouts + representation-controlled penalized grid.
+
+    ``design`` is the (patient, drug, y) AUC label frame -- the caller's responsibility to
+    leakage-filter first (this function does not know ``filter_leakage`` exists; it scores
+    whatever ``design`` it is handed, exactly like ``evaluation.score_delta_sources`` does for
+    Check 1). (a) scores every ``sources`` delta through each named fixed Hallmark-derived
+    readout (sensitivity -> ``-score`` vs AUC); (b) fits the SAME penalized regression
+    (RidgeCV/LassoCV/ElasticNetCV, one per ``penalties`` entry) to the untreated ``base``
+    expression, every ``sources`` delta, and any ``stack_emb`` embedding, leave-cell-line-out
+    by grouped fold, so a difference across representations is the representation and not the
+    model (Kurilov 2020). Returns one row per (source, method) with
+    global/interaction/perdrug/p_label/regret@1/regret@3/n.
+    """
+    fixed_sigs = {
+        "hallmark": hallmark,
+        "proliferation": {n: hallmark[n] for n in PROLIFERATION if n in hallmark},
+    }
+    fixed_readouts = {
+        m: build_adapters(["hallmark"], signatures=fixed_sigs[m])[0]
+        for m in fixed_methods
+        if m in fixed_sigs
+    }
+    uniq_lines = sorted(set(real_key["patient"].astype(str)))
+    n_folds = max(1, min(folds, len(uniq_lines)))
+    fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+    target_drugs = list(set(real_key["drug"].astype(str)))
+    # Boolean-mask indexing on a DataFrame is typed Series | DataFrame | Unknown by the pandas
+    # stubs (they can't see this mask always selects rows of the same frame); narrow it back.
+    design_target = cast(pd.DataFrame, design[design["drug"].astype(str).isin(target_drugs)])
+
+    def _row(s: dict[str, float]) -> dict[str, object]:
+        return {
+            "global": s["global"],
+            "interaction": s["interaction"],
+            "perdrug": s["perdrug"],
+            "p_label": s["p_label"],
+            "regret@1": s["regret@1"],
+            "regret@3": s["regret@3"],
+            "n": int(s["n"]),
+        }
+
+    out: list[dict[str, object]] = []
+
+    # (a) fixed-signature readouts on the delta sources (sensitivity -> -y_pred vs AUC).
+    for name, (d, kk) in sources.items():
+        for method, adapter in fixed_readouts.items():
+            sens = np.asarray(adapter.predict(d), dtype=float)
+            merged = pd.DataFrame(
+                {"patient": kk["patient"].to_numpy(), "drug": kk["drug"].to_numpy(), "_s": sens}
+            ).merge(design.rename(columns={"y": "y_true"}), on=["patient", "drug"], how="inner")
+            if merged.empty:
+                continue
+            preds = pd.DataFrame(
+                {
+                    "patient": merged["patient"],
+                    "drug": merged["drug"],
+                    "y_true": merged["y_true"].to_numpy(),
+                    "y_pred": -merged["_s"].to_numpy(),
+                }
+            )
+            s = score_predictions(preds, n_perm=n_permutations)
+            out.append({"source": name, "method": method, **_row(s)})
+
+    # (b) representation-controlled penalized regression: baseline expression + every delta source.
+    base_hvg = base.reindex(columns=hvg).fillna(0.0)
+    representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
+        "expr": lambda _drug: base_hvg
+    }
+    for name, (d, kk) in sources.items():
+        representations[name] = repr_by_drug(d, kk, hvg)
+    for label, emb in (stack_emb or {}).items():
+        representations[label] = (lambda e: lambda _drug: e)(emb)
+    for repr_name, feat in representations.items():
+        for pen in penalties:
+            preds = penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
+            if preds.empty:
+                continue
+            s = score_predictions(preds, n_perm=n_permutations)
+            out.append({"source": repr_name, "method": pen, **_row(s)})
+
+    return pd.DataFrame(out)
