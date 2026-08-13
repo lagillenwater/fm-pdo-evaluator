@@ -29,7 +29,9 @@ rebuilt leave-one-line-out), and `stack` (Stack-Large-**Aligned** generated delt
 | nmf | 0.221 | 0.088 | 0.912 | 1600 |
 | pca | 0.207 | 0.083 | 0.896 | 1600 |
 | knn | 0.178 | 0.067 | 0.904 | 1600 |
-| **stack (gen)** | **0.012** | −0.002 | 0.644 | 1568 |
+| **stack (gen, cytokine-aligned)** | **0.012** | −0.002 | 0.644 | 1568 |
+| stack (gen, drug-aligned, unfiltered) | 0.021 | 0.006 | 0.665 | 1568 |
+| stack (gen, drug-aligned, leak-excluded) | 0.021 | 0.006 | 0.665 | 1563 |
 
 Ceiling (delta reproducibility, Tahoe plate split-half): **0.30 raw / 0.46 Spearman-Brown.**
 
@@ -38,6 +40,11 @@ Ceiling (delta reproducibility, Tahoe plate split-half): **0.30 raw / 0.46 Spear
 additive floor (0.225) and the 0.46 ceiling. The FM's generated delta carries no real signal
 about the perturbation. (Baselines top out ~0.18–0.22; the *line-specific* part of the delta
 is not recovered by any of them either — `additive`, which ignores the line, is the best.)
+Drug alignment (fine-tuning the generation head on sci-Plex instead of cytokines) roughly
+doubles Stack's Check-1 correlation vs. the cytokine-aligned checkpoint (0.012 → 0.021), but
+both stay far below the additive floor (0.225) and the 0.46 ceiling, and leakage filtering does
+not change the drug-aligned number (0.021 unfiltered and leak-excluded alike;
+doubly_exposed_frac=0.003 on the ~5 doubly-exposed A549/drug pairs).
 
 ## Gate — Hallmark readout on the real delta vs random gene sets
 
@@ -79,13 +86,47 @@ aligned = cytokine-aligned checkpoint embedding, encoder-stripped):
 | knn | 0.547 / −0.068 | 0.617 / −0.171 | 0.618 / −0.168 | 0.250 | 0.101 |
 | pca | 0.585 / +0.007 | 0.634 / −0.108 | 0.634 / −0.103 | 0.219 | 0.102 |
 | nmf | 0.550 / +0.007 | 0.610 / −0.198 | 0.614 / −0.178 | 0.251 | 0.082 |
-| stack (gen delta) | 0.540 / −0.003 | 0.567 / −0.194 | 0.571 / −0.187 | 0.320 | 0.140 |
+| stack (gen, cytokine-aligned) | 0.539 / −0.003 | 0.568 / −0.182 | 0.574 / −0.164 | 0.320 | 0.144 |
+| stack (gen, drug-aligned, unfiltered) | 0.561 / −0.082 | 0.575 / −0.145 | 0.570 / −0.147 | 0.343 | 0.133 |
+| stack (gen, drug-aligned, leak-excluded) | 0.561 / −0.079 | 0.572 / −0.134 | 0.562 / −0.123 | 0.324 | 0.122 |
 | **base (embed)** | **0.644 / +0.119** | 0.612 / −0.166 | 0.613 / −0.170 | 0.273 | 0.102 |
 | aligned (embed) | 0.618 / +0.045 | 0.623 / −0.097 | 0.625 / −0.103 | 0.240 | 0.096 |
 
-Through fixed signature readouts the Stack generated delta is *negative* (hallmark −0.128,
-proliferation −0.150) — consistent with its Check-1 null; the other deltas sit at global
-~0.08–0.12.
+Leakage filtering changes essentially nothing here either: the drug-aligned row moves by
+≤0.02 on every ladder metric after excluding the doubly-exposed A549/drug pairs. (Its own
+leakage-filter print reports `doubly_exposed_frac=0.000`, not the ~0.003 Check 1 reports on the
+same declared corpus — not a discrepancy: `filter_leakage` runs on the *full* 141,103-row GDSC2
+`design` frame before it is restricted to the ~1,313 Tahoe-drug-overlapping pairs the table
+scores, so the same 5 doubly-exposed pairs Check 1 finds land on a ~90x larger denominator and
+round to 0.000 at 3 decimals.)
+
+**Fixed-signature readouts** (Hallmark gene sets scored directly on each delta source — no
+training — full per-source table, all three Stack checkpoint variants):
+
+| source | method | global | interaction | per-drug | sel. gap@1 | sel. gap@3 | p_label |
+|---|---|---|---|---|---|---|---|
+| additive | hallmark | 0.088 | −0.063 | −0.033 | 0.855 | 0.579 | 0.979 |
+| additive | proliferation | 0.097 | −0.016 | −0.035 | 0.585 | 0.547 | 0.884 |
+| knn | hallmark | 0.080 | 0.022 | −0.008 | 0.788 | 0.587 | 0.219 |
+| knn | proliferation | 0.092 | 0.015 | 0.063 | 0.628 | 0.415 | 0.358 |
+| pca | hallmark | 0.089 | −0.075 | 0.053 | 0.855 | 0.579 | 0.985 |
+| pca | proliferation | 0.123 | −0.010 | 0.049 | 0.585 | 0.535 | 0.848 |
+| nmf | hallmark | 0.077 | −0.068 | −0.072 | 0.855 | 0.579 | 0.981 |
+| nmf | proliferation | 0.094 | −0.016 | −0.023 | 0.585 | 0.549 | 0.882 |
+| stack (gen, cytokine-aligned) | hallmark | −0.128 | −0.030 | −0.090 | 0.733 | 0.581 | 0.809 |
+| stack (gen, cytokine-aligned) | proliferation | −0.150 | −0.014 | −0.090 | 0.849 | 0.674 | 0.560 |
+| stack (gen, drug-aligned, unfiltered) | hallmark | −0.077 | 0.019 | −0.084 | 0.687 | 0.532 | 0.322 |
+| stack (gen, drug-aligned, unfiltered) | proliferation | −0.038 | 0.081 | −0.057 | 0.317 | 0.209 | 0.009 |
+| stack (gen, drug-aligned, leak-excluded) | hallmark | −0.074 | 0.021 | −0.079 | 0.687 | 0.532 | 0.296 |
+| stack (gen, drug-aligned, leak-excluded) | proliferation | −0.035 | 0.082 | −0.057 | 0.317 | 0.208 | 0.004 |
+
+Through the fixed readouts the cytokine-aligned Stack delta is *negative* on both methods
+(hallmark −0.128, proliferation −0.150) — consistent with its Check-1 null. The drug-aligned
+delta's global scores stay negative but smaller in magnitude, and — unlike the ladder's trained
+fits — its *interaction* term is slightly positive (proliferation +0.08, p_label 0.004–0.009);
+leakage filtering moves it only marginally (interaction 0.019→0.021 hallmark, 0.081→0.082
+proliferation), the same near-independence Check 1 found. The other (non-Stack) deltas sit at
+global ~0.08–0.12 regardless of checkpoint.
 
 Per-drug ranking and label-permutation significance — the two columns the ladder omits, for the
 ridge (L2) fits that carry the embedding signal:

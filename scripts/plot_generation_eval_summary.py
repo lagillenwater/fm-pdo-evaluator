@@ -26,7 +26,9 @@ CHECK1 = {
     "knn": (0.178, 0.067),
     "pca": (0.207, 0.083),
     "nmf": (0.221, 0.088),
-    "stack\n(generated)": (0.012, -0.002),
+    "stack\n(cytokine)": (0.012, -0.002),
+    "stack\n(drug, unfilt.)": (0.021, 0.006),
+    "stack\n(drug)": (0.021, 0.006),
 }
 DELTA_CEILING, DELTA_SPLIT_HALF = 0.46, 0.30
 
@@ -39,7 +41,9 @@ CHECK2_RIDGE = {
     "knn": (0.547, -0.068),
     "pca": (0.585, 0.007),
     "nmf": (0.550, 0.007),
-    "stack\n(gen delta)": (0.540, -0.003),
+    "stack\n(cytokine)": (0.539, -0.003),
+    "stack\n(drug, unfilt.)": (0.561, -0.082),
+    "stack\n(drug)": (0.561, -0.079),
     "base\n(embed)": (0.644, 0.119),
     "aligned\n(embed)": (0.618, 0.045),
 }
@@ -50,7 +54,9 @@ SEL_GAP = {
     "knn": (0.250, 0.101),
     "pca": (0.219, 0.102),
     "nmf": (0.251, 0.082),
-    "stack\n(gen delta)": (0.320, 0.140),
+    "stack\n(cytokine)": (0.320, 0.144),
+    "stack\n(drug, unfilt.)": (0.343, 0.133),
+    "stack\n(drug)": (0.324, 0.122),
     "base\n(embed)": (0.273, 0.102),
     "aligned\n(embed)": (0.240, 0.096),
 }
