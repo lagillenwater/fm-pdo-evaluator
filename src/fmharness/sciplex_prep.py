@@ -64,3 +64,16 @@ def check_perturbation_count(perturbations: pd.Series, *, expected_min_distinct:
             f"sci-Plex 3, floor {expected_min_distinct}) -- check for upstream name "
             f"truncation/collisions before training on this data"
         )
+
+
+def identity_missing_mask(pert: pd.Series, cell_line: pd.Series) -> np.ndarray:
+    """True for cells whose raw perturbation and/or cell-line identity is missing.
+
+    sci-Plex 3's own nuclear-hash demultiplexing blanks perturbation/cell_line/dose/well/
+    plate together when a hash call is too ambiguous to resolve (a real, ~4.6% fraction of
+    the published release, concentrated in no single column) -- these cells have no usable
+    identity as either "control" or "treated" and must be dropped before any downstream
+    is_control detection, not swept in via a stringified-NaN string match against a value
+    like "control"/"vehicle"/"nan".
+    """
+    return pert.isna().to_numpy() | cell_line.isna().to_numpy()

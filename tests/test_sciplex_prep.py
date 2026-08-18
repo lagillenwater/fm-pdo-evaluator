@@ -7,7 +7,12 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from fmharness.sciplex_prep import check_gene_count, check_perturbation_count, check_raw_counts
+from fmharness.sciplex_prep import (
+    check_gene_count,
+    check_perturbation_count,
+    check_raw_counts,
+    identity_missing_mask,
+)
 
 
 def test_check_gene_count_raises_on_a_subset_panel() -> None:
@@ -51,3 +56,33 @@ def test_check_perturbation_count_silent_above_the_floor(capsys: pytest.CaptureF
     perts = pd.Series([f"drug{i}" for i in range(150)])
     check_perturbation_count(perts, expected_min_distinct=100)
     assert capsys.readouterr().out == ""
+
+
+def test_identity_missing_mask_true_when_perturbation_is_missing() -> None:
+    pert = pd.Series(["DrugA", None, "DrugB"])
+    cell_line = pd.Series(["A549", "A549", "K562"])
+    mask = identity_missing_mask(pert, cell_line)
+    assert list(mask) == [False, True, False]
+
+
+def test_identity_missing_mask_true_when_cell_line_is_missing() -> None:
+    pert = pd.Series(["DrugA", "DrugB", "DrugC"])
+    cell_line = pd.Series(["A549", None, "K562"])
+    mask = identity_missing_mask(pert, cell_line)
+    assert list(mask) == [False, True, False]
+
+
+def test_identity_missing_mask_true_when_both_missing() -> None:
+    pert = pd.Series(["DrugA", None])
+    cell_line = pd.Series(["A549", None])
+    mask = identity_missing_mask(pert, cell_line)
+    assert list(mask) == [False, True]
+
+
+def test_identity_missing_mask_false_when_both_present_including_literal_control_string() -> None:
+    # a real, resolved vehicle-control call ("control") must NOT be flagged as missing --
+    # only actual NaN identity, never a resolved-but-control-like string value.
+    pert = pd.Series(["DrugA", "control"])
+    cell_line = pd.Series(["A549", "K562"])
+    mask = identity_missing_mask(pert, cell_line)
+    assert list(mask) == [False, False]

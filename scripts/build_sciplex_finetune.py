@@ -27,14 +27,19 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from fmharness.sciplex_prep import check_gene_count, check_perturbation_count, check_raw_counts
+from fmharness.sciplex_prep import (
+    check_gene_count,
+    check_perturbation_count,
+    check_raw_counts,
+    identity_missing_mask,
+)
 
 PERT_CANDIDATES = ["perturbation", "condition", "product_name", "treatment", "drug", "compound"]
 LINE_CANDIDATES = ["cell_line", "cell line", "cell_type", "cell_name", "line"]
 DOSE_CANDIDATES = ["dose_value", "dose", "dose_val", "dose_uM", "dose_unit"]
 CTRL_FLAG_CANDIDATES = ["control", "is_control", "vehicle"]
 SYM_CANDIDATES = ["gene_symbol", "symbol", "gene_name", "feature_name", "gene_short_name"]
-VEHICLE_NAMES = {"control", "vehicle", "dmso", "none", "nan"}
+VEHICLE_NAMES = {"control", "vehicle", "dmso", "none"}
 
 
 def _pick(cols: object, override: str | None, candidates: list[str], kind: str) -> str | None:
@@ -69,6 +74,15 @@ def main() -> None:
     dose_col = _pick(a.obs.columns, args.dose_col, DOSE_CANDIDATES, "dose-col")
     if pert_col is None or line_col is None:
         raise SystemExit(f"need perturbation + cell-line columns; obs has {list(a.obs.columns)}")
+
+    missing = identity_missing_mask(a.obs[pert_col], a.obs[line_col])
+    if missing.any():
+        print(
+            f"dropping {int(missing.sum())}/{a.n_obs} cells with missing perturbation and/or "
+            "cell-line identity (e.g. failed hash-demultiplexing calls) before any control "
+            "detection"
+        )
+        a = a[~missing].copy()
 
     # ---- RAW counts (Stack is a count model; chemCPA .X is normalized -> prefer a counts layer) --
     if args.counts_layer:
