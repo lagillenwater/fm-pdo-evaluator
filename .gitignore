@@ -242,12 +242,28 @@ docs/results.md
 # Stack generation + embedding outputs and local archives (regenerable; never tracked)
 /generated/
 /generated_rich/
+/generated_agg_*/
+/generated_drug_aligned/
+/generated_drug_aligned_agg/
 /generated*.zip
 /stack_gdsc.csv
 /stack_soragni.csv
 /l1000_context*.h5ad
 stack_input_gdscv2.h5ad
 stack_input_sarcoma.h5ad
+
+# Tahoe context/generation-eval artifacts (regenerable via scripts/build_tahoe_context.py,
+# scripts/build_tahoe_pseudobulk_deltas.py, scripts/build_tahoe_de_calls.py, and the
+# scripts/alpine/0[3-9]_*.sbatch pipeline; never tracked -- multi-GB single-cell data)
+/tahoe_context.h5ad
+/tahoe_query.h5ad
+/tahoe_query_baseline.h5ad
+/tahoe_deltas/
+/tahoe_de_calls/
+/context_by_drug/
+/generated_sciplex/
+/sciplex_drugs.txt
+/sciplex_lines.txt
 
 # Generated presentation deck + Office lock files (regenerable; never tracked)
 /harness_overview.pptx
