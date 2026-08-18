@@ -592,7 +592,7 @@ def aggregate_generated_replicates(
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows: list[dict[str, object]] = []
+    summaries: list[pd.DataFrame] = []
     for f in sorted(Path(generated_dir).glob("*.h5ad")):
         gen = ad.read_h5ad(f)
         if "gen_logit" not in gen.obs or "cell_line_id" not in gen.obs:
@@ -603,32 +603,44 @@ def aggregate_generated_replicates(
         logit = gen.obs["gen_logit"].to_numpy(dtype=float)
         line = gen.obs["cell_line_id"].astype(str).to_numpy()
         x = dense(gen.X)
-        kept_lines: list[str] = []
-        kept_rows: list[np.ndarray] = []
-        for u in pd.unique(line):
-            m = (line == u) & (logit < threshold)
-            n_total = int((line == u).sum())
-            n_kept = int(m.sum())
-            rows.append(
+        keep = logit < threshold
+
+        # per-line mean of the KEPT replicates only, via an indicator-matmul (no explicit
+        # per-line loop -- mirrors fmharness.deltas._group_mean's own indicator-matmul pattern,
+        # restricted here to the kept subset).
+        codes, uniq = pd.factorize(line)
+        n_lines = len(uniq)
+        n_total = np.bincount(codes, minlength=n_lines)
+        n_kept = np.bincount(codes[keep], minlength=n_lines)
+        ind = np.zeros((n_lines, len(codes)), dtype=np.float64)
+        ind[codes[keep], np.flatnonzero(keep)] = 1.0
+        denom = np.where(n_kept == 0, 1.0, n_kept.astype(np.float64))
+        means = (ind @ x) / denom[:, None]
+
+        have = n_kept > 0
+        if have.any():
+            reduced = ad.AnnData(X=means[have].astype(np.float32))
+            reduced.obs_names = [str(u) for u in uniq[have]]
+            reduced.var_names = [str(v) for v in gen.var_names]
+            reduced.var["feature_name"] = list(reduced.var_names)
+            reduced.write_h5ad(out_dir / f.name)
+
+        summaries.append(
+            pd.DataFrame(
                 {
                     "pert_id": f.stem,
-                    "cell_line_id": u,
+                    "cell_line_id": [str(u) for u in uniq],
                     "n_replicates": n_total,
                     "n_kept": n_kept,
                     "dropped": n_kept == 0,
                 }
             )
-            if n_kept == 0:
-                continue
-            kept_lines.append(u)
-            kept_rows.append(x[m].mean(axis=0))
-        if kept_rows:
-            reduced = ad.AnnData(X=np.vstack(kept_rows).astype(np.float32))
-            reduced.obs_names = kept_lines
-            reduced.var_names = [str(v) for v in gen.var_names]
-            reduced.var["feature_name"] = list(reduced.var_names)
-            reduced.write_h5ad(out_dir / f.name)
-    return pd.DataFrame(rows)
+        )
+    if not summaries:
+        return pd.DataFrame(
+            columns=["pert_id", "cell_line_id", "n_replicates", "n_kept", "dropped"]
+        )
+    return pd.concat(summaries, ignore_index=True)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -826,19 +838,20 @@ def build_tahoe_de_calls(
         sc.tl.rank_genes_groups(
             sub, groupby="de_group", groups=drugs_here, reference="control", method="wilcoxon"
         )
-        for d in drugs_here:
-            res = sc.get.rank_genes_groups_df(sub, group=d)
-            rows.append(
-                pd.DataFrame(
-                    {
-                        "patient": line,
-                        "drug": d,
-                        "gene": res["names"].to_numpy(),
-                        "log2fc": res["logfoldchanges"].to_numpy(dtype=float),
-                        "padj": res["pvals_adj"].to_numpy(dtype=float),
-                    }
-                )
+        # group=None returns every tested group's rows concatenated in one DataFrame (with its
+        # own "group" column) -- no per-drug loop needed alongside the per-line loop above.
+        res = sc.get.rank_genes_groups_df(sub, group=None)
+        rows.append(
+            pd.DataFrame(
+                {
+                    "patient": line,
+                    "drug": res["group"].to_numpy(),
+                    "gene": res["names"].to_numpy(),
+                    "log2fc": res["logfoldchanges"].to_numpy(dtype=float),
+                    "padj": res["pvals_adj"].to_numpy(dtype=float),
+                }
             )
+        )
     if not rows:
         raise ValueError("no (line, drug) pair had both control and treated cells")
     out = pd.concat(rows, ignore_index=True)
