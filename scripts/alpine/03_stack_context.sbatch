@@ -8,8 +8,14 @@
                                       # QoS values: admin or mem-normal or mem-long"
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=48G                    # bounded by --max-cells-per-cond; only kept cells held
+#SBATCH --cpus-per-task=12            # amem's MaxMemPerCPU=21333MB caps cpus at this --mem;
+                                       # matches 08_sciplex_prep.sbatch's own solved ratio
+                                       # (240G/12=20000MB/core, under the 21333MB ceiling).
+#SBATCH --mem=240G                    # QOSMinMemory: mem-normal's floor is confirmed 240G
+                                       # (08_sciplex_prep.sbatch, via sacctmgr); mem-long's own
+                                       # floor is not independently confirmed but a plain 48G
+                                       # request failed the same QOSMinMemory check here, so
+                                       # applying the same, best-evidenced 240G floor.
 #SBATCH --time=36:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
