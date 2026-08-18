@@ -5,10 +5,18 @@
 
 ## Purpose
 
-Two changes to the Tahoe generation-eval harness, following up on the completed leakage-aware
+Three changes to the Tahoe generation-eval harness, following up on the completed leakage-aware
 Check-2 plan and a full read of the Stack paper (Dong et al. 2026, "Stack: In-Context Learning
-of Single-Cell Biology," PMC12803207, bioRxiv posted 2026-06-08):
+of Single-Cell Biology," PMC12803207, bioRxiv posted 2026-06-08). The first two were the
+original scope; the third was discovered while resolving one of this design's own open items
+and gates the other two's real runs on the drug-aligned checkpoint:
 
+0. **Change 0 — fix a confirmed sci-Plex ingestion bug.** `scripts/build_sciplex_finetune.py`
+   silently mislabels 36,522 cells with no recoverable identity (failed hash-demultiplexing
+   calls in the original sci-Plex 3 data) as vehicle controls, inflating the control pool from
+   a true 17,578 to 54,100. The existing drug-aligned checkpoint — and every downstream number
+   derived from it, including already-published Check-1/Check-2 results — was fine-tuned with
+   this bug present.
 1. **Change 1 — faithful generation procedure.** `scripts/alpine/04_stack_generate.sbatch`
    currently runs `--mode vanilla`, a workaround that skips the paper's actual described
    generative procedure (Methods 4.2.5: scheduled context ratio + confidence-guided selective
@@ -22,9 +30,10 @@ of Single-Cell Biology," PMC12803207, bioRxiv posted 2026-06-08):
    Methods 4.7/Fig. 3F). Check 1 has, by construction, been scoring the one axis the paper's own
    data says is least informative about this model's generative advantage.
 
-Both changes were adversarially reviewed against the real `ArcInstitute/stack` source (not paper
-prose alone) before this design was finalized — see "Design history" below for what that review
-overturned.
+Changes 1 and 2 were adversarially reviewed against the real `ArcInstitute/stack` source (not
+paper prose alone) before this design was finalized — see "Design history" below for what that
+review overturned. Change 0 was found and verified via a full crosstab against both the live
+scPerturb-hosted file and the raw NCBI GEO deposit — see "Change 0" below.
 
 ## Why now, not deferred
 
@@ -81,6 +90,131 @@ the real `ArcInstitute/stack` source fetched fresh via `gh api`) found:
   filtering results in reduced cell-type specificity, confirming the essence of the procedure").
 
 The corrected design below reflects all three findings.
+
+## Change 0 — fix a confirmed sci-Plex ingestion bug (prerequisite for Change 1's drug-aligned run)
+
+Discovered while resolving Change 1's "real per-cell-line control-pool sizes" open item
+(2026-08-18 smoke test). Not part of the original two changes this design set out to make, but
+gates Change 1's drug-aligned generation run: that run needs a correctly-fine-tuned checkpoint,
+and the existing one was fine-tuned with this bug present.
+
+### What the smoke test found, and what it turned out to mean
+
+The real per-cell-line control-pool query returned:
+
+```
+cell_line
+A549     5,857
+K562     3,935
+MCF7     7,786
+nan     36,522
+```
+
+The `nan` bucket — 67.5% of all 54,100 cells `build_sciplex_finetune.py` currently calls
+"control" — was initially read as a large, alarming data-quality gap in the published sci-Plex 3
+release. It is not. Independent verification against both the live scPerturb-hosted file
+(Zenodo record 13350497, `SrivatsanTrapnell2020_sciplex3.h5ad`, read directly via HTTP range
+reads) and the raw NCBI GEO deposit (`GSM4150378_sciPlex3_pData.txt.gz`) it derives from, via a
+full crosstab over all 799,317 rows (not a sample), found:
+
+- The true rate of missing `cell_line` in the published file is **4.57%** (36,522 of 799,317),
+  not 67.5% of anything.
+- Those 36,522 rows are cells whose nuclear hash-oligo call was too ambiguous for the *original
+  sci-Plex authors' own* well/plate identity lookup to resolve (spot-checked top-to-second-best
+  hash purity ratios ~1.0-2.0 on these rows, vs. 5-275+ on confidently-assigned cells) — when
+  that happens, the authors' own pipeline blanks `cell_line`, `perturbation`, `dose`, `treatment`,
+  `well_oligo`, and `plate_oligo` together as one bundle, not as an independent per-column
+  dropout. This is expected behavior in a pooled multi-line hashing experiment, already handled
+  as "ambiguous, drop" by the original authors — not a scPerturb reprocessing defect and not
+  something this project's ingestion introduced.
+- Crucially, **the crosstab confirms 0 of the 36,522 are real controls and 0 are real treated
+  cells** — they carry no usable identity for either category. The true control population is
+  exactly 17,578 cells (5,857 + 3,935 + 7,786 — matches the per-line breakdown above exactly),
+  and the true treated population is 745,217, with **zero missingness among treated cells**.
+
+### The actual bug, confirmed in `scripts/build_sciplex_finetune.py`
+
+```python
+VEHICLE_NAMES = {"control", "vehicle", "dmso", "none", "nan"}
+...
+pert = a.obs[pert_col].astype(str).to_numpy()   # a real NaN silently becomes the STRING "nan"
+...
+is_ctl = np.array([p.strip().lower() in VEHICLE_NAMES for p in pert])
+```
+
+The raw scPerturb file's real control indicator lives as a value (`'control'`) inside the
+`perturbation` categorical column itself, not as a separately-named flag column, so
+`CTRL_FLAG_CANDIDATES = ["control", "is_control", "vehicle"]` never matches anything and the
+script falls into this string-matching fallback. `VEHICLE_NAMES` including the literal string
+`"nan"` means any cell whose real perturbation is missing (and therefore stringifies to `"nan"`)
+gets swept into `is_ctl=True` alongside genuine vehicle controls. The arithmetic confirms this
+exactly: 17,578 (real controls) + 36,522 (unassignable) = **54,100** — precisely the
+`"controls 54100/799317"` the original `08_sciplex_prep.sbatch` run logged.
+
+**Consequence for the already-completed fine-tune:** `pert_id` is fine-tuning's grouping axis,
+and `"control"` is one of the 189 groups; whenever a 512-cell training block is drawn from that
+group, roughly two-thirds of its cells are these unassignable cells rather than real untreated
+biology — the model was trained on a "control" reconstruction target contaminated by ambiguous
+hash calls for ~67.5% of that group's own samples. (Whether this also contaminates the
+per-cell-line control-*replacement* candidate pools used for every *other* drug group's training
+samples is reasoned-but-not-independently-verified: `identity_col=cell_line`, and these
+unassignable cells carry `cell_line="nan"`, a fourth identity value distinct from
+A549/K562/MCF7 — plausibly excluding them naturally from real-identity replacement lookups — but
+this hasn't been traced against the actual `ArcInstitute/stack` fine-tuning source the way
+everything else in this design has been, so it is stated as a hypothesis, not a fact.)
+
+### The fix
+
+Two parts, both in `scripts/build_sciplex_finetune.py` / `src/fmharness/sciplex_prep.py`:
+
+1. **New filter, applied before any `is_control` detection**, on the *raw*, pre-stringified
+   columns (checking `.isna()` before `.astype(str)` runs — stringifying first is exactly what
+   turns real missingness into the deceptive `"nan"` string this bug exploited):
+
+   ```python
+   def identity_missing_mask(pert: pd.Series, cell_line: pd.Series) -> np.ndarray:
+       """True for cells whose raw perturbation and/or cell-line identity is missing.
+
+       sci-Plex 3's own nuclear-hash demultiplexing blanks perturbation/cell_line/dose/well/
+       plate together when a hash call is too ambiguous to resolve (a real, ~4.6% fraction of
+       the published release, concentrated in no single column) -- these cells have no usable
+       identity as either "control" or "treated" and must be dropped before any downstream
+       is_control detection, not swept in via a stringified-NaN string match against a value
+       like "control"/"vehicle"/"nan".
+       """
+       return pert.isna().to_numpy() | cell_line.isna().to_numpy()
+   ```
+
+   `build_sciplex_finetune.py`'s `main()` calls this immediately after reading `pert_col`/
+   `line_col` (before the existing `pert = a.obs[pert_col].astype(str).to_numpy()` line),
+   drops the matched rows, and prints the count dropped — matching the existing
+   `--min-cells-per-cond` filter's own established convention of a visible, counted drop rather
+   than a silent one.
+2. **Remove `"nan"` from `VEHICLE_NAMES`.** Once the explicit filter above runs first, no
+   genuinely-null cell should ever reach this fallback; leaving `"nan"` in the set is a
+   redundant landmine for any future sci-Plex-shaped file where the explicit filter isn't
+   applied first, or is applied in the wrong order.
+
+### Required re-run, and its effect on already-published numbers
+
+`08_sciplex_prep.sbatch` (produces `sciplex_finetune.h5ad`) and `09_stack_finetune.sbatch`
+(produces the drug-aligned checkpoint) both need re-running with the fix before Change 1's real
+generation run on the drug-aligned checkpoint. **This means the drug-aligned Check-1/Check-2
+numbers already written into `docs/tahoe_generation_results.md` and the harness-overview deck**
+(from the just-completed leakage-aware Check-2 SDD plan — r=0.021 both variants, plus the
+Check-2 ladder/fixed-signature rows) **were derived from the contaminated checkpoint and will
+need re-deriving once the corrected one exists.** Folded into this design's scope per explicit
+direction (not deferred to a separate plan) — the implementation plan's real-run task should
+re-run `08`/`09` first, then feed the corrected checkpoint into Change 1's generation work and
+re-derive the downstream Check-1/Check-2 rows, rather than treating the prior numbers as still
+valid.
+
+Group-eligibility mechanics measured in "Batch construction" below (all 189 groups clear both
+the 128- and 512-cell floors) are very likely unaffected by this fix in *outcome* — the true
+control count (17,578) still clears 512 by a wide margin, same as every other group — but this
+must be re-measured after the re-run, not assumed to carry over unchanged, since removing
+36,522 rows (4.57% of the total dataset) changes the underlying counts even if it probably
+doesn't flip which groups qualify.
 
 ## Change 1 — faithful generation procedure
 
@@ -198,27 +332,31 @@ New step, inserted between Stack's raw per-drug `.h5ad` output and
 4. This step only exists once `mode != vanilla` (`gen_logit` is `None` under vanilla) — the mode
    switch above is a hard prerequisite for it, not merely a paper-fidelity nicety.
 
-### `n_cells` verification (required before trusting the table above)
+### `n_cells` verification — confirmed `512` for both checkpoints
 
-`self.n_cells=512` was confirmed in source for both checkpoints this project can point `CKPT=`
-at (the cytokine-aligned `bc_large_aligned.ckpt`, built from `ArcInstitute/stack`'s own
+`self.n_cells=512` was first confirmed in source for both checkpoints this project can point
+`CKPT=` at (the cytokine-aligned `bc_large_aligned.ckpt`, built from `ArcInstitute/stack`'s own
 `configs/finetuning/ft_parsecg.yaml` which pins `sample_size: 512`; and this project's own
 sci-Plex-finetuned checkpoint, via `--sample_size 512` in `09_stack_finetune.sbatch`, which
 `override_model_config_n_cells` bakes into the checkpoint's own `hyper_parameters` and
-`generation.py` reads with no override available at generation time). But `n_cells` is a plain
-constructor kwarg with **zero effect on any tensor shape** (`TabularAttentionLayer`'s
-parameters, and `query_pos_embedding`, are both cell-axis-independent) — a wrong value would
-never crash, it would just silently change every `n_test_cells`/`n_base_cells` calculation
-above. Verify directly against whichever `.ckpt` is actually used, once on Alpine, before the
-first real generation run under the new mode:
+`generation.py` reads with no override available at generation time) — but since `n_cells` is a
+plain constructor kwarg with **zero effect on any tensor shape** (`TabularAttentionLayer`'s
+parameters, and `query_pos_embedding`, are both cell-axis-independent), a wrong value would
+never crash, only silently change every `n_test_cells`/`n_base_cells` calculation above, so this
+needed a direct file-level check, not just source/config inference. **Now confirmed directly**
+(2026-08-18 `ah200` smoke test, job 31418001) against both real checkpoint files:
 
-```bash
-python -c "
-import torch
-ckpt = torch.load('<path>.ckpt', map_location='cpu')
-print(ckpt['hyper_parameters']['model_config']['n_cells'])
-"
 ```
+cytokine-aligned: n_cells=512  (stack-aligned/bc_large_aligned.ckpt)
+sci-Plex-drug-aligned: n_cells=512  (finetuned-epoch=4-val_loss=5.0847.ckpt)
+```
+
+The entire `n_test_cells`/`n_base_cells` schedule table above is now verified against real
+checkpoint data, not source/config inference alone. (The sci-Plex-drug-aligned checkpoint here
+is the pre-Change-0-fix one — `n_cells` is independent of the control-cell mislabeling bug and
+this number is not expected to change once `09` is re-run, but the corrected checkpoint should
+still be spot-checked the same way once it exists, as routine hygiene rather than because this
+specific value is suspected to differ.)
 
 ## Change 2 — faithful DE-based Check-1 metrics
 
@@ -261,13 +399,19 @@ extension of `delta_fidelity` itself is a planning-time decision, not fixed here
 
 Pulled directly from the already-completed `sciplex-prep` and `stack-finetune` Alpine job logs
 (`ralpine cat` on the full log files — `ralpine log`'s default view truncates/tail-samples, do
-not rely on it alone for anything requiring the complete log). All numbers below are measured,
-not inferred.
+not rely on it alone for anything requiring the complete log), plus the corrected control-cell
+counts from "Change 0" above. All numbers below are measured, not inferred. **The counts in
+this section describe the pre-fix run** (what actually happened on 2026-08-12) — they will
+change once `08`/`09` are re-run with Change 0's fix applied; re-measure rather than assume
+they carry over.
 
 ### Data scale
 
-`build_sciplex_finetune.py`'s own summary line: **799,317 cells x 110,983 features, 745,217
-treated / 54,100 control, 189 perturbation groups, 4 cell identities.**
+`build_sciplex_finetune.py`'s own summary line (pre-fix run): **799,317 cells x 110,983
+features, 745,217 treated / 54,100 control, 189 perturbation groups, 4 cell identities.** Per
+Change 0 above, the true composition is **745,217 treated (zero missingness) / 17,578 real
+control / 36,522 unassignable (dropped by the fix, not real controls)** — the pre-fix "54,100
+control" figure conflates the latter two.
 
 **Gene-count anomaly, confirmed real, not yet checked anywhere in this pipeline.** The prep run's
 own log shows `gene_symbol='var_names'` — none of `build_sciplex_finetune.py`'s candidate
@@ -334,10 +478,15 @@ real, same-cell-line vehicle control cell drawn from anywhere in the dataset (gr
 the original treated cell's raw counts) — chosen by iterating cell-line identity groups in
 shuffled order until the quota is filled, drawing without replacement when the real candidate
 pool is large enough, with-replacement (modulo reuse) only if it is not. **Real per-cell-line
-control-pool sizes were not obtained this session** (would need a fresh, small Alpine job
-grouping `sciplex_finetune.h5ad`'s obs by `cell_line` restricted to `pert_id == "control"`) —
-flagged as an open item for the smoke-test phase below, not blocking this design, since the
-mechanism itself is fully confirmed regardless of the exact numbers.
+control-pool sizes, now measured** (obtained via the 2026-08-18 smoke test that also surfaced
+Change 0's bug — see above): **A549 5,857 / K562 3,935 / MCF7 7,786** real controls (17,578
+total; the pre-fix run's own per-line breakdown included an additional 36,522 "nan"-identity
+cells now confirmed to be unassignable, not real controls of any line). All three real per-line
+pools are comfortably large relative to the ≤51-per-sample draw, so the with-replacement fallback
+path is expected to trigger rarely if at all for the genuine cell lines — this was not directly
+measured (would need instrumenting the actual training run, not just the static pool sizes), but
+the margin (thousands of candidates vs. tens needed per sample) makes frequent triggering
+implausible.
 
 **Epoch-level note, worth stating precisely for reproducibility:** `resample_training_data()`
 reshuffles sample *order* only, not block *membership* — the same fixed 512-cell contiguous
@@ -363,7 +512,14 @@ the original 2026-08-12 run, not a correctness bug), and nothing about this need
 of this design — noted here so it isn't mistaken for a new problem if seen again in a future
 fine-tuning run's logs.
 
-### Draft methods paragraph (now fully source- and log-verified, no remaining "inferred" caveats on the mechanism itself)
+### Draft methods paragraph
+
+**This paragraph describes the pre-fix (2026-08-12) run and is being superseded, not finalized**
+— Change 0's fix removes the 36,522 unassignable cells before fine-tuning, so every number below
+needs re-measuring after `08`/`09` are re-run. Kept here as the fully source- and log-verified
+record of what the *existing* (to-be-replaced) checkpoint was actually trained on, since that
+checkpoint's own already-published Check-1/Check-2 numbers are being re-derived against this
+exact history, not silently discarded.
 
 > Fine-tuning batches were constructed by ArcInstitute Stack's `MultiDatasetSplittableDataset`
 > (`stack.data.finetuning.datasets`), configured via a `drug`-type `DatasetConfig` with
@@ -379,89 +535,92 @@ fine-tuning run's logs.
 > training sample was constructed by selecting 10% of its cells (51 cells) for control
 > replacement, chosen by iterating cell-line identity groups in randomized order; for each
 > selected cell, its model input was replaced with a real control (vehicle) cell of the matching
-> cell line drawn from anywhere in the dataset (with replacement only if fewer real control
-> cells of that line were available than needed — exact real per-line control-pool sizes not
-> yet measured), while the reconstruction target remained the original treated cell's raw
-> counts. Training data was regenerated in sample *order* each epoch but not in block
-> *membership* — the same fixed 512-cell blocks per drug recur across all 10 epochs. The
-> resulting batch was passed to the fine-tuning head (`ICL_FinetunedModel`) with
+> cell line drawn from anywhere in the dataset, while the reconstruction target remained the
+> original treated cell's raw counts. Training data was regenerated in sample *order* each epoch
+> but not in block *membership* — the same fixed 512-cell blocks per drug recur across all 10
+> epochs. The resulting batch was passed to the fine-tuning head (`ICL_FinetunedModel`) with
 > `n_kept_cell=460` (`= (1 - replacement_ratio) x sample_size`), which additionally applies a
 > per-forward-pass scheduled context/query split over the remaining 52 cells. Fine-tuning used
 > `sample_size=512`, `replacement_ratio=0.1`, batch size 8, for 10 epochs, initialized from the
-> base `bc_large.ckpt` checkpoint. Input data comprised 799,317 sci-Plex 3 cells (745,217
-> treated / 54,100 control) across 4 recorded cell-line identities.
+> base `bc_large.ckpt` checkpoint. **[Pre-fix run, being superseded]** input data comprised
+> 799,317 sci-Plex 3 cells nominally reported as 745,217 treated / 54,100 control across 4
+> recorded cell-line identities; 36,522 of that "control" figure were later found to be cells
+> with no recoverable cell-line or perturbation identity (failed nuclear-hash demultiplexing
+> calls in the original sci-Plex 3 processing), incorrectly swept into the control bucket by an
+> ingestion bug now fixed (Change 0) — the true composition is 745,217 treated / 17,578 control
+> (5,857 A549 / 3,935 K562 / 7,786 MCF7) / 36,522 excluded as unassignable.
 
-**Remaining open item, not blocking:** real per-cell-line control-pool sizes (needed to state
-precisely whether/how often the control-replacement step's with-replacement fallback path
-triggers) — a small, cheap Alpine job, folded into the smoke-test phase below rather than run as
-a separate step.
-
-## Alpine execution: partition selection (in progress, not yet resolved)
+## Alpine execution: partition selection — resolved, `ah200`
 
 Three partitions considered, in the order tried:
 
 **`gh200`** (2 nodes, idle) — rejected at `sbatch` submission time (`Invalid qos specification`),
 confirmed via CURC's own docs (curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html)
 to be request-only: the partition lists `gh200` as an allowed QoS, but an individual account also
-needs that QoS granted at the association level via a separate CURC support-request form — the
-partition-level `AllowQos` entry is not sufficient on its own. Not retried; would need that
-request filed first. (Its nodes are also confirmed `aarch64`/ARM, not `x86_64` — a further,
-separate risk to the existing `x86_64`-built `stack` conda env that was never actually reached
-because the QoS rejection happened first.)
+needs that QoS granted at the association level via a separate CURC support-request form. Not
+pursued further — out of scope unless that request is separately filed and granted.
 
-**`ah200`** (H200 GPUs, `x86_64`, confirmed via `scontrol show node` — no architecture risk;
-`AllowQos=admin,gpu-normal,gpu-long`, i.e. the same `gpu-normal` QoS `aa100` already uses, no
-special access needed) — submission succeeded, but the smoke-test job (`smoke_test_env.sbatch`,
-2026-08-18, job 31416858) hit its 20-minute time limit having printed nothing past the script's
-own bash `echo` lines: not even step 1's first `print('machine: ...')`, which should be
-near-instant. Root cause of the *missing output* (not necessarily of any underlying slowness):
-Python fully buffers stdout by default when writing to a file rather than a terminal, so any
-`print()` inside a `python -c` block sits unflushed until that block exits normally — a
-time-limit `SIGTERM` discards the whole buffer. **This makes the run genuinely inconclusive**: it
-does not distinguish "the env import hangs on `ah200`" from "the env import is merely slow
-there" (e.g. cold NFS reads or CUDA JIT warmup on a node/architecture combination `stack` hasn't
-run on before). `smoke_test_env.sbatch` has since been fixed (`PYTHONUNBUFFERED=1`, `python -u`,
-per-step `flush=True` timestamps, time limit raised 20→30 min as a safety margin — not because 20
-was proven insufficient) so a re-run will show exactly where time goes even if it fails again.
-**Re-running this on `ah200` is the immediate next step, not yet done.**
+**`ah200`** (H200 GPUs, `x86_64`, `AllowQos=admin,gpu-normal,gpu-long` — the same `gpu-normal`
+QoS `aa100` already uses, no special access needed) — the first attempt (job 31416858) hit its
+20-minute time limit with no output past the script's own bash `echo` lines, an artifact of
+Python's default stdout buffering to a file rather than evidence of a hang (see git history on
+this doc for the full diagnosis). Fixed (`PYTHONUNBUFFERED=1`, `python -u`, flushed per-step
+timestamps, 30-min limit) and re-run (job 31418001) **completed successfully in 21 minutes** —
+genuinely slow, not hung. Confirmed: `machine: x86_64`, `torch 2.11.0+cu128`, `cuda available:
+True`, allocated a full `NVIDIA H200 NVL` (not a MIG slice — the explicit `--gres=gpu:h200:1`
+type pin worked as intended), `stack` imports cleanly with no architecture issue. Most of the
+21 minutes was `import torch` (~2.5 min) and `from stack.model_loading import
+load_model_from_checkpoint` (~11 min) — plausibly cold NFS/first-touch cost on an unfamiliar
+node, not necessarily representative of steady-state cost on a node the env has already run on.
+**`ah200` is confirmed usable — this is the partition for the real Change-1/2 runs.**
 
-**`aa100`** (already proven throughout this project's history) — the comparison run was still
-queued when cancelled by request; no data collected. Still the documented fallback if `ah200`'s
-re-run turns out to genuinely hang rather than merely be slow.
+**`aa100`** (already proven throughout this project's history) — the comparison run was
+cancelled while still queued; no data collected, and no longer needed now that `ah200` is
+confirmed. Stays the documented fallback if a future `ah200` run genuinely fails, but is not
+the current plan.
 
-**Next steps, in order** (none complete yet — this section will be updated once they are):
-1. Re-run the fixed `smoke_test_env.sbatch` on `ah200` (`--partition=ah200 --qos=gpu-normal
-   --gres=gpu:h200:1`). If it now completes: partition question resolved, `n_cells` for both
-   checkpoints and the real sci-Plex per-line control-pool sizes are obtained in the same run
-   (see "Sci-Plex fine-tuning" above and "n_cells verification" earlier in this doc for what
-   those numbers close out).
-2. If it still stalls past a few minutes into step 1 specifically (now visible via the added
-   timestamps, not silently swallowed): that is real evidence of an `ah200`-specific import
-   problem, not an artifact — fall back to `aa100` for the real Change-1/2 runs and treat
-   further `ah200` investigation as separate, future work.
-3. `gh200` stays out of scope for this design unless/until its access request is separately
-   filed and granted — not blocking Change 1/2.
+**Real-run time budgeting implication, worth carrying into `04_stack_generate.sbatch`'s own
+`--time` estimate:** if the ~11-minute `load_model_from_checkpoint` import cost recurs per array
+task (33 drugs, `%16` concurrency) rather than being amortized across tasks sharing a node, that
+overhead should be accounted for in the real generation jobs' time budget, not assumed away —
+worth confirming empirically on the first real run rather than assumed to vanish on repeat use.
 
 ## Acceptance
 
+**Change 0 (sci-Plex ingestion bug fix — prerequisite):**
+- `identity_missing_mask` (or equivalent name at planning time) added to
+  `src/fmharness/sciplex_prep.py`, applied in `build_sciplex_finetune.py` before any
+  `is_control` detection, on raw pre-stringified columns; `"nan"` removed from `VEHICLE_NAMES`.
+  Tested against a small fixture proving a cell with real, missing (not merely
+  string-`"nan"`-valued) perturbation/cell-line data is dropped, not mislabeled `is_control=True`.
+- `08_sciplex_prep.sbatch` re-run with the fix; its own logged control count is exactly 17,578
+  (down from the buggy 54,100), matching this design's independently-verified crosstab.
+- `09_stack_finetune.sbatch` re-run against the corrected `sciplex_finetune.h5ad`, producing a
+  new drug-aligned checkpoint. Group-eligibility numbers (currently 189 groups / 153-18-18 split)
+  re-measured against the corrected data, not assumed unchanged from the pre-fix run.
+- The drug-aligned Check-1/Check-2 rows already published in `docs/tahoe_generation_results.md`
+  and the harness-overview deck (from the completed leakage-aware Check-2 plan) are re-derived
+  against the corrected checkpoint and the numbers updated — not left standing as-is.
+
+**Change 1 (faithful generation procedure):**
 - `03_stack_context.sbatch` writes a real, per-line single-cell `tahoe_query.h5ad` (400 total
   rows, `cell_line_id` column present, `--partition` no longer `amilan`).
 - `04_stack_generate.sbatch` runs `--mode mdm` with the four schedule flags explicit; a real run
-  (both checkpoints) completes without the `IndexError` the current `--mode vanilla` workaround
-  exists to avoid.
+  (both the cytokine-aligned and the Change-0-corrected drug-aligned checkpoint) completes
+  without the `IndexError` the current `--mode vanilla` workaround exists to avoid, on `ah200`
+  (confirmed working, see "Alpine execution" above).
 - A new aggregation step (module TBD at planning time, likely `src/fmharness/`) reduces
   multi-cell-per-line generated output to one row per (line, drug), filtering by `gen_logit`
   before averaging, with a calibrated (not copied-from-the-paper) threshold and explicit
   missing-value handling — proven, not just asserted, to change Check-1's `stack` row relative
   to naive unfiltered averaging on a small fixture.
+
+**Change 2 (faithful DE-based Check-1 metrics):**
 - A new cached DE-calls bundle exists (`tahoe_deltas/`-pattern), and `delta_fidelity`/
   `score_delta_sources` report DE Spearman LFC, PR-AUC, DE Overlap Accuracy, and Jaccard
-  alongside the existing Pearson-Delta, for every existing Check-1 row (all three checkpoint
-  variants from the completed Check-2 plan).
-- `src/fmharness/sciplex_prep.py` gains a gene-symbol-uniqueness check.
-- The `ah200`-vs-`aa100` partition question is resolved (the fixed `smoke_test_env.sbatch`
-  either completes cleanly on `ah200`, or a genuine — not buffering-obscured — hang/failure
-  there sends the real runs to `aa100` instead) before any real Change-1/2 generation run is
-  submitted.
-- Real per-cell-line sci-Plex control-pool sizes are obtained and folded into the methods
-  paragraph above, closing its one remaining open item.
+  alongside the existing Pearson-Delta, for every Check-1 row (all three checkpoint variants,
+  the drug-aligned one now against the Change-0-corrected checkpoint).
+
+**Other:**
+- `src/fmharness/sciplex_prep.py` gains a gene-symbol-uniqueness check (the separate 110,983-
+  feature anomaly, unrelated to Change 0's identity-missingness bug).
