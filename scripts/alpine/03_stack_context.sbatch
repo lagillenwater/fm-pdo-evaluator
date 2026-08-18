@@ -6,7 +6,6 @@
                                       # (valid under the old, retired amilan partition) errors
                                       # with "Error 1: The amem partition accepts the following
                                       # QoS values: admin or mem-normal or mem-long"
-#SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
