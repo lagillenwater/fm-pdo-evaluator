@@ -396,31 +396,51 @@ precisely whether/how often the control-replacement step's with-replacement fall
 triggers) — a small, cheap Alpine job, folded into the smoke-test phase below rather than run as
 a separate step.
 
-## Alpine execution: partition and a required compatibility check
+## Alpine execution: partition selection (in progress, not yet resolved)
 
-Per direction: target the `gh200` partition (2 nodes, both idle at time of writing, `AllowQos=gh200`
-— note the QOS name is `gh200`, not `gpu-normal` like `aa100` uses) rather than `aa100` (currently
-under load: `mix`/`drain`, 1 idle node of 12). But `gh200`'s nodes are confirmed **`aarch64`
-(ARM), not `x86_64`** (`scontrol show node c3gh-c13-u26`: `Arch=aarch64`) — a real architecture
-difference from `aa100`, not just a faster/newer GPU generation. Conda environments are
-architecture-specific; the existing `stack` conda env (activated via `conda activate stack` in
-both `04_stack_generate.sbatch` and `09_stack_finetune.sbatch`) was almost certainly built for
-`x86_64` and is not guaranteed to import cleanly, let alone run correctly, on `aarch64` without a
-separate ARM-native build.
+Three partitions considered, in the order tried:
 
-**This must be checked before committing any real generation run to `gh200`.** Smoke-test plan
-(small, cheap, run before the implementation plan's real work):
-1. A minimal sbatch job on `gh200` (`--partition=gh200 --qos=gh200`) that only activates the
-   `stack` conda env and imports `torch`/`stack` — confirms whether the existing env is usable at
-   all on this architecture, before spending any GPU time on real generation.
-2. If it fails: fall back to `aa100` for the real runs (already confirmed working, per this
-   project's entire prior history on this branch), and treat a `gh200`-native env build as
-   separate, future work, not a blocker for Change 1/Change 2 landing.
-3. If it succeeds: proceed with the real Change 1/2 runs on `gh200` directly.
-4. Same job (or a second tiny one) also resolves the sci-Plex control-pool open item above via a
-   quick `groupby` on `sciplex_finetune.h5ad`, and verifies `n_cells=512` against the actual
-   `.ckpt` files per the "n_cells verification" snippet above — batching all three cheap checks
-   into one Alpine round-trip rather than three.
+**`gh200`** (2 nodes, idle) — rejected at `sbatch` submission time (`Invalid qos specification`),
+confirmed via CURC's own docs (curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html)
+to be request-only: the partition lists `gh200` as an allowed QoS, but an individual account also
+needs that QoS granted at the association level via a separate CURC support-request form — the
+partition-level `AllowQos` entry is not sufficient on its own. Not retried; would need that
+request filed first. (Its nodes are also confirmed `aarch64`/ARM, not `x86_64` — a further,
+separate risk to the existing `x86_64`-built `stack` conda env that was never actually reached
+because the QoS rejection happened first.)
+
+**`ah200`** (H200 GPUs, `x86_64`, confirmed via `scontrol show node` — no architecture risk;
+`AllowQos=admin,gpu-normal,gpu-long`, i.e. the same `gpu-normal` QoS `aa100` already uses, no
+special access needed) — submission succeeded, but the smoke-test job (`smoke_test_env.sbatch`,
+2026-08-18, job 31416858) hit its 20-minute time limit having printed nothing past the script's
+own bash `echo` lines: not even step 1's first `print('machine: ...')`, which should be
+near-instant. Root cause of the *missing output* (not necessarily of any underlying slowness):
+Python fully buffers stdout by default when writing to a file rather than a terminal, so any
+`print()` inside a `python -c` block sits unflushed until that block exits normally — a
+time-limit `SIGTERM` discards the whole buffer. **This makes the run genuinely inconclusive**: it
+does not distinguish "the env import hangs on `ah200`" from "the env import is merely slow
+there" (e.g. cold NFS reads or CUDA JIT warmup on a node/architecture combination `stack` hasn't
+run on before). `smoke_test_env.sbatch` has since been fixed (`PYTHONUNBUFFERED=1`, `python -u`,
+per-step `flush=True` timestamps, time limit raised 20→30 min as a safety margin — not because 20
+was proven insufficient) so a re-run will show exactly where time goes even if it fails again.
+**Re-running this on `ah200` is the immediate next step, not yet done.**
+
+**`aa100`** (already proven throughout this project's history) — the comparison run was still
+queued when cancelled by request; no data collected. Still the documented fallback if `ah200`'s
+re-run turns out to genuinely hang rather than merely be slow.
+
+**Next steps, in order** (none complete yet — this section will be updated once they are):
+1. Re-run the fixed `smoke_test_env.sbatch` on `ah200` (`--partition=ah200 --qos=gpu-normal
+   --gres=gpu:h200:1`). If it now completes: partition question resolved, `n_cells` for both
+   checkpoints and the real sci-Plex per-line control-pool sizes are obtained in the same run
+   (see "Sci-Plex fine-tuning" above and "n_cells verification" earlier in this doc for what
+   those numbers close out).
+2. If it still stalls past a few minutes into step 1 specifically (now visible via the added
+   timestamps, not silently swallowed): that is real evidence of an `ah200`-specific import
+   problem, not an artifact — fall back to `aa100` for the real Change-1/2 runs and treat
+   further `ah200` investigation as separate, future work.
+3. `gh200` stays out of scope for this design unless/until its access request is separately
+   filed and granted — not blocking Change 1/2.
 
 ## Acceptance
 
@@ -439,7 +459,9 @@ separate ARM-native build.
   alongside the existing Pearson-Delta, for every existing Check-1 row (all three checkpoint
   variants from the completed Check-2 plan).
 - `src/fmharness/sciplex_prep.py` gains a gene-symbol-uniqueness check.
-- The `gh200` vs `aarch64` compatibility question is resolved (either confirmed working, or a
-  documented fallback to `aa100`) before any real Change-1/2 generation run is submitted.
+- The `ah200`-vs-`aa100` partition question is resolved (the fixed `smoke_test_env.sbatch`
+  either completes cleanly on `ah200`, or a genuine — not buffering-obscured — hang/failure
+  there sends the real runs to `aa100` instead) before any real Change-1/2 generation run is
+  submitted.
 - Real per-cell-line sci-Plex control-pool sizes are obtained and folded into the methods
   paragraph above, closing its one remaining open item.

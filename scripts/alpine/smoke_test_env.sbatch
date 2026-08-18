@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:20:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
@@ -48,55 +48,73 @@
 #     before submitting (ls via `ralpine ls`); the sci-Plex one especially, since its filename
 #     bakes in a specific val_loss (finetuned-epoch=4-val_loss=5.0847.ckpt per the 2026-08-12 run's
 #     own log) that would change if that job is ever re-run.
+#
+# 2026-08-18: first ah200 attempt hit the (then) 20-minute time limit having printed nothing past
+# this script's own bash `echo` lines -- not even step 1's first `print('machine: ...')`, which
+# should be near-instant. That is Python's default full stdout buffering when writing to a file
+# (unlike a terminal): any output from a python -c block sits in an in-process buffer until it
+# flushes or the process exits normally, so a SIGTERM from the time limit discards it whole,
+# whether the script was hung or just slow. This does NOT distinguish "ah200 import hangs" from
+# "ah200 import is merely slow" -- fixed below (PYTHONUNBUFFERED + explicit timestamps per step),
+# time limit raised to 30 min as a safety margin, not because 20 was necessarily insufficient.
 set -euo pipefail
 
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
+export PYTHONUNBUFFERED=1   # see the 2026-08-18 note above -- without this, output from any
+                             # python -c block below is invisible in the log until that block
+                             # exits normally; a time-limit kill would discard it silently.
 
 module purge
 module load anaconda
 conda activate stack
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix, same as 04/09
 
-echo "partition=$SLURM_JOB_PARTITION qos=$SLURM_JOB_QOS host=$(hostname) job=$SLURM_JOB_ID"
+echo "$(date -Is) partition=$SLURM_JOB_PARTITION qos=$SLURM_JOB_QOS host=$(hostname) job=$SLURM_JOB_ID"
 
 CKPT_ALIGNED="${CKPT_ALIGNED:-stack-aligned/bc_large_aligned.ckpt}"
 CKPT_SCIPLEX="${CKPT_SCIPLEX:-/scratch/alpine/$USER/sciplex_finetune/finetuned-epoch=4-val_loss=5.0847.ckpt}"
 SCIPLEX_H5AD="${SCIPLEX_H5AD:-/scratch/alpine/$USER/sciplex/finetune_input/sciplex_finetune.h5ad}"
-echo "Resolved: CKPT_ALIGNED=$CKPT_ALIGNED CKPT_SCIPLEX=$CKPT_SCIPLEX SCIPLEX_H5AD=$SCIPLEX_H5AD"
+echo "$(date -Is) Resolved: CKPT_ALIGNED=$CKPT_ALIGNED CKPT_SCIPLEX=$CKPT_SCIPLEX SCIPLEX_H5AD=$SCIPLEX_H5AD"
 
-echo "=== 1. arch + import check ==="
-python -c "
+echo "$(date -Is) === 1. arch + import check ==="
+python -u -c "
+import time
+def log(msg):
+    print(f'{time.strftime(\"%Y-%m-%dT%H:%M:%S\")} {msg}', flush=True)
+
 import platform
-print('machine:', platform.machine())
+log(f'machine: {platform.machine()}')
+log('importing torch...')
 import torch
-print('torch:', torch.__version__, 'cuda available:', torch.cuda.is_available())
+log(f'torch: {torch.__version__}  cuda available: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
-    print('device:', torch.cuda.get_device_name(0))
+    log(f'device: {torch.cuda.get_device_name(0)}')
+log('importing stack...')
 import stack
-print('stack import: OK')
+log('stack import: OK')
 from stack.model_loading import load_model_from_checkpoint
-print('load_model_from_checkpoint import: OK')
+log('load_model_from_checkpoint import: OK')
 "
 
-echo "=== 2. n_cells for both checkpoints (direct file read, no model construction) ==="
-python -c "
+echo "$(date -Is) === 2. n_cells for both checkpoints (direct file read, no model construction) ==="
+python -u -c "
 import torch
 for label, path in [('cytokine-aligned', '$CKPT_ALIGNED'), ('sci-Plex-drug-aligned', '$CKPT_SCIPLEX')]:
     ckpt = torch.load(path, map_location='cpu')
     n_cells = ckpt['hyper_parameters']['model_config'].get('n_cells', '<missing>')
-    print(f'{label}: n_cells={n_cells}  ({path})')
+    print(f'{label}: n_cells={n_cells}  ({path})', flush=True)
 "
 
-echo "=== 3. real per-cell-line sci-Plex control-pool sizes ==="
-python -c "
+echo "$(date -Is) === 3. real per-cell-line sci-Plex control-pool sizes ==="
+python -u -c "
 import anndata as ad
 a = ad.read_h5ad('$SCIPLEX_H5AD', backed='r')
 obs = a.obs
-print('total cells:', a.n_obs)
+print('total cells:', a.n_obs, flush=True)
 ctl = obs[obs['pert_id'].astype(str) == 'control']
-print('control cells total:', len(ctl))
-print(ctl.groupby('cell_line').size().to_string())
+print('control cells total:', len(ctl), flush=True)
+print(ctl.groupby('cell_line').size().to_string(), flush=True)
 "
 
-echo "smoke test complete"
+echo "$(date -Is) smoke test complete"
