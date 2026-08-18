@@ -6,7 +6,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:gh200:1   # gh200 partition/QoS requires an explicit GRES type, unlike aa100's
+                              # bare "gpu:1" -- an unqualified type fails submission with
+                              # "Invalid qos specification" (CURC's own warning text is clearer:
+                              # "valid GRES are ... --gres=gpu:gh200:N"), confirmed 2026-08-18.
 #SBATCH --time=00:20:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
