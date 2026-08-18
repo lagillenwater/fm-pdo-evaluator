@@ -1,13 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=stack-gen
-#SBATCH --partition=aa100
+#SBATCH --partition=ah200
 #SBATCH --qos=gpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
-#SBATCH --time=04:00:00
+#SBATCH --gres=gpu:h200:1
+#SBATCH --time=04:00:00             # smoke test measured ~11-14min cold-cache import/checkpoint-
+                                     # load cost per task on ah200 (job 31418001); --mode mdm's
+                                     # fuller per-step schedule may also cost more than vanilla's
+                                     # fixed ratio -- confirm on Task 7's first real run and raise
+                                     # this if any array task approaches the limit.
 #SBATCH --array=0-32%16              # 33 drugs = tasks 0-32; %16 caps concurrent A100s.
 #SBATCH --output=logs/%x-%A_%a.out   #   override with --array=<N> to run a single drug.
 #SBATCH --error=logs/%x-%A_%a.out
@@ -43,7 +47,7 @@ fi
 PERT=$(awk -F'\t' -v i="$TASK" '$1==i{print $2}' context_by_drug/manifest.tsv)
 echo "task $TASK -> pert '$PERT' ($SHARD)"
 
-QUERY="tahoe_query.h5ad"              # cell-line control baselines (written by 03); 50 cells
+QUERY="tahoe_query.h5ad"              # 400 real control cells, 8/line (written by 03)
 # Env-overridable so the base (unaligned) checkpoint can be A/B'd against the aligned one, e.g.:
 #   sbatch --export=CKPT=stack-large/bc_large.ckpt,GENELIST=stack-large/basecount_1000per_15000max.pkl,OUTDIR=generated_base \
 #       --array=3 scripts/alpine/04_stack_generate.sbatch
@@ -63,13 +67,24 @@ OUTDIR="${OUTDIR:-generated}"
 echo "Resolved: CKPT=$CKPT GENELIST=$GENELIST OUTDIR=$OUTDIR"
 mkdir -p "$OUTDIR"
 
-# Stack splits its 512-cell set as n_test = int(512*(1 - prompt_ratio - context_ratio)), rest base.
-# --mode vanilla is REQUIRED: the default (generate) mode ignores context_ratio and instead SCHEDULES
-# it (linspace(context_ratio_min, context_ratio)) per step, so n_test varies and most steps pad the
-# 50-cell query -> IndexError. vanilla passes the fixed context_ratio, so ratio = prompt+context is
-# constant. We want n_test = 50 = the query size (no padding): prompt+context ~= 1 - 50/512 = 0.90;
-# 0.501 + 0.4 = 0.901 -> n_test = 50, n_base = 462 (unique for drugs with >=462 cells; thinner drugs
-# loop the base -> duplicates -> skipped). COUPLED to the 50-line query -- recompute if 03 changes.
+# Stack's true in-context generative procedure (the CLI's own default, --mode mdm, NOT --mode
+# vanilla): T=5 steps, context_ratio SCHEDULED via linspace(context_ratio_min, context_ratio, 5)
+# with confidence-guided selective unmasking carried between steps (Methods 4.2.5 of the Stack
+# preprint) -- this is what the paper actually describes; --mode vanilla is a materially simpler
+# fixed-ratio baseline the CLI happens to also expose, not "one-shot generation." n_test_cells =
+# max(1, int(512*(1-prompt_ratio-context_ratio))) is recomputed per step under the SCHEDULED
+# context_ratio, ranging 179-333 cells across these 5 steps; the 400-real-cell tahoe_query.h5ad
+# (03) covers every step's n_test_cells with margin (see 03's own comment for why 400 suffices).
+# This pipeline previously used --mode vanilla specifically to dodge an IndexError at the old
+# 50-row pseudobulk query; that workaround is no longer needed now the query pool itself is large
+# enough for the model's own default mode. Explicit rather than left to CLI defaults, matching
+# this repo's "log resolved CKPT/GENELIST/OUTDIR" reproducibility discipline and guarding against
+# a future package upgrade silently changing a default.
+#
+# Output is now MULTIPLE rows per line (one per surviving real query cell, each carrying
+# obs["gen_logit"]) instead of one -- run
+# fmharness.stack_aggregate.aggregate_generated_replicates (Task 3) on $OUTDIR before
+# build_generated_deltas/delta_fidelity, which still expect exactly one row per (line, drug).
 
 stack-generation \
     --checkpoint "$CKPT" \
@@ -80,7 +95,8 @@ stack-generation \
     --split-column pert_id \
     --split-values "$PERT" \
     --device cuda \
-    --mode vanilla \
-    --prompt-ratio 0.501 \
+    --mode mdm \
+    --prompt-ratio 0.25 \
     --context-ratio 0.4 \
+    --context-ratio-min 0.2 \
     --output-dir "$OUTDIR"/

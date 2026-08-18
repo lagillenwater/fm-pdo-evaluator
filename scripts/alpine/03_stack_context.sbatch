@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=tahoe-context
-#SBATCH --partition=amilan
+#SBATCH --partition=amem
 #SBATCH --qos=long                   # generous ceiling; the pushed-down read is typically ~1-2h
 #SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
@@ -52,8 +52,6 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from fmharness.deltas import _group_mean
-
 repo = Path.cwd()
 adata = ad.read_h5ad(repo / "tahoe_context.h5ad")
 obs = adata.obs
@@ -82,23 +80,45 @@ pm = obs.loc[~is_ctl, ["pert_id", "pubchem_cid"]].astype(str).drop_duplicates()
     "\n".join(f"{p}\t{c}" for p, c in zip(pm["pert_id"], pm["pubchem_cid"])) + "\n"
 )
 
-# query baseline: control pseudobulk per DepMap line, renormalized to 1e6 (Stack scale)
+# query baseline: 8 REAL single control cells per DepMap line (400 total) -- NOT a pseudobulk
+# mean. Stack's true generative procedure (--mode mdm, see 04) schedules its query-cell draw per
+# step (n_test_cells up to 281 of the fixed self.n_cells=512 pool, at --prompt-ratio 0.25); a
+# single pseudobulk row per line can never satisfy that (04's confirmed IndexError root cause:
+# the CLI's single-pass pad, `pad = test_indices[:need]`, silently truncates once `need` exceeds
+# the pool it draws from). 8/line x 50 lines = 400 clears the sufficient bound (pool >=
+# max(n_test_cells) = 281, since the pad always draws from the FULL original pool, not a
+# per-batch remainder) with ~40% headroom -- well inside the 200 real controls/line always
+# available in tahoe_context.h5ad, so no replacement is needed or used. Fixed seed (0) for
+# reproducible cell selection across re-runs.
 cid = obs["cell_id"].astype(str).to_numpy()
 cln = obs["cell_line_id"].astype(str).to_numpy()
 patient = np.where((cid != "") & (cid != "nan"), cid, cln)
-x = adata.X
-xc = x if sparse.issparse(x) else sparse.csr_matrix(np.asarray(x, dtype=np.float64))
-codes, uniq = pd.factorize(patient[np.flatnonzero(is_ctl)])
-qb = _group_mean(xc[np.flatnonzero(is_ctl)], codes, len(uniq))
-row = qb.sum(axis=1, keepdims=True)
+ctl_idx = np.flatnonzero(is_ctl)
+rng = np.random.default_rng(0)
+codes, uniq = pd.factorize(patient[ctl_idx])
+sel = np.sort(
+    np.concatenate(
+        [
+            rng.choice(
+                ctl_idx[codes == code], size=min(8, int((codes == code).sum())), replace=False
+            )
+            for code in range(len(uniq))
+        ]
+    )
+)
+qx = adata.X[sel]
+qx = np.asarray(qx.todense() if sparse.issparse(qx) else qx, dtype=np.float64)
+row = qx.sum(axis=1, keepdims=True)
 row[row == 0] = 1.0
-query = ad.AnnData(X=(qb / row * 1e6).astype("float32"))
-query.obs_names = [str(u) for u in uniq]
+query = ad.AnnData(X=(qx / row * 1e6).astype("float32"))
+query.obs_names = [str(i) for i in range(query.n_obs)]
+query.obs["cell_line_id"] = patient[sel]
 query.var_names = [str(v) for v in adata.var_names]
 query.var["feature_name"] = list(query.var_names)
 query.write_h5ad(repo / "tahoe_query.h5ad")
 print(
     f"{len(perts)} per-drug shards, {len(pm)} pert->CID rows, "
-    f"query baseline {query.n_obs} lines x {query.n_vars} genes -> tahoe_query.h5ad"
+    f"query baseline {query.n_obs} real cells x {query.n_vars} genes "
+    f"({len(uniq)} lines, {query.n_obs / len(uniq):.1f} cells/line avg) -> tahoe_query.h5ad"
 )
 PY
