@@ -443,7 +443,7 @@ def de_fidelity(
             continue
         i = cast(int, match.index[0])
         genes = grp["gene"].to_numpy()
-        pred_row = pred_delta.reindex(columns=genes).iloc[i].to_numpy(dtype=np.float64)
+        pred_row = pred_delta.iloc[[i]].reindex(columns=genes).iloc[0].to_numpy(dtype=np.float64)
         have = ~np.isnan(pred_row)
         if not have.any():
             continue

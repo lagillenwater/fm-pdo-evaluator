@@ -1294,7 +1294,35 @@ pull`) and confirm locally: `uv run python -c "import anndata as ad; a =
 ad.read_h5ad('tahoe_query.h5ad'); print(a.n_obs, 'cell_line_id' in a.obs.columns)"` — expect
 `400 True`.
 
-- [ ] **Step 3: Hand Lucas the submission command for `04` (cytokine-aligned, default `CKPT`)**
+- [ ] **Step 3: Collapse the query baseline for `--query-baseline` (once — covers both checkpoints)**
+
+`tahoe_query.h5ad` is cell-position indexed (`obs_names` `"0".."399"`, the line id living in
+`obs["cell_line_id"]`) — the shape Stack's own `--test-adata` generation input needs. But
+`fmharness.deltas.build_generated_deltas`'s `--query-baseline` argument joins on the AnnData
+index directly (`base_df.index.intersection(g.index)`), and Task 3's
+`aggregate_generated_replicates` reduces the generated side to one row per line, indexed BY LINE.
+Passing `tahoe_query.h5ad` straight through as `--query-baseline` therefore joins cell-position
+ids against line ids — an empty intersection every time, which silently produces zero delta rows
+(`ValueError: no generated files matched a drug; check generated_dir / mapping`) rather than a
+visibly-wrong result. `fmharness.stack_aggregate.collapse_query_baseline` closes that gap: it
+reduces the same 400-cell pool to one mean row per line, indexed by `cell_line_id`, matching what
+`build_generated_deltas` actually expects. Run it once here — the same query pool `03` just wrote
+backs both this task's cytokine-aligned generation and Task 9's drug-aligned generation, so one
+collapsed baseline serves both; Task 10 references `tahoe_query_baseline.h5ad`, not
+`tahoe_query.h5ad` itself.
+
+```bash
+uv run python -c "
+from pathlib import Path
+from fmharness.stack_aggregate import collapse_query_baseline
+audit = collapse_query_baseline(Path('tahoe_query.h5ad'), Path('tahoe_query_baseline.h5ad'))
+print(audit.to_string(index=False))
+"
+```
+
+Expect 50 rows (one per DepMap line), each `n_cells` close to 8.
+
+- [ ] **Step 4: Hand Lucas the submission command for `04` (cytokine-aligned, default `CKPT`)**
 
 ```bash
 sbatch scripts/alpine/04_stack_generate.sbatch
@@ -1303,13 +1331,13 @@ sbatch scripts/alpine/04_stack_generate.sbatch
 (No `--export=CKPT=...` needed — the script's default `CKPT` is already the cytokine-aligned
 checkpoint.)
 
-- [ ] **Step 4: Poll for completion; watch for time-limit issues on the new `--mode mdm` schedule**
+- [ ] **Step 5: Poll for completion; watch for time-limit issues on the new `--mode mdm` schedule**
 
 Run: `ralpine sacct` until all 33 array tasks show `COMPLETED`. If any task shows `TIMEOUT`,
 resubmit that single array index with a raised `--time` (per Task 2's flagged open question about
 `mdm`'s per-step cost vs. `vanilla`'s) — do not silently drop it from the aggregate.
 
-- [ ] **Step 5: Pull the generated output and run the new aggregation step, then calibrate the confidence threshold**
+- [ ] **Step 6: Pull the generated output and run the new aggregation step, then calibrate the confidence threshold**
 
 Pull the `generated/` directory locally via `ralpine pull`. Run the aggregation module (Task 3)
 at a few candidate thresholds and pick the one that most improves Check-1 Pearson-Delta relative
@@ -1332,7 +1360,7 @@ For each threshold's `generated_agg_<T>/` directory, run `check1_registry_driver
 `stack` row's Pearson-Delta `r`. Pick the threshold with the best `r`; record the choice and its
 rationale in `docs/tahoe_generation_results.md` in Task 10.
 
-- [ ] **Step 6: No commit yet** (results feed into Task 10's single docs-update commit).
+- [ ] **Step 7: No commit yet** (results feed into Task 10's single docs-update commit).
 
 ---
 
@@ -1407,7 +1435,7 @@ project has already hit in production.)
 - [ ] **Step 2: Poll for completion**
 
 Run: `ralpine sacct` until all array tasks show `COMPLETED` (same time-limit caveat as Task 7 Step
-4).
+5).
 
 - [ ] **Step 3: Pull, aggregate at the threshold Task 7 calibrated**
 
@@ -1436,17 +1464,23 @@ aggregate_generated_replicates(
 
 - [ ] **Step 1: Run Check 1 for both checkpoints, redirecting output to files (not inline)**
 
+Use `tahoe_query_baseline.h5ad` (Task 7 Step 3's collapsed, line-indexed baseline), not
+`tahoe_query.h5ad` itself — `tahoe_query.h5ad` is cell-position indexed (03's `--test-adata`
+shape), and `build_generated_deltas` joins `--query-baseline` on the AnnData index directly, so
+passing it straight through here silently intersects to zero rows against the aggregated
+(line-indexed) generated output.
+
 ```bash
 uv run python scripts/check1_registry_driver.py \
     --deltas-bundle tahoe_deltas \
-    --query-baseline tahoe_query.h5ad \
+    --query-baseline tahoe_query_baseline.h5ad \
     --generated-dir generated_agg_<Task 7's threshold> \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --checkpoint-label cytokine-aligned > /tmp/check1_cytokine_aligned_v2.txt
 
 uv run python scripts/check1_registry_driver.py \
     --deltas-bundle tahoe_deltas \
-    --query-baseline tahoe_query.h5ad \
+    --query-baseline tahoe_query_baseline.h5ad \
     --generated-dir generated_drug_aligned_agg \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --checkpoint-label drug-aligned > /tmp/check1_drug_aligned_v2.txt
@@ -1484,7 +1518,7 @@ sources = {
     "pca": loo_baseline_source("pca", real_delta, real_key, base, k=10, genes=learned_genes),
     "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=10, genes=learned_genes),
     "stack": build_generated_deltas(
-        Path("generated_agg_<threshold>"), Path("tahoe_query.h5ad"), pert_to_drug
+        Path("generated_agg_<threshold>"), Path("tahoe_query_baseline.h5ad"), pert_to_drug
     ),
 }
 print(score_de_metrics(sources, de_calls).to_string(index=False))

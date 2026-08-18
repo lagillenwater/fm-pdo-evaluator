@@ -6,6 +6,13 @@ rows per line per drug, each carrying obs["gen_logit"] (Stack's own confidence c
 = still-masked/unresolved, low = confidently-resolved). fmharness.deltas.build_generated_deltas
 expects exactly one row per (line, drug); aggregate_generated_replicates is the step between
 Stack's raw output and that function.
+
+The QUERY side has the same shape problem: tahoe_query.h5ad (03_stack_context.sbatch) is
+cell-indexed too (400 real cells, 8/line, obs["cell_line_id"] carrying the line), because that
+is the shape Stack's --test-adata generation input needs -- but build_generated_deltas's
+--query-baseline argument must be indexed BY LINE. collapse_query_baseline is that same
+reduction applied to the query side, run once up front (Task 7 Step 3) rather than once per
+generated file.
 """
 
 from __future__ import annotations
@@ -91,3 +98,36 @@ def aggregate_generated_replicates(
             columns=["pert_id", "cell_line_id", "n_replicates", "n_kept", "dropped"]  # type: ignore[arg-type]
         )
     return pd.concat(summaries, ignore_index=True)
+
+
+def collapse_query_baseline(query_path: Path, out_path: Path) -> pd.DataFrame:
+    """Collapse tahoe_query.h5ad's multiple real cells per line down to one mean row per line,
+    indexed by cell_line_id.
+
+    tahoe_query.h5ad (03_stack_context.sbatch) holds 8 real single control cells per line,
+    indexed by cell position (obs_names "0".."399") with the line id as obs["cell_line_id"] --
+    the shape Stack's --test-adata generation input needs. fmharness.deltas.build_generated_deltas
+    expects its --query-baseline argument indexed BY LINE (base_df.index.intersection(g.index)
+    joins on that index directly). Passing tahoe_query.h5ad straight through silently joins on an
+    empty intersection (cell-position ids never match line ids) -- this collapse is a required
+    separate step, not the same file serving double duty the way the pre-Task-2 pseudobulk query
+    file did.
+
+    Returns an audit DataFrame (cell_line_id, n_cells) alongside writing the collapsed baseline
+    to out_path.
+    """
+    query = ad.read_h5ad(query_path)
+    line = query.obs["cell_line_id"].astype(str).to_numpy()
+    x = dense(query.X)
+    codes, uniq = pd.factorize(line)
+    n_lines = len(uniq)
+    counts = np.bincount(codes, minlength=n_lines).astype(np.float64)
+    ind = np.zeros((n_lines, len(codes)), dtype=np.float64)
+    ind[codes, np.arange(len(codes))] = 1.0
+    means = (ind @ x) / counts[:, None]
+    baseline = ad.AnnData(X=means.astype(np.float32))
+    baseline.obs_names = [str(u) for u in uniq]
+    baseline.var_names = [str(v) for v in query.var_names]
+    baseline.var["feature_name"] = list(baseline.var_names)
+    baseline.write_h5ad(out_path)
+    return pd.DataFrame({"cell_line_id": [str(u) for u in uniq], "n_cells": counts.astype(int)})

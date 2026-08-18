@@ -73,7 +73,7 @@ mkdir -p "$OUTDIR"
 # preprint) -- this is what the paper actually describes; --mode vanilla is a materially simpler
 # fixed-ratio baseline the CLI happens to also expose, not "one-shot generation." n_test_cells =
 # max(1, int(512*(1-prompt_ratio-context_ratio))) is recomputed per step under the SCHEDULED
-# context_ratio, ranging 179-333 cells across these 5 steps; the 400-real-cell tahoe_query.h5ad
+# context_ratio, ranging 179-281 cells across these 5 steps; the 400-real-cell tahoe_query.h5ad
 # (03) covers every step's n_test_cells with margin (see 03's own comment for why 400 suffices).
 # This pipeline previously used --mode vanilla specifically to dodge an IndexError at the old
 # 50-row pseudobulk query; that workaround is no longer needed now the query pool itself is large
