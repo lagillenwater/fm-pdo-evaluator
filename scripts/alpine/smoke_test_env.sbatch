@@ -1,15 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=smoke-gh200
-#SBATCH --partition=gh200
-#SBATCH --qos=gh200
+#SBATCH --job-name=smoke-env
+#SBATCH --partition=aa100
+#SBATCH --qos=gpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --gres=gpu:gh200:1   # gh200 partition/QoS requires an explicit GRES type, unlike aa100's
-                              # bare "gpu:1" -- an unqualified type fails submission with
-                              # "Invalid qos specification" (CURC's own warning text is clearer:
-                              # "valid GRES are ... --gres=gpu:gh200:N"), confirmed 2026-08-18.
+#SBATCH --gres=gpu:1
 #SBATCH --time=00:20:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
@@ -18,11 +15,8 @@
 # and-de-metrics-design.md's three open items, batched into one Alpine round-trip before any real
 # GPU time is spent on the actual Change-1/Change-2 generation runs:
 #
-#   1. gh200 vs aarch64 compatibility -- gh200's 2 nodes are confirmed Arch=aarch64 (ARM), NOT the
-#      x86_64 aa100 nodes the `stack` conda env has only ever been run on in this project. Conda
-#      envs are architecture-specific; this may simply fail to import. If it does, the design's own
-#      fallback is aa100 for the real runs -- this job's only purpose is finding that out cheaply
-#      (CPU-cost import checks, no model forward pass) rather than discovering it mid-generation.
+#   1. GPU partition/env sanity -- confirms the `stack` conda env actually imports and sees a GPU
+#      on whichever partition this submits to, before spending real time on generation there.
 #   2. self.n_cells for both checkpoints Change 1's schedule math (context_ratio linspace, the
 #      n_test_cells/n_base_cells table in the design doc) assumes =512 for. Confirmed in source/
 #      config already; this is the direct, file-level check the design doc calls "required before
@@ -30,6 +24,24 @@
 #   3. Real per-cell-line sci-Plex control-pool sizes -- the one still-open item in the design doc's
 #      sci-Plex methods paragraph (needed to state precisely how often the fine-tuning control-
 #      replacement step's with-replacement fallback path triggers).
+#
+# PARTITION HISTORY (2026-08-18): first tried gh200 (2 idle ARM/aarch64 nodes) -- rejected at
+# submission with "Invalid qos specification". Confirmed via CURC's own docs
+# (curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html) that gh200 is
+# request-only access (a support-request form grants the QoS at the account level; the partition
+# listing it as an allowed QoS is not sufficient on its own) -- not a syntax issue, don't retry
+# gh200 without first filing that request. `ah200` (H200 GPUs, x86_64, confirmed via `scontrol
+# show node`) is a DIFFERENT partition that uses this project's already-proven `gpu-normal` QoS
+# (same as aa100) -- no special access needed. Its nodes carry a MIX of full and MIG-sliced H200
+# GPU types (`gpu:h200` vs `gpu:h200_2g.35gb` / `gpu:h200_3g.71gb`), so an ah200 submission needs
+# an explicit, non-MIG GRES type or it may land on a partial-memory slice:
+#
+#   sbatch --job-name=smoke-ah200 --partition=ah200 --qos=gpu-normal --gres=gpu:h200:1 \
+#       scripts/alpine/smoke_test_env.sbatch
+#
+# The #SBATCH directives above default to aa100 (this project's fully proven target); the command
+# above overrides them for an ah200 run -- sbatch CLI flags take precedence over in-script
+# #SBATCH lines. Submit both to compare queue time.
 #
 # CONFIRM BEFORE RUNNING (this worktree's own paths, not derivable here):
 #   * CKPT_ALIGNED / CKPT_SCIPLEX below -- verify both actually exist at these paths on Alpine
@@ -45,6 +57,8 @@ module purge
 module load anaconda
 conda activate stack
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix, same as 04/09
+
+echo "partition=$SLURM_JOB_PARTITION qos=$SLURM_JOB_QOS host=$(hostname) job=$SLURM_JOB_ID"
 
 CKPT_ALIGNED="${CKPT_ALIGNED:-stack-aligned/bc_large_aligned.ckpt}"
 CKPT_SCIPLEX="${CKPT_SCIPLEX:-/scratch/alpine/$USER/sciplex_finetune/finetuned-epoch=4-val_loss=5.0847.ckpt}"
