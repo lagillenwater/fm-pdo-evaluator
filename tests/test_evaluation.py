@@ -10,9 +10,11 @@ import pytest
 
 from fmharness.cv import group_k_fold
 from fmharness.evaluation import (
+    de_fidelity,
     delta_fidelity,
     grouped_cv_predict,
     regret_norm_at_k,
+    score_de_metrics,
     score_delta_sources,
     score_predictions,
 )
@@ -98,6 +100,88 @@ def test_score_delta_sources_builds_one_row_per_source() -> None:
     assert by_source.loc["good", "r"] > by_source.loc["bad", "r"]
     assert by_source.loc["good", "r"] == 1.0
     assert by_source.loc["bad", "r"] == -1.0
+
+
+def test_de_fidelity_scores_spearman_lfc_overlap_pr_auc_jaccard() -> None:
+    # one (patient, drug) pair, 4 genes; real DE calls: A, B significant (padj<0.05,
+    # |log2fc|>0.25), C, D not. Predicted delta ranks A, B highest by |value| -- matches the real
+    # top-N=2 exactly -> perfect overlap/Jaccard/PR-AUC, and correlates with the real log2FC on
+    # the significant genes -> spearman +1.
+    de_calls = pd.DataFrame(
+        {
+            "patient": ["ACH-1"] * 4,
+            "drug": ["100"] * 4,
+            "gene": ["A", "B", "C", "D"],
+            "log2fc": [3.0, 2.0, 0.1, -0.05],
+            "padj": [0.001, 0.01, 0.9, 0.8],
+            "significant": [True, True, False, False],
+        }
+    )
+    pred_delta = pd.DataFrame({"A": [3.5], "B": [1.5], "C": [0.2], "D": [-0.1]})
+    pred_key = pd.DataFrame({"patient": ["ACH-1"], "drug": ["100"]})
+
+    f = de_fidelity(pred_delta, pred_key, de_calls)
+
+    assert len(f) == 1
+    row = f.iloc[0]
+    assert row["n_sig_genes"] == 2
+    assert row["de_overlap_accuracy"] == 1.0
+    assert row["jaccard"] == 1.0
+    assert np.isclose(row["de_spearman_lfc"], 1.0)
+    assert 0.0 <= row["pr_auc"] <= 1.0
+
+
+def test_de_fidelity_zero_significant_genes_gives_nan_rank_metrics_but_no_crash() -> None:
+    de_calls = pd.DataFrame(
+        {
+            "patient": ["ACH-1"] * 2,
+            "drug": ["100"] * 2,
+            "gene": ["A", "B"],
+            "log2fc": [0.1, -0.05],
+            "padj": [0.9, 0.8],
+            "significant": [False, False],
+        }
+    )
+    pred_delta = pd.DataFrame({"A": [0.2], "B": [-0.1]})
+    pred_key = pd.DataFrame({"patient": ["ACH-1"], "drug": ["100"]})
+
+    f = de_fidelity(pred_delta, pred_key, de_calls)
+
+    assert f.iloc[0]["n_sig_genes"] == 0
+    assert np.isnan(f.iloc[0]["de_spearman_lfc"])
+    assert np.isnan(f.iloc[0]["de_overlap_accuracy"])
+    assert np.isnan(f.iloc[0]["jaccard"])
+    assert np.isnan(f.iloc[0]["pr_auc"])  # only one class present (all non-significant)
+
+
+def test_score_de_metrics_builds_one_row_per_source() -> None:
+    de_calls = pd.DataFrame(
+        {
+            "patient": ["ACH-1", "ACH-1"],
+            "drug": ["100", "100"],
+            "gene": ["A", "B"],
+            "log2fc": [3.0, 0.1],
+            "padj": [0.001, 0.9],
+            "significant": [True, False],
+        }
+    )
+    pred_key = pd.DataFrame({"patient": ["ACH-1"], "drug": ["100"]})
+    sources = {
+        "good": (pd.DataFrame({"A": [3.0], "B": [0.1]}), pred_key),
+        "bad": (pd.DataFrame({"A": [-3.0], "B": [0.1]}), pred_key),
+    }
+
+    table = score_de_metrics(sources, de_calls)
+
+    assert set(table["source"]) == {"good", "bad"}
+    assert list(table.columns) == [
+        "source",
+        "de_spearman_lfc",
+        "pr_auc",
+        "de_overlap_accuracy",
+        "jaccard",
+        "n_pairs",
+    ]
 
 
 def test_score_predictions_reports_interaction_and_null() -> None:

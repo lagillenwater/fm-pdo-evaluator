@@ -14,6 +14,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import average_precision_score
 
 from fmharness.cv import CVScheme, group_k_fold
 from fmharness.data.loaders import CoderDataBundle
@@ -401,6 +402,111 @@ def score_delta_sources(
                 "rank": round(float(f["rank"].mean()), 3),
                 "n_pairs": len(f),
                 "n_genes": int(f["n_genes"].iloc[0]),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def de_fidelity(
+    pred_delta: pd.DataFrame,
+    pred_key: pd.DataFrame,
+    de_calls: pd.DataFrame,
+) -> pd.DataFrame:
+    """DE-based faithfulness of a predicted expression delta, per (patient, drug), against
+    ground-truth Wilcoxon DE calls (``fmharness.deltas.build_tahoe_de_calls``).
+
+    For every (patient, drug) present in both ``pred_key`` and ``de_calls``, computes four
+    metrics matching the Stack paper's cell-eval-based DE evaluation (Methods 4.6.3): DE Spearman
+    LFC (Spearman rank correlation between predicted delta and real log2FC, restricted to the
+    real-significant genes), PR-AUC (average precision of ``|predicted delta|`` as a score against
+    the real ``significant`` binary label, over all tested genes), and DE Overlap Accuracy /
+    Jaccard similarity (both from the top-N genes by ``|predicted delta|``, N = the number of
+    real-significant genes for that pair, against the real-significant gene set -- the paper's own
+    top-N-overlap definition). Our predicted side has no per-cell distribution to run a formal
+    significance test against (a single generated delta per line, not multiple cells to test), so
+    it is ranked by ``|predicted delta|`` alone in place of a predicted p-value -- the design's
+    sanctioned adaptation, since only the ground truth needs a formal significance call.
+
+    Returns one row per matched pair: ``patient, drug, de_spearman_lfc, pr_auc,
+    de_overlap_accuracy, jaccard, n_sig_genes``. A pair with zero real-significant genes has
+    ``de_spearman_lfc``/``de_overlap_accuracy``/``jaccard`` as NaN (undefined without at least one
+    true positive); if every gene in that pair is one single class (all- or none-significant),
+    ``pr_auc`` (needs both classes present) is NaN too -- both cases explicit, never silently
+    defaulted to 0 or 1.
+    """
+    pk = pred_key.reset_index(drop=True)
+    rows: list[dict[str, object]] = []
+    for key, grp in de_calls.groupby(["patient", "drug"]):
+        patient, drug = cast("tuple[str, str]", key)
+        match = pk[(pk["patient"] == patient) & (pk["drug"] == drug)]
+        if match.empty:
+            continue
+        i = cast(int, match.index[0])
+        genes = grp["gene"].to_numpy()
+        pred_row = pred_delta.reindex(columns=genes).iloc[i].to_numpy(dtype=np.float64)
+        have = ~np.isnan(pred_row)
+        if not have.any():
+            continue
+        genes, pred_row = genes[have], pred_row[have]
+        by_gene = grp.set_index("gene").loc[genes]
+        real_lfc = by_gene["log2fc"].to_numpy(dtype=np.float64)
+        sig = by_gene["significant"].to_numpy(dtype=bool)
+        n_sig = int(sig.sum())
+
+        pr_auc = (
+            float(average_precision_score(sig, np.abs(pred_row)))
+            if 0 < n_sig < len(sig)
+            else float("nan")
+        )
+        if n_sig == 0:
+            de_spearman_lfc = overlap = jaccard = float("nan")
+        else:
+            de_spearman_lfc = float(np.asarray(spearmanr(pred_row[sig], real_lfc[sig]))[0])
+            order = np.argsort(-np.abs(pred_row))
+            pred_top_n = set(genes[order[:n_sig]])
+            true_sig = set(genes[sig])
+            inter = len(pred_top_n & true_sig)
+            overlap = inter / n_sig
+            union = len(pred_top_n | true_sig)
+            jaccard = inter / union if union else float("nan")
+        rows.append(
+            {
+                "patient": patient,
+                "drug": drug,
+                "de_spearman_lfc": de_spearman_lfc,
+                "pr_auc": pr_auc,
+                "de_overlap_accuracy": overlap,
+                "jaccard": jaccard,
+                "n_sig_genes": n_sig,
+            }
+        )
+    if not rows:
+        raise ValueError("pred_key and de_calls share no (patient, drug) pairs")
+    return pd.DataFrame(rows)
+
+
+def score_de_metrics(
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    de_calls: pd.DataFrame,
+) -> pd.DataFrame:
+    """DE-metrics analogue of ``score_delta_sources``: one row per delta source, averaged over
+    its matched (patient, drug) pairs' DE Spearman LFC / PR-AUC / DE Overlap Accuracy / Jaccard
+    (``de_fidelity``), against the same ground-truth DE-calls bundle
+    (``fmharness.deltas.build_tahoe_de_calls``). Pairs with zero real-significant genes contribute
+    NaN to the rank-based columns for that source and are excluded from those means via pandas'
+    default ``skipna``, but still count toward the ``pr_auc`` mean when it is defined.
+    """
+    rows: list[dict[str, object]] = []
+    for name, (d, kk) in sources.items():
+        f = de_fidelity(d, kk, de_calls)
+        rows.append(
+            {
+                "source": name,
+                "de_spearman_lfc": round(float(f["de_spearman_lfc"].mean()), 3),
+                "pr_auc": round(float(f["pr_auc"].mean()), 3),
+                "de_overlap_accuracy": round(float(f["de_overlap_accuracy"].mean()), 3),
+                "jaccard": round(float(f["jaccard"].mean()), 3),
+                "n_pairs": len(f),
             }
         )
     return pd.DataFrame(rows)
