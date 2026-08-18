@@ -14,6 +14,7 @@ from fmharness.deltas import (
     build_generated_deltas,
     build_knn_deltas,
     build_learned_deltas,
+    build_tahoe_de_calls,
     build_tahoe_deltas,
     drug_pert_maps,
     learned_gene_panel,
@@ -229,6 +230,63 @@ def test_build_tahoe_deltas_pseudobulks_and_logfc() -> None:
     for p in ("ACH-1", "CVCL_2"):
         row = delta[key["patient"].to_numpy() == p].to_numpy()[0]
         assert np.allclose(row, trt_lc.loc[p].to_numpy() - base_lc.loc[p].to_numpy())
+
+
+def test_build_tahoe_de_calls_significant_gene_flagged_by_wilcoxon_and_lfc() -> None:
+    # one line, one drug; gene A clearly separates control vs treated (Wilcoxon-significant,
+    # large log2fc); gene B is flat (not significant). n=6/group gives the rank-sum test enough
+    # resolution to reach padj < 0.05 on a complete separation (the minimum possible two-sided
+    # exact p-value at n1=n2=6 is ~0.0043, well under 0.05; at n=2/group it could never go below
+    # 1/3, so this fixture needs >=6 cells per group, not the 2-per-group used elsewhere in this
+    # file for pseudobulk-only tests).
+    #
+    # gene B's raw count (1000) is held constant across every cell (both groups) but must stay
+    # LARGE relative to gene A's swing (1 -> 50): build_tahoe_de_calls library-size-normalizes
+    # (CPM) before testing, and in a toy 2-gene panel a small, unchanged B would still get
+    # compositionally diluted by A eating up an outsized share of the per-cell library (B=5
+    # would drop ~87% in CPM terms purely from A's swing, |log2fc| ~ 3.2 -- a false positive
+    # unrelated to Wilcoxon/BH correctness). B=1000 keeps A's swing to <5% of the library, so
+    # B's post-normalization log2fc stays under the 0.25 threshold, matching its true "flat"
+    # biological signal -- the same compositional effect real-data HVG panels absorb painlessly
+    # over thousands of genes, exaggerated here only because the fixture has just two.
+    genes = ["A", "B"]
+    ctl = np.array([[1.0, 1000.0]] * 6, dtype=np.float32)
+    trt = np.array([[50.0, 1000.0]] * 6, dtype=np.float32)
+    x = np.vstack([ctl, trt])
+    obs = pd.DataFrame(
+        {
+            "cell_id": ["ACH-1"] * 12,
+            "cell_line_id": ["CVCL_1"] * 12,
+            "pubchem_cid": ["0"] * 6 + ["100"] * 6,
+            "is_control": [True] * 6 + [False] * 6,
+        }
+    )
+    adata = ad.AnnData(X=x, obs=obs)
+    adata.var_names = genes
+
+    calls = build_tahoe_de_calls(adata)
+
+    assert set(calls.columns) == {"patient", "drug", "gene", "log2fc", "padj", "significant"}
+    assert set(map(tuple, calls[["patient", "drug"]].drop_duplicates().to_numpy())) == {
+        ("ACH-1", "100")
+    }
+    a = calls[calls["gene"] == "A"].iloc[0]
+    b = calls[calls["gene"] == "B"].iloc[0]
+    assert bool(a["significant"])
+    assert a["log2fc"] > 0  # treated > control
+    assert a["padj"] < 0.05
+    assert not bool(b["significant"])
+
+
+def test_build_tahoe_de_calls_uses_paper_grounded_default_thresholds() -> None:
+    # locks in the exact threshold decision (Methods 4.8's cell-eval LFC/FDR pair -- the only
+    # concrete number the paper states anywhere for cell-eval-based DE calling) as an explicit,
+    # checkable contract rather than an accidental default.
+    import inspect
+
+    sig = inspect.signature(build_tahoe_de_calls)
+    assert sig.parameters["lfc_threshold"].default == 0.25
+    assert sig.parameters["fdr_threshold"].default == 0.05
 
 
 def test_pseudobulk_de_to_deltas_pools_doses_and_rekeys() -> None:

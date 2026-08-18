@@ -32,6 +32,7 @@ from typing import cast
 import anndata as ad
 import numpy as np
 import pandas as pd
+import scanpy as sc
 from scipy import sparse
 from sklearn.decomposition import NMF, PCA
 from sklearn.linear_model import Ridge
@@ -678,6 +679,95 @@ def build_tahoe_deltas(
     )
     key = pd.DataFrame({"patient": tpat[keep], "drug": tdrug[keep]})
     return delta, key, base
+
+
+def build_tahoe_de_calls(
+    adata: ad.AnnData,
+    *,
+    lfc_threshold: float = 0.25,
+    fdr_threshold: float = 0.05,
+) -> pd.DataFrame:
+    """Ground-truth per-(line, drug, gene) DE calls: two-sided Wilcoxon rank-sum test (treated
+    vs. that line's own DMSO control cells), Benjamini-Hochberg FDR correction, significant =
+    ``(padj < fdr_threshold) & (|log2fc| > lfc_threshold)`` -- the paper's own cell-eval-based DE
+    procedure (Methods 4.6.3: "Wilcoxon rank-sum tests for DE detection and Benjamini-Hochberg
+    correction... cell-eval v0.6.6 with default parameters"; the default thresholds here come
+    from Methods 4.8's "LFC threshold of 0.25 and a FDR threshold of 0.05 for cell-eval
+    evaluations" -- the only concrete LFC/FDR pair stated anywhere in the paper for a cell-eval
+    DE call). Uses ``scanpy.tl.rank_genes_groups(method="wilcoxon")``, which already implements
+    this exact test + BH correction, rather than a hand-rolled scipy loop.
+
+    Loops once per cell line (not per (line, drug) pair): for each line, every drug applied in
+    that line is compared against the line's own control cells in a single ``rank_genes_groups``
+    call (scanpy natively supports multiple groups vs. one reference), so the gene-level
+    computation for every drug in that line is vectorized together.
+
+    Returns one row per (line, drug, gene): ``patient, drug, gene, log2fc, padj, significant`` --
+    the ground-truth side of Check 1's DE metrics (``fmharness.evaluation.de_fidelity``); the
+    predicted side needs no test (ranked by ``|log2fc|`` alone -- see that function's docstring).
+    """
+    obs = adata.obs
+    genes = pd.Index([str(v) for v in adata.var_names])
+    cid = obs["cell_id"].astype(str).to_numpy()
+    cln = obs["cell_line_id"].astype(str).to_numpy()
+    patient = np.where((cid != "") & (cid != "nan"), cid, cln)
+    drug = obs["pubchem_cid"].astype(str).to_numpy()
+    is_ctl = obs["is_control"].to_numpy(dtype=bool)
+
+    x = adata.X
+    xc = cast(
+        "sparse.csr_matrix",
+        x if sparse.issparse(x) else sparse.csr_matrix(np.asarray(x, dtype=np.float64)),
+    )
+    lib = np.asarray(xc.sum(axis=1)).ravel()
+    lib[lib == 0] = 1.0
+    log1p_cpm = xc.multiply(1e4 / lib[:, None]).tocsr()
+    log1p_cpm.data = np.log1p(log1p_cpm.data)
+
+    rows: list[pd.DataFrame] = []
+    for line in sorted(set(patient[is_ctl])):
+        line_mask = patient == line
+        ctl_mask = line_mask & is_ctl
+        trt_mask = line_mask & ~is_ctl
+        if not ctl_mask.any() or not trt_mask.any():
+            continue
+        idx = np.flatnonzero(ctl_mask | trt_mask)
+        group = np.where(is_ctl[idx], "control", drug[idx])
+        drugs_here = [str(d) for d in pd.unique(group) if str(d) != "control"]
+        if not drugs_here:
+            continue
+        sub = ad.AnnData(
+            X=log1p_cpm[idx],
+            obs=pd.DataFrame({"de_group": group}, index=pd.Index([str(i) for i in idx])),
+            var=pd.DataFrame(index=genes),
+        )
+        sc.tl.rank_genes_groups(
+            sub, groupby="de_group", groups=drugs_here, reference="control", method="wilcoxon"
+        )
+        # group=None returns every tested group's rows concatenated in one DataFrame (with its
+        # own "group" column) -- no per-drug loop needed alongside the per-line loop above. When
+        # exactly one drug is tested against control, rank_genes_groups_df drops the "group"
+        # column entirely ("backward compat" for the single-group case) -- restore it explicitly
+        # rather than indexing a column that may not exist.
+        res = sc.get.rank_genes_groups_df(sub, group=None)
+        if "group" not in res.columns:
+            res = res.assign(group=drugs_here[0])
+        rows.append(
+            pd.DataFrame(
+                {
+                    "patient": line,
+                    "drug": res["group"].to_numpy(),
+                    "gene": res["names"].to_numpy(),
+                    "log2fc": res["logfoldchanges"].to_numpy(dtype=float),
+                    "padj": res["pvals_adj"].to_numpy(dtype=float),
+                }
+            )
+        )
+    if not rows:
+        raise ValueError("no (line, drug) pair had both control and treated cells")
+    out = pd.concat(rows, ignore_index=True)
+    out["significant"] = (out["padj"] < fdr_threshold) & (out["log2fc"].abs() > lfc_threshold)
+    return out
 
 
 def pseudobulk_de_to_deltas(
