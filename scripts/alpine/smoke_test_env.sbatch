@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=smoke-env
-#SBATCH --partition=aa100
+#SBATCH --partition=ah200
 #SBATCH --qos=gpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h200:1
 #SBATCH --time=00:30:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
@@ -34,14 +34,17 @@
 # show node`) is a DIFFERENT partition that uses this project's already-proven `gpu-normal` QoS
 # (same as aa100) -- no special access needed. Its nodes carry a MIX of full and MIG-sliced H200
 # GPU types (`gpu:h200` vs `gpu:h200_2g.35gb` / `gpu:h200_3g.71gb`), so an ah200 submission needs
-# an explicit, non-MIG GRES type or it may land on a partial-memory slice:
+# an explicit, non-MIG GRES type or it may land on a partial-memory slice (the #SBATCH directives
+# above already specify it).
 #
-#   sbatch --job-name=smoke-ah200 --partition=ah200 --qos=gpu-normal --gres=gpu:h200:1 \
+# 2026-08-18, later: aa100 was carrying a long queue backlog while ah200 ran near-immediately
+# (confirmed job 31418001), so ah200 is now this repo's default for every GPU job, not just this
+# smoke test -- see 04_stack_generate.sbatch, 06_stack_embed.sbatch, 09_stack_finetune.sbatch.
+# To fall back to aa100 (e.g. if ah200 itself backs up later), override on the command line --
+# sbatch CLI flags take precedence over in-script #SBATCH lines:
+#
+#   sbatch --job-name=smoke-aa100 --partition=aa100 --qos=gpu-normal --gres=gpu:1 \
 #       scripts/alpine/smoke_test_env.sbatch
-#
-# The #SBATCH directives above default to aa100 (this project's fully proven target); the command
-# above overrides them for an ah200 run -- sbatch CLI flags take precedence over in-script
-# #SBATCH lines. Submit both to compare queue time.
 #
 # CONFIRM BEFORE RUNNING (this worktree's own paths, not derivable here):
 #   * CKPT_ALIGNED / CKPT_SCIPLEX below -- verify both actually exist at these paths on Alpine

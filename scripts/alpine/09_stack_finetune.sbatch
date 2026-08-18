@@ -1,12 +1,15 @@
 #!/bin/bash
 #SBATCH --job-name=stack-finetune
-#SBATCH --partition=aa100
+#SBATCH --partition=ah200             # aa100 has a long queue backlog; ah200 (H200, same
+                                       # gpu-normal QoS) is the confirmed-working, shorter-queue
+                                       # default for all GPU jobs in this repo (2026-08-18).
 #SBATCH --qos=gpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:h200:1             # ah200 mixes full and MIG-sliced H200 types; explicit
+                                       # type required or the job may land on a partial slice.
 #SBATCH --time=8:00:00              # real run, 10 epochs; re-tune once epoch time is observed
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
