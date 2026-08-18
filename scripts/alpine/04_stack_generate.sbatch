@@ -12,14 +12,14 @@
                                      # fuller per-step schedule may also cost more than vanilla's
                                      # fixed ratio -- confirm on Task 7's first real run and raise
                                      # this if any array task approaches the limit.
-#SBATCH --array=0-32%16              # 33 drugs = tasks 0-32; %16 caps concurrent A100s.
+#SBATCH --array=0-32%16              # 33 drugs = tasks 0-32; %16 caps concurrent H200s.
 #SBATCH --output=logs/%x-%A_%a.out   #   override with --array=<N> to run a single drug.
 #SBATCH --error=logs/%x-%A_%a.out
 #
 # Stack-Large-Aligned in-context generation, one drug per GPU task, reading the per-drug
 # context shards 03 produced. --split-column pert_id groups the base cells by drug and
 # --split-values "$PERT" restricts each task to its own drug (the shard also holds DMSO),
-# generating the query (test-adata) treated state under that drug. Parallelized across A100s.
+# generating the query (test-adata) treated state under that drug. Parallelized across H200s.
 #
 # QUERY is tahoe_query.h5ad (the per-line control baselines 03 writes) -- the same file
 # 05 passes as --query-baseline, so the scored delta is generated - this baseline.
