@@ -1,7 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=tahoe-context
 #SBATCH --partition=amem
-#SBATCH --qos=long                   # generous ceiling; the pushed-down read is typically ~1-2h
+#SBATCH --qos=mem-long               # generous ceiling; the pushed-down read is typically ~1-2h
+                                      # amem only accepts admin/mem-normal/mem-long -- "long"
+                                      # (valid under the old, retired amilan partition) errors
+                                      # with "Error 1: The amem partition accepts the following
+                                      # QoS values: admin or mem-normal or mem-long"
 #SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
