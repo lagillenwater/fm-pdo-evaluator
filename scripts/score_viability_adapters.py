@@ -76,6 +76,11 @@ def main() -> None:
         help="gene sets for the hallmark adapter",
     )
     ap.add_argument("--n-permutations", type=int, default=1000)
+    ap.add_argument(
+        "--out-csv",
+        default=None,
+        help="also write the source x adapter results table here (for downstream plotting)",
+    )
     ap.add_argument("--time", type=float, default=24.0)
     ap.add_argument("--chunk", type=int, default=2000)
     ap.add_argument("--treated-cap", type=int, default=8)
@@ -178,8 +183,12 @@ def main() -> None:
                 }
             )
 
+    results = pd.DataFrame(out)
     print("\n=== delta source x viability adapter vs Soragni AUC ===")
-    print(pd.DataFrame(out).to_string(index=False))
+    print(results.to_string(index=False))
+    if args.out_csv:
+        results.to_csv(args.out_csv, index=False)
+        print(f"\nwrote {args.out_csv}")
 
 
 if __name__ == "__main__":
