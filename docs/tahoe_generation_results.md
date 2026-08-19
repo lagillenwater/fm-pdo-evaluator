@@ -10,6 +10,11 @@ per-line control baseline. Every delta source is judged on equal footing:
 - **Check 1 (generation quality, label-free):** per-(line, drug) delta-Pearson vs the real
   Tahoe delta, plus an off-diagonal correlation and a specificity rank (catch a source that
   is merely smooth). Ceiling = delta reproducibility.
+- **Check 1b (2026-08-19, DE-restricted, label-free):** the same idea restricted to genes real
+  single-cell Wilcoxon testing calls significantly changed, instead of the full dense profile —
+  Spearman on the real-significant genes' LFC, PR-AUC, top-N overlap/Jaccard. Permutation-null
+  significance (shuffle the pair label a predicted delta claims) in place of an off-diagonal
+  correlation.
 - **Gate:** the real delta scored through Hallmark vs random gene sets — is the readout even
   powered on this data?
 - **Check 2 (end-to-end vs GDSC2 AUC, grouped 5-fold by cell line):** fixed signature readouts, and a
@@ -33,12 +38,29 @@ checkpoint variants: cytokine-aligned, drug-aligned-unfiltered, and drug-aligned
 | **stack (gen, cytokine-aligned)** | **0.012** | −0.002 | 0.644 | 1568 |
 | stack (gen, drug-aligned, unfiltered) | 0.021 | 0.006 | 0.665 | 1568 |
 | stack (gen, drug-aligned, leak-excluded) | 0.021 | 0.006 | 0.665 | 1563 |
+| stack (gen, cytokine-aligned, faithful `--mode mdm`, 2026-08-19) | −0.001 | −0.005 | 0.538 | 1568 |
+| stack (gen, drug-aligned, faithful `--mode mdm`, 2026-08-19) | 0.006 | −0.002 | 0.593 | 1508 |
 
 **Pairs are not all from the same run.** Baseline rows (additive/knn/pca/nmf) are scored on the
 unfiltered 1,600-pair design; the stack rows use Stack's own coverage (1,568), and the
 leak-excluded stack row further drops the 5 doubly-exposed A549/drug pairs (1,563). None of this
 changes any conclusion (~5/1300–1600 pairs is tiny) — noted here since it isn't visible from the
 table alone.
+
+**2026-08-19 — faithful generation procedure (Change 1), re-run.** The rows above (dated
+2026-08-13 and earlier) used `--mode vanilla` with `prompt+context = 0.901` — a fixed-ratio
+workaround adopted to dodge an `IndexError` at the old 50-row pseudobulk query baseline, not
+Stack's own generative procedure. The new rows use the CLI's actual default, `--mode mdm`:
+`context_ratio` scheduled over `linspace(0.2, 0.4, 5)`, confidence-guided selective unmasking
+carried between steps, `n_test_cells` ranging 179–281 per step — fed by a genuinely larger query
+pool (400 real single control cells, 8/line, replacing the old pseudobulk row) so the schedule's
+padding never truncates. Per-query-cell replicates are then confidence-filtered
+(`gen_logit < 0` — calibrated empirically against this Check-1 Pearson-Delta itself; see
+Reproducibility) and averaged to one row per line before scoring, matching Stack's own generation
+confidence classifier rather than a fixed literature threshold. **Both checkpoints still land in
+the same null band as the vanilla-mode rows** (r = −0.001 cytokine-aligned, 0.006 drug-aligned) —
+the faithful procedure does not recover the signal the workaround was suspected of suppressing.
+See "Check 1b" below, though, for a metric where the two procedures disagree.
 
 Ceiling (delta reproducibility, Tahoe plate split-half): **0.30 raw / 0.46 Spearman-Brown.**
 
@@ -52,6 +74,72 @@ doubles Stack's Check-1 correlation vs. the cytokine-aligned checkpoint (0.012 �
 both stay far below the additive floor (0.225) and the 0.46 ceiling, and leakage filtering does
 not change the drug-aligned number (0.021 unfiltered and leak-excluded alike;
 doubly_exposed_frac=0.003 on the ~5 doubly-exposed A549/drug pairs).
+
+## Check 1b — DE-based metrics (2026-08-19, faithful generation only)
+
+Pearson-Delta scores the full ~15,012-gene continuous profile, most of which is non-DE noise for
+any given (line, drug) pair — a model could nail the genes that actually moved and still post a
+near-zero `r` if it gets the other 14,900+ near-constant genes' fine structure wrong. `de_fidelity`
+(`fmharness.evaluation`) asks a narrower, sparser question instead: restricted to genes
+Wilcoxon-called significant in the real Tahoe single cells (`build_tahoe_de_calls`, LFC ≥ 0.25 /
+FDR ≤ 0.05, Stack paper Methods 4.8's cell-eval threshold), does the predicted delta rank/flag the
+right genes? Four metrics: `de_spearman_lfc` (rank correlation on the real-significant genes),
+`pr_auc` (average precision of |predicted delta| against the true significant/non-significant
+label), `de_overlap_accuracy` / `jaccard` (top-N-by-|predicted delta| vs. the true significant set,
+N = that pair's true significant-gene count).
+
+| source | de_spearman_lfc | pr_auc | overlap_accuracy | jaccard | pairs |
+|---|---|---|---|---|---|
+| additive | 0.389 | 0.012 | 0.017 | 0.009 | 1568 |
+| knn | 0.382 | 0.010 | 0.009 | 0.005 | 1568 |
+| pca | 0.414 | 0.034 | 0.023 | 0.014 | 1568 |
+| nmf | 0.414 | 0.041 | 0.029 | 0.019 | 1568 |
+| stack (gen, cytokine-aligned, mdm) | 0.357 | 0.030 | **0.049** | **0.026** | 1600 |
+| **stack (gen, drug-aligned, mdm)** | **0.466** | **0.075** | 0.076 | 0.047 | 1518 |
+
+**Unlike Pearson-Delta, both Stack checkpoints beat every baseline here** — cytokine-aligned
+already leads on overlap_accuracy/jaccard; drug-aligned leads on all four, by close to 2x the best
+baseline on `pr_auc`. Point estimates alone, though, do not distinguish real (patient, drug)-
+specific signal from a generically-plausible predictor that would score above these baselines on
+*any* pairing — the same failure mode Pearson-Delta's `r_offdiag`/`rank` columns exist to catch.
+No `r_offdiag` analogue existed for the DE metrics, so before trusting this table a permutation
+null was run: shuffle which (patient, drug) label each predicted-delta row claims (`pred_key`'s
+row order only — the delta content is untouched), recompute the four metrics' means, 200 shuffles
+per checkpoint, one-sided p = fraction of shuffles reaching the real (correctly-paired) value.
+
+| checkpoint | metric | observed | null mean | null std | **specific lift** | p |
+|---|---|---|---|---|---|---|
+| cytokine-aligned | de_spearman_lfc | 0.357 | 0.129 | 0.0065 | **+0.228** | <0.005 |
+| cytokine-aligned | pr_auc | 0.030 | 0.023 | 0.0006 | **+0.0072** | <0.005 |
+| cytokine-aligned | overlap_accuracy | 0.049 | 0.035 | 0.0009 | **+0.0137** | <0.005 |
+| cytokine-aligned | jaccard | 0.026 | 0.019 | 0.0006 | **+0.0076** | <0.005 |
+| drug-aligned | de_spearman_lfc | 0.466 | 0.193 | 0.0061 | **+0.273** | <0.005 |
+| drug-aligned | pr_auc | 0.075 | 0.063 | 0.0008 | **+0.0119** | <0.005 |
+| drug-aligned | overlap_accuracy | 0.076 | 0.064 | 0.0012 | **+0.0123** | <0.005 |
+| drug-aligned | jaccard | 0.047 | 0.039 | 0.0010 | **+0.0075** | <0.005 |
+
+All 8 rows: 0/200 shuffles reached the observed value (true p is almost certainly far below the
+1/201 resolution floor here — every lift is 7–45 null standard deviations out, and the null
+distributions are tight, ~1500-pair means). **Both checkpoints carry real, statistically robust
+(patient, drug)-specific DE signal — this itself contradicts Pearson-Delta's null verdict.** But
+the null mean is not near zero for either checkpoint (de_spearman_lfc null ≈ 0.13–0.19) — a real
+generic/non-specific correlation floor, the DE-metric analogue of a smooth predictor's nonzero
+`r_offdiag`. Comparing checkpoints on the *specific lift* rather than the raw point estimate
+narrows drug-alignment's apparent edge and reverses it on two of four metrics: drug-aligned wins
+clearly on the ranking-type metrics (de_spearman_lfc +20% relative, pr_auc +65% relative) but is
+a wash on the set-identification metrics (overlap_accuracy: cytokine slightly ahead;
+jaccard: tied). Drug-alignment also raises its own generic floor across all four metrics — worth a
+follow-up look (are its deltas more broadly perturbation-plausible in a non-specific way, or is
+this sci-Plex-domain structure that partially transfers to Tahoe drugs regardless of identity?),
+not concerning on its own since the specific-signal finding stands either way.
+
+**Read this section as: the generation-quality question has two different answers depending on
+which axis you score.** Pearson-Delta (dense, whole-transcriptome) says both checkpoints are null.
+DE-based metrics (sparse, restricted to genes that actually moved) say both checkpoints carry real
+per-pair signal beyond baselines, with drug-alignment providing a real but modest edge on half the
+metrics. Neither reading is wrong; they are answering different questions about the same
+generated delta, and a dense correlation can be swamped by thousands of non-DE genes even when the
+sparse, biologically-relevant signal is real.
 
 ## Gate — Hallmark readout on the real delta vs random gene sets
 
@@ -69,6 +157,25 @@ random on Tahoe (so a death-signature readout is underpowered here).
 
 Trained penalized regression. global = overall potency, interaction = cell-line-specific
 response, per-drug = within-drug line ranking, p_label = label-permutation p on interaction.
+
+**Representations tested.** Check 2 runs two separate analyses: (a) fixed-signature Hallmark
+readouts, no model fit, applied only to the 6 delta sources; (b) the penalized-regression grid
+below, applied to all 10 representations (source of the ladder table). Every representation in
+(b) is scored through the *same* model class per Kurilov (2020) — RidgeCV/LassoCV/ElasticNetCV,
+alpha tuned per representation via inner 3-fold CV — under leave-cell-line-out grouped 5-fold CV,
+so a difference across rows is the representation, not the model.
+
+| representation | kind | mechanism | key params |
+|---|---|---|---|
+| expr | raw baseline expression | the untreated (DMSO) cell state itself — no delta, no drug information in the representation | top 2,000 HVGs |
+| additive | baseline delta | each drug's mean real Tahoe delta across every *other* line, broadcast flat to the held-out line — ignores the line entirely; the drug-main-effect floor | leave-one-line-out |
+| knn | baseline delta | mean real delta of the *k* other lines whose baseline expression is most similar (cosine, standardized/L2-normalized), among lines treated with that drug — sees the query baseline like Stack does, but averages real neighbors instead of generating | k=10 |
+| pca | learned baseline→delta map | ridge-regress each drug's delta *residual* (delta − drug mean) on PCA components of the per-line baseline, predict, add the drug mean back — an organoid-specific correction on top of the additive floor | 20 components, ridge α=1.0, Hallmark-restricted gene panel |
+| nmf | learned baseline→delta map | same as pca, non-negative matrix factorization instead of PCA | same params |
+| stack (gen, cytokine-aligned) | FM-generated delta | Stack-Large in-context-generated post-drug state minus the per-line control baseline, cytokine-aligned checkpoint | see Check 1 methodology |
+| stack (gen, drug-aligned, unfilt./leak-excl.) | FM-generated delta | same, sci-Plex drug-aligned checkpoint; leak-excluded drops the ~5 doubly-exposed A549/drug pairs | see Check 1 methodology |
+| base (embed) | learned representation, not a delta | the per-line Stack embedding from the *unaligned* `bc_large.ckpt` encoder, fed directly into the regression as a feature vector — no generation head, no drug info | encoder only |
+| aligned (embed) | learned representation, not a delta | same, from the cytokine-aligned checkpoint's encoder | encoder-stripped from `bc_large_aligned.ckpt` |
 
 **Splitting — corrected.** The delta *sources* are rebuilt genuinely leave-one-line-out
 (`_loo_baseline_source`), but the penalized fit is **grouped 5-fold**, not leave-one-out:
@@ -197,23 +304,53 @@ cell-line-specific interaction is ≈0 and non-significant for all except base-e
 > base rate (shuffled shortlist) so saturation does not read as skill. Needs GDSC2
 > `PATHWAY_NAME`/`PUTATIVE_TARGET` joined to the drug table (not in the current context map).
 
-> **Proposed — are all the models just picking the same few toxic drugs?** The direct way to
-> answer this is not another summary statistic; it is to look at the actual shortlists. For each
-> representation, write down the drug it ranks #1 for each of the ~50 cell lines, and put that
-> next to the drug that *actually* was best for that line:
+> **Answered (2026-08-19) — are all the models just picking the same few toxic drugs?** Filled in
+> by replicating `check2_registry_driver.run_check2`'s representation construction but keeping
+> `penalized_preds`'s per-pair predictions instead of letting `score_check2` discard them (no
+> library code changed — the function already returns exactly this), picking each
+> representation's best-gap@1 penalty (matching how the published SEL_GAP table's own "best of
+> L1/L2/EN" was built — this reconstruction's own gap@1 values reproduce SEL_GAP to 3 decimals
+> for every non-stack representation, confirming it's a faithful replay), then scoring the actual
+> #1 picks (n=44 of 50 lines scored) against the same broadly-active definition
+> `scripts/pick_concentration_reference.py` used for the truth/prior rows:
 >
-> | | distinct drugs ever picked #1 | most-picked drug, and its share of lines | share of #1 picks that are broadly active |
+> | | distinct drugs ever picked #1 (of 26) | most-picked drug's share of lines | share of #1 picks that are broadly active |
 > |---|---|---|---|
-> | observed best (the truth) | *reference* | *reference* | *reference* |
+> | observed best (the truth) | 6.7 (95% 2–13) | 89% (95% 49–100%) | *reference* |
 > | potency prior (ignores the cell line) | 1 by construction | 100% | 100% |
-> | expr / pca / nmf / additive / knn | ? | ? | ? |
-> | stack (gen delta) | ? | ? | ? |
-> | base (embed) | ? | ? | ? |
+> | additive | 3 | 86.4% | 100% |
+> | knn | 3 | 86.4% | 100% |
+> | nmf | 3 | 86.4% | 100% |
+> | pca | 4 | 86.4% | 97.7% |
+> | base (embed) | 4 | 81.8% | 97.7% |
+> | aligned (embed) | 4 | 88.6% | 97.7% |
+> | expr | 7 | 65.9% | 88.6% |
+> | stack (gen, cytokine-aligned) | 5 | 54.5% | 88.6% |
+> | stack (gen, drug-aligned, unfiltered) | 7 | 70.5% | 93.2% |
 >
 > "Broadly active" = a drug whose AUC is below the line's own median in most lines — i.e. the
 > compounds that work on nearly everything. Read the table like this: **if a representation picks
 > only 1–2 distinct drugs across all 50 lines, it is ranking toxicity and nothing else.** If its
 > pick distribution resembles the observed one, it is doing something cell-line-specific.
+>
+> **Result: the regression baselines (additive/knn/nmf/pca) ARE just ranking toxicity** — 3–4
+> distinct picks, 82–86% modal share, both far more concentrated than the truth's own 6.7/89%
+> reference and close to the 1-drug/100% potency-prior floor. **expr and both stack rows are
+> the least concentrated** (5–7 distinct drugs, 55–71% modal share) — closer to, though still
+> more concentrated than, the observed truth. This does not contradict finding 4 (only the base
+> embedding shows a significant trained-ridge *interaction* term): a representation can shortlist
+> more diverse drugs without those picks being more *correct* — gap@1 for stack and expr is
+> actually the *worst* in the table (0.32–0.36 vs. 0.22–0.26 for the tightly-concentrated
+> baselines), so their extra diversity isn't (yet) buying better selections, just less pure
+> potency-chasing. Caveat: the stack rows pair the Aug-12 vanilla-mode generated deltas (whatever
+> produced the currently-published CHECK2_RIDGE/SEL_GAP numbers) with the newer
+> `tahoe_query_baseline.h5ad`, since the original 50-row pseudobulk query baseline wasn't
+> preserved — an approximation on baseline *magnitude*, not on per-line *ranking*, which is what
+> top-1-pick concentration actually depends on.
+>
+> **Still open:** the potency-prior-vs-gap@1 comparison below (a genuinely separate check — the
+> prior needs each model's coefficients zeroed, not a different data source) has not been
+> measured; the ≈0.06–0.11 estimate remains a prediction, not a result.
 >
 > **The truth is itself concentrated, which is the trap.** Across 955 GDSC2 lines the observed
 > best drug is one of only 13 distinct compounds, and Staurosporine alone is best for 69% of
@@ -232,13 +369,13 @@ cell-line-specific interaction is ≈0 and non-significant for all except base-e
 > ≈ 0.06–0.11 against 0.22–0.36 for every representation, so the expected result is that the
 > prior *wins* — a stronger statement than "confounded by toxicity".
 >
-> **Why we cannot answer this today, and the fix.** `fmharness.check2.penalized_preds` builds the
-> per-(line, drug) prediction frame, scores it, and discards it; nothing in
-> `results/` holds per-pair predictions, so the picks are unrecoverable. Emitting `y_prior` in the
-> fold loop and dumping `(source, penalty, patient, drug, y_true, y_pred, y_prior)` to
-> `results/check2_preds.parquet` is ~10 lines, after which the table above and the prior
-> comparison are a groupby. `_personalization` (`per_patient_eval.py:444`) already computes the
-> distinct-count and modal-share columns and already carries the observed row as its reference.
+> **The `y_prior` fix is still the right next step for the prior comparison.**
+> `fmharness.check2.penalized_preds` builds the per-(line, drug) prediction frame and returns it
+> unchanged — `score_check2` is what discards it, which is why the table above only needed a new
+> script, not a library change. But `y_prior` (the same fitted model with its coefficients
+> zeroed) isn't in that returned frame at all, so the potency-prior-vs-gap@1 comparison still
+> needs the fold loop itself changed (~10 lines, per the original estimate) before it can be
+> measured rather than predicted.
 >
 > **If the answer comes back "yes, concentrated"**, the follow-up is to stop scoring selection in
 > raw AUC and score it in percentile-within-drug instead (each drug's out-of-fold rank among
@@ -282,6 +419,18 @@ genuine prediction gap, not label noise.
    cell-line-specific drug response (interaction 0.119, per-drug 0.200, p = 0.001, ridge).
    Cytokine-alignment does not help (base > aligned). So Stack carries drug-response-relevant
    structure — in the cell-state **embedding**, not the generative **delta**.
+5. **The Pearson-Delta null survives switching to Stack's faithful generation procedure, but a
+   DE-restricted metric tells a different story (Check 1b).** Re-running Check 1 under
+   `--mode mdm` (the CLI's own confidence-guided schedule, not the `vanilla` workaround) leaves
+   both checkpoints in the same null band (r = −0.001 / 0.006) — finding 1 was not an artifact of
+   the workaround. But scored on DE-restricted metrics instead of the full dense profile, both
+   checkpoints show real, permutation-significant (patient, drug)-specific signal beyond every
+   baseline (p < 0.005, 7–45 null-SDs out on every metric) — Pearson-Delta's whole-transcriptome
+   average was swamping a real sparse signal in ~15,000 mostly-non-DE genes. Drug-alignment gives
+   a real, permutation-confirmed edge on the ranking-type DE metrics (de_spearman_lfc, pr_auc) but
+   not on the set-identification ones (overlap_accuracy, jaccard) once each checkpoint's own
+   generic-correlation floor is subtracted out — a real, modest, partial confirmation of the
+   drug-alignment hypothesis, not the clean 2x win the raw point estimates alone suggested.
 
 ## Relation to the Stack preprint
 
@@ -319,6 +468,27 @@ incremental FM-vs-PCA gaps typical of the paper's embedding tables. Both are con
   mode.** Drug alignment moves Check-1 r from 0.012 to 0.021 (see the Check 1 table above) —
   still null either way, both far below the additive floor (0.225) and the 0.46 ceiling.
   Consistent with finding 4: the embedding story holds regardless of checkpoint.
+- **Faithful generation procedure + DE-based metrics — done, answered (2026-08-19).** Two
+  open items: (a) the vanilla-mode workaround above was a materially simpler fixed-ratio
+  procedure than Stack's own default (`--mode mdm`, confidence-guided scheduled unmasking) — was
+  the null an artifact of that workaround? (b) Pearson-Delta scores the full dense profile —
+  would a metric restricted to genes that actually moved tell a different story? Fixed the
+  sci-Plex identity-missing-cell bug (54,100 → 17,578 correct controls), re-ran `08`→`09` on the
+  corrected input, re-ran `03`→`04` under `--mode mdm` with a 400-real-cell query pool
+  (replacing the 50-row pseudobulk baseline that forced the vanilla workaround), added a
+  confidence-filtered replicate-aggregation step (`gen_logit`-based, calibrated empirically) and
+  a ground-truth Wilcoxon DE-calls bundle. **Answers: (a) no — the faithful procedure lands in
+  the same Pearson-Delta null band. (b) yes — DE-restricted metrics show real,
+  permutation-significant per-pair signal in both checkpoints that Pearson-Delta was missing.**
+  See Check 1b and finding 5.
+- **"Are the top picks just the pan-toxic drugs?" per-representation table — done, answered
+  (2026-08-19).** `fmharness.check2.penalized_preds` already returns full per-pair predictions;
+  no library change was needed, just a script that keeps what `score_check2` was discarding.
+  **Answer: yes for the regression baselines, less so for expr and stack.** additive/knn/nmf/pca
+  pick only 3–4 distinct drugs at 82–86% modal share (close to the 1-drug/100% potency-prior
+  floor); expr and both stack checkpoints pick 5–7 distinct drugs at 55–71% share (closer to the
+  observed truth's 6.7/89%) but with *worse* gap@1 — more diverse shortlists, not yet more
+  correct ones. See the Check-2 "Proposed" section (now answered) for the full table and caveats.
 
 ## Reproducibility
 
@@ -327,3 +497,22 @@ generate → score), `06`/`07` (embeddings), `08`/`09` (sci-Plex alignment). Get
 to run required `--split-column pert_id --split-values "$PERT"`, `--mode vanilla`, and
 `prompt+context = 0.901` (so n_test = 50 = the query size, no padding into Stack's 512-cell set).
 Key commits: 4720b63 (generation wiring), 6a3fa7a (scorer crash fix), 3ce6a02 (`--stack-emb`).
+
+**2026-08-19 update — faithful procedure supersedes the vanilla workaround above for all rows
+dated 2026-08-19.** `03_stack_context.sbatch` now writes a 400-real-cell query pool (8/line, real
+single cells, not a pseudobulk row) large enough for `04_stack_generate.sbatch`'s
+`--mode mdm --prompt-ratio 0.25 --context-ratio 0.4 --context-ratio-min 0.2` (Stack's own default
+schedule) without the old workaround's `IndexError`. Per-query-cell replicates are reduced with
+`fmharness.stack_aggregate.aggregate_generated_replicates` (keep `gen_logit < 0`, empirically
+calibrated against Check-1 Pearson-Delta — see the threshold sweep in the implementation plan's
+Task 7 Step 6) before scoring; `fmharness.stack_aggregate.collapse_query_baseline` reduces the
+same query pool to a line-indexed baseline for `--query-baseline` (required — `04`'s query file is
+cell-indexed, `build_generated_deltas` joins on the AnnData index directly). DE-calls bundle:
+`scripts/build_tahoe_de_calls.py` (Wilcoxon per line, LFC ≥ 0.25 / FDR ≤ 0.05, Stack paper Methods
+4.8's threshold) → `fmharness.evaluation.{de_fidelity,score_de_metrics}`. Both driven end-to-end
+by `scripts/check1_registry_driver.py --deltas-bundle tahoe_deltas --query-baseline
+tahoe_query_baseline.h5ad` (Check 1) and the one-off pattern in the implementation plan's Task 10
+Step 2 (Check 1b). Permutation significance for Check 1b: shuffle `pred_key`'s row order (not
+`pred_delta`'s), 200 shuffles/checkpoint, one-sided p = frac(null ≥ observed) — script not
+committed (matches this project's own uncommitted one-off-analysis convention). Plan:
+`docs/superpowers/plans/2026-08-18-stack-faithful-generation-and-de-metrics.md`.

@@ -39,15 +39,13 @@ CHECK1_ROWS = [
     ("nmf", "0.221", "0.088", "0.912", "1600", None),
     ("pca", "0.207", "0.083", "0.896", "1600", None),
     ("knn", "0.178", "0.067", "0.904", "1600", None),
-    ("stack (gen, cytokine-aligned)", "0.012", "-0.002", "0.644", "1568", "red"),
-    ("stack (gen, drug-aligned, unfiltered)", "0.021", "0.006", "0.665", "1568", "red"),
-    ("stack (gen, drug-aligned, leak-excluded)", "0.021", "0.006", "0.665", "1563", "red"),
+    ("stack (gen, cytokine-aligned, mdm, 2026-08-19)", "-0.001", "-0.005", "0.538", "1568", "red"),
+    ("stack (gen, drug-aligned, mdm, 2026-08-19)", "0.006", "-0.002", "0.593", "1508", "red"),
 ]
 CHECK1_TAKEAWAY = (
-    "Stack generation is null: r = 0.012, off-diagonal ~ 0, specificity rank 0.64 (random ~ 0.5) — "
-    "below the line-independent additive floor (0.225) and far below the 0.46 reproducibility ceiling. "
-    "Drug alignment roughly doubles the correlation (0.012 to 0.021) but both variants stay null, "
-    "still far below the additive floor."
+    "Re-run 2026-08-19 under Stack's faithful generation procedure (--mode mdm, not the earlier "
+    "vanilla workaround): still null on Pearson-Delta. But DE-restricted metrics tell a different "
+    "story (Check 1b, slide 6) — both checkpoints beat every baseline there, p < 0.005."
 )
 
 # --- Hallmark gate ------------------------------------------------------------------------
@@ -221,12 +219,15 @@ def build_slide5(slide) -> None:
     _textbox(
         slide,
         "How well each source reproduces the real Tahoe change "
-        "(1,600 line-drug pairs; 1,568 for Stack — top 2,000 variable genes)",
+        "(1,600 line-drug pairs; 1,568 cytokine-aligned / 1,508 drug-aligned for Stack — "
+        "top 2,000 variable genes)",
         left=0.40, top=1.02, width=12.50, height=0.31, size=12.5, bold=True,
     )
     # CHECK1 table: col0 widened to 4.45in so the long "stack (gen, drug-aligned, ...)" labels
     # fit on a single line at body_size=16 (verified with font-metric measurement — see the
-    # fix-round report). row_height (0.34) is unchanged; 8 rows (7 data + header) -> bottom 4.14.
+    # fix-round report). row_height (0.34) is unchanged; 7 rows (6 data + header, 2026-08-19:
+    # dropped from 7 to 6 data rows when the faithful-mode re-run replaced the vanilla-mode
+    # unfiltered/leak-excluded split with 2 checkpoint rows) -> bottom shifts up accordingly.
     _add_table(
         slide, CHECK1_HEAD, CHECK1_ROWS,
         left=0.40, top=1.42, widths=[4.45, 2.10, 1.55, 1.65, 0.70], row_height=0.34,
@@ -252,7 +253,7 @@ def build_slide6(slide) -> None:
     _clear_body(slide)
     _set_banner(
         slide,
-        "Current results — generation null; the base Stack embedding is the exception",
+        "Current results — Pearson-Delta null, DE metrics real; base embedding signal",
     )
     from PIL import Image  # noqa: PLC0415 -- only needed for the figure aspect ratio
 

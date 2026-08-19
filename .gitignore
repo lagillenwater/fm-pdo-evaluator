@@ -245,7 +245,10 @@ docs/results.md
 /generated_agg_*/
 /generated_drug_aligned/
 /generated_drug_aligned_agg/
+/generated_sciplex/
 /generated*.zip
+/emb_base.h5ad
+/emb_aligned.h5ad
 /stack_gdsc.csv
 /stack_soragni.csv
 /l1000_context*.h5ad
