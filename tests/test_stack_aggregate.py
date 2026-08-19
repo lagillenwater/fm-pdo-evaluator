@@ -9,7 +9,11 @@ import numpy as np
 import pytest
 
 from fmharness.deltas import build_generated_deltas
-from fmharness.stack_aggregate import aggregate_generated_replicates, collapse_query_baseline
+from fmharness.stack_aggregate import (
+    aggregate_generated_replicates,
+    build_synthetic_replicate_pool,
+    collapse_query_baseline,
+)
 
 
 @pytest.fixture
@@ -45,7 +49,9 @@ def test_aggregate_generated_replicates_filters_by_confidence_before_averaging(
 
     reduced = ad.read_h5ad(out_dir / "drugX.h5ad")
     assert list(reduced.obs_names) == ["L1"]  # L2 dropped: zero replicates survive the filter
-    assert np.allclose(np.asarray(reduced.X), [[11.0, 0.0]])  # mean of the two KEPT reps, not all three
+    assert np.allclose(
+        np.asarray(reduced.X), [[11.0, 0.0]]
+    )  # mean of the two KEPT reps, not all three
     naive_mean_gene_a = (10.0 + 12.0 + 100.0) / 3
     assert not np.isclose(float(np.asarray(reduced.X)[0, 0]), naive_mean_gene_a)
 
@@ -124,3 +130,91 @@ def test_collapse_query_baseline_closes_the_build_generated_deltas_index_gap(
     assert list(key["patient"]) == ["L1"]
     assert list(key["drug"]) == ["D1"]
     assert np.allclose(delta.to_numpy(), [[5.0, 0.0]])  # generated 11.0 - baseline 6.0, 0 - 0
+
+
+@pytest.fixture
+def bulk_baseline() -> ad.AnnData:
+    """A stack_input_sarcoma.h5ad-shaped fixture: one CPM row per patient, sums to 1e6."""
+    genes = ["A", "B", "C"]
+    x = np.array(
+        [
+            [500_000.0, 300_000.0, 200_000.0],  # P1
+            [100_000.0, 100_000.0, 800_000.0],  # P2
+        ],
+        dtype=np.float32,
+    )
+    baseline = ad.AnnData(X=x)
+    baseline.var_names = genes
+    baseline.obs_names = ["P1", "P2"]
+    return baseline
+
+
+def test_build_synthetic_replicate_pool_shape_and_ids(bulk_baseline: ad.AnnData) -> None:
+    pool = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=4, library_size=5000.0, seed=0
+    )
+
+    assert pool.n_obs == 8  # 2 patients x 4 replicates
+    assert list(pool.var_names) == ["A", "B", "C"]
+    counts = pool.obs["cell_line_id"].value_counts().to_dict()
+    assert counts == {"P1": 4, "P2": 4}
+
+
+def test_build_synthetic_replicate_pool_renormalizes_each_replicate_to_cpm(
+    bulk_baseline: ad.AnnData,
+) -> None:
+    pool = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=6, library_size=5000.0, seed=0
+    )
+
+    row_sums = np.asarray(pool.X).sum(axis=1)
+    assert np.allclose(row_sums, 1e6, atol=1.0)  # each replicate renormalized to CPM
+
+
+def test_build_synthetic_replicate_pool_is_deterministic_given_seed(
+    bulk_baseline: ad.AnnData,
+) -> None:
+    pool1 = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=4, library_size=5000.0, seed=0
+    )
+    pool2 = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=4, library_size=5000.0, seed=0
+    )
+
+    np.testing.assert_array_equal(np.asarray(pool1.X), np.asarray(pool2.X))
+
+
+def test_build_synthetic_replicate_pool_different_seeds_differ(bulk_baseline: ad.AnnData) -> None:
+    pool1 = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=4, library_size=5000.0, seed=0
+    )
+    pool2 = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=4, library_size=5000.0, seed=1
+    )
+
+    assert not np.allclose(np.asarray(pool1.X), np.asarray(pool2.X))
+
+
+def _mean_within_patient_std(pool: ad.AnnData) -> float:
+    # Std of replicates AROUND EACH PATIENT'S OWN MEAN, averaged over patients and genes --
+    # isolates per-replicate Poisson noise from the (much larger, library-size-independent)
+    # between-patient baseline gap a pooled std would otherwise be dominated by.
+    x = np.asarray(pool.X)
+    ids = pool.obs["cell_line_id"].to_numpy()
+    stds = [x[ids == pid].std(axis=0) for pid in np.unique(ids)]
+    return float(np.mean(stds))
+
+
+def test_build_synthetic_replicate_pool_larger_library_size_reduces_replicate_noise(
+    bulk_baseline: ad.AnnData,
+) -> None:
+    # Poisson relative noise scales as 1/sqrt(library_size); a bigger nominal depth should
+    # pull replicates closer to the original bulk profile (lower variance around the mean).
+    noisy = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=50, library_size=500.0, seed=0
+    )
+    smooth = build_synthetic_replicate_pool(
+        bulk_baseline, n_replicates=50, library_size=50_000.0, seed=0
+    )
+
+    assert _mean_within_patient_std(noisy) > _mean_within_patient_std(smooth)

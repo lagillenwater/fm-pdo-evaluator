@@ -131,3 +131,43 @@ def collapse_query_baseline(query_path: Path, out_path: Path) -> pd.DataFrame:
     baseline.var["feature_name"] = list(baseline.var_names)
     baseline.write_h5ad(out_path)
     return pd.DataFrame({"cell_line_id": [str(u) for u in uniq], "n_cells": counts.astype(int)})
+
+
+def build_synthetic_replicate_pool(
+    baseline: ad.AnnData,
+    *,
+    n_replicates: int,
+    library_size: float,
+    seed: int,
+) -> ad.AnnData:
+    """Expand a one-row-per-sample CPM baseline into a synthetic single-cell-like pool.
+
+    The inverse problem to ``collapse_query_baseline``: bulk data (one CPM row per
+    patient) has too few rows to satisfy Stack's ``--mode mdm`` scheduled draw (up to
+    ~281 cells from the whole query pool, independent of the true sample count -- see
+    04_stack_generate.sbatch/03's real-cell-pool comment), and unlike Tahoe's single-cell
+    panel there are no additional real cells to draw from. Poisson-resampling each
+    sample's CPM profile at a nominal single-cell ``library_size`` injects a count-level
+    noise magnitude in the range Stack was pretrained on (real, sparse single-cell data),
+    then renormalizes each replicate back to CPM so the output matches the query file's
+    own scale convention. These are NOT real cells -- a documented, seeded approximation,
+    not Tahoe's real-cell pool. ``library_size`` trades off noise magnitude: smaller is
+    noisier/more single-cell-like, larger converges toward re-feeding the bulk profile.
+    """
+    x = dense(baseline.X).astype(np.float64)
+    mean_counts = x / 1e6 * library_size
+    rng = np.random.default_rng(seed)
+    tiled_mean = np.repeat(mean_counts, n_replicates, axis=0)
+    counts = rng.poisson(tiled_mean)
+    row_sum = counts.sum(axis=1, keepdims=True).astype(np.float64)
+    row_sum[row_sum == 0] = 1.0
+    cpm = counts / row_sum * 1e6
+
+    sample_ids = np.asarray([str(s) for s in baseline.obs_names])
+    ids = np.repeat(sample_ids, n_replicates)
+    pool = ad.AnnData(X=cpm.astype(np.float32))
+    pool.obs_names = [str(i) for i in range(pool.n_obs)]
+    pool.obs["cell_line_id"] = ids
+    pool.var_names = [str(v) for v in baseline.var_names]
+    pool.var["feature_name"] = list(pool.var_names)
+    return pool
