@@ -1,24 +1,29 @@
 """Simple predictors of Soragni TREATED expression, judged exactly like Stack.
 
-Each method predicts the treated transcriptome for every (organoid, drug) from the
-SAME inputs Stack used -- the Soragni baseline + the L1000 drug context (NOT GDSC2) --
-then goes through the identical bridge: delta = predicted_treated - baseline, read by
-the death signature, scored against the real Soragni AUC with the random-gene-set
-control (score_signatures). So Stack's generated expression and these simple
-predictions are judged the same way, on the same organoid x drug pairs.
+Each method predicts the treated transcriptome for every (patient, drug) from the
+SAME inputs Stack used -- the Soragni tumor-RNA baseline + the L1000 drug context (NOT
+GDSC2) -- then goes through the identical bridge: delta = predicted_treated - baseline,
+read by the death signature, scored against the real Soragni AUC with the random-gene-
+set control (score_signatures). So Stack's generated expression and these simple
+predictions are judged the same way, on the same patient x drug pairs.
 
   control : predicted treated = baseline (delta 0). Does Stack beat 'no effect'?
-  mean    : baseline + the average L1000 drug delta. Organoid-independent -> drug-level
+  mean    : baseline + the average L1000 drug delta. Patient-independent -> drug-level
             floor, interaction ~0 by construction. The measured-perturbation floor.
   pca/nmf : a low-rank LINEAR control->treated map fit on the drug's L1000 cell lines,
-            applied to each organoid's baseline -> organoid-SPECIFIC predicted treated.
+            applied to each patient's baseline -> patient-SPECIFIC predicted treated.
             The 'does the foundation model beat a linear predictor' test. L1000 and
             Soragni are bridged by per-gene standardization into a shared space; if that
             naive bridge fails, that is itself the platform gap Stack is meant to close.
 
+--baseline must be the same tumor-RNA query file the generation step used
+(``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
+model input" switch) -- see score_viability_adapters.py's docstring for why
+``stack_input_soragni.h5ad`` is a stale, pre-switch default.
+
   uv run python scripts/predict_expression_baselines.py \\
       --l1000-context l1000_context_rich.h5ad \\
-      --baseline data/reference/stack_input_soragni.h5ad --signatures hallmark
+      --baseline data/reference/stack_input_sarcoma.h5ad --signatures hallmark
 """
 
 from __future__ import annotations
@@ -92,7 +97,7 @@ def _broadcast(
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--l1000-context", required=True, help="L1000 context .h5ad (rich preferred)")
-    ap.add_argument("--baseline", default="data/reference/stack_input_soragni.h5ad")
+    ap.add_argument("--baseline", default="data/reference/stack_input_sarcoma.h5ad")
     ap.add_argument("--signatures", choices=["curated", "hallmark"], default="hallmark")
     ap.add_argument("--n-components", type=int, default=10)
     ap.add_argument("--min-lines", type=int, default=5, help="min L1000 cell lines for the map")

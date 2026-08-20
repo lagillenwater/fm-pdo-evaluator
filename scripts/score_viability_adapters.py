@@ -4,20 +4,27 @@ The generation axis must be fair: the readout adapters (szalai/xgboost supervise
 real L1000 deltas vs GDSC2 AUC; hallmark unsupervised) are applied to EVERY delta
 source, not just Stack's. Sources:
 
-  - ``additive`` (always): each drug's mean real L1000 delta, applied to every organoid
-    (organoid-independent) -- the generation analogue of the drug-mean baseline. The
-    floor Stack must beat: it carries the drug main effect but no organoid x drug
+  - ``additive`` (always): each drug's mean real L1000 delta, applied to every patient
+    (patient-independent) -- the generation analogue of the drug-mean baseline. The
+    floor Stack must beat: it carries the drug main effect but no patient x drug
     interaction.
-  - ``stack`` (when --generated-dir is given): Stack-generated organoid-specific deltas.
+  - ``stack`` (when --generated-dir is given): Stack-generated patient-specific deltas.
 
 Every (source, adapter) cell is scored against the real Soragni AUC with the same
 global / interaction rho + within-drug label-permutation null, so Stack's generated
 delta is compared head-to-head against the additive baseline under each readout.
 Run on Alpine (needs the L1000 .gctx for the training cohort and additive source).
 
+--baseline must be the same tumor-RNA query file the generation step used
+(``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
+model input" switch), NOT ``stack_input_soragni.h5ad`` -- a pre-switch, organoid-RNA
+artifact left behind as a stale default until 2026-08-20 (correlation as low as 0.57
+against stack_input_sarcoma.h5ad on the same patient IDs; using it silently subtracts
+a mismatched-substrate baseline from every non-additive delta source).
+
   PYTHONPATH=src python scripts/score_viability_adapters.py --l1000-dir . \\
       --gctx GSE92742_Broad_LINCS_Level3_INF_mlr12k_n1319138x12328.gctx \\
-      --generated-dir generated_rich/ --baseline data/reference/stack_input_soragni.h5ad
+      --generated-dir generated_rich/ --baseline data/reference/stack_input_sarcoma.h5ad
 """
 
 from __future__ import annotations
@@ -43,7 +50,7 @@ from fmharness.signatures import load_hallmark
 
 
 def _read_baseline(path: Path) -> pd.DataFrame:
-    """Soragni baseline AnnData -> DataFrame (organoid x gene symbol)."""
+    """Soragni tumor-RNA baseline AnnData -> DataFrame (patient x gene symbol)."""
     a = ad.read_h5ad(path)
     x = a.X
     x = x.toarray() if hasattr(x, "toarray") else np.asarray(x)
@@ -63,7 +70,7 @@ def main() -> None:
         default=None,
         help="Stack-generated per-drug .h5ad dir; omit to score the additive baseline only",
     )
-    ap.add_argument("--baseline", default="data/reference/stack_input_soragni.h5ad")
+    ap.add_argument("--baseline", default="data/reference/stack_input_sarcoma.h5ad")
     ap.add_argument(
         "--methods",
         default=",".join(ALL_METHODS),

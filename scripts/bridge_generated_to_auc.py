@@ -1,11 +1,11 @@
 """Viability bridge: turn Stack-generated treated profiles into an AUC prediction.
 
 Stack-Large-Aligned generates, per context drug, the *treated* expression of each
-Soragni organoid. It does not output viability, so we bridge generated expression to
-drug response with a fixed transcriptional readout:
+Soragni patient's tumor RNA. It does not output viability, so we bridge generated
+expression to drug response with a fixed transcriptional readout:
 
-  1. delta(s, d) = generated_treated(s, d) - baseline(s)      per organoid, drug
-  2. z-score each gene's delta across all (organoid, drug) pairs
+  1. delta(s, d) = generated_treated(s, d) - baseline(s)      per patient, drug
+  2. z-score each gene's delta across all (patient, drug) pairs
   3. sensitivity = direction-signed mean over a death / proliferation signature
        apoptosis / p53 up under a working drug -> sensitive
        proliferation down under a working drug -> sensitive
@@ -15,8 +15,13 @@ drug response with a fixed transcriptional readout:
 Sign convention: y_pred = -sensitivity (AUC-like), so a POSITIVE interaction rho
 means the signature tracks real drug response.
 
+--baseline must be the same tumor-RNA query file the generation step used
+(``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
+model input" switch) -- see score_viability_adapters.py's docstring for why
+``stack_input_soragni.h5ad`` is a stale, pre-switch default.
+
   uv run python scripts/bridge_generated_to_auc.py --generated-dir generated/ \\
-      --baseline data/reference/stack_input_soragni.h5ad --signatures hallmark
+      --baseline data/reference/stack_input_sarcoma.h5ad --signatures hallmark
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ SEED = 0
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--generated-dir", required=True, help="dir of per-drug generated .h5ad")
-    ap.add_argument("--baseline", default="data/reference/stack_input_soragni.h5ad")
+    ap.add_argument("--baseline", default="data/reference/stack_input_sarcoma.h5ad")
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
         "--signatures",

@@ -15,6 +15,15 @@
 # Path B final step: reduce 11's per-replicate generated output to one row per (patient,
 # drug) (Task-3-style confidence filtering, same fmharness.stack_aggregate module Tahoe
 # uses), then score the fair source x readout-adapter grid against real Soragni viability.
+#
+# --baseline is stack_input_sarcoma.h5ad -- the SAME tumor-RNA file 10_soragni_context's
+# build_soragni_query_pool.py used to seed generation. Fixed 2026-08-20: this script
+# previously passed score_viability_adapters.py's own stale default,
+# stack_input_soragni.h5ad -- a pre-"use tumor RNA as the Soragni model input" (commit
+# 16f42df) organoid-RNA artifact never updated to match. Confirmed materially different
+# data (correlation as low as 0.57 on shared patient IDs, not just a naming/subset gap):
+# using it silently subtracted a mismatched-substrate baseline from every non-additive
+# delta source (pca/nmf/stack all take --baseline; only additive doesn't).
 # CONFIRM BEFORE RUNNING:
 #   * GCTX matches the file already staged in $REPO (see build_l1000_context.py's docstring
 #     for the download recipe if it's ever missing).
@@ -61,5 +70,5 @@ python scripts/score_viability_adapters.py \
     --l1000-dir . \
     --gctx "$GCTX" \
     --generated-dir "$AGGDIR" \
-    --baseline data/reference/stack_input_soragni.h5ad \
+    --baseline data/reference/stack_input_sarcoma.h5ad \
     --out-csv soragni_pathb_results.csv
