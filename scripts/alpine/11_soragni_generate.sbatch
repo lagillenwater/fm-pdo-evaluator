@@ -8,10 +8,10 @@
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:h200:1
 #SBATCH --time=04:00:00
-#SBATCH --array=0-19%16              # 20 L1000-matched Soragni drugs (generated_rich/'s
-                                      # known count) = tasks 0-19; CONFIRM against
-                                      # context_by_drug_soragni/manifest.tsv's line count
-                                      # after 10 runs and adjust --array if it differs.
+#SBATCH --array=0-18%16              # 19 L1000-matched Soragni drugs (confirmed via
+                                      # context_by_drug_soragni/manifest.tsv's line count,
+                                      # 2026-08-20) = tasks 0-18. Reconfirm if 10's context
+                                      # build ever changes the L1000<->Soragni drug match.
 #SBATCH --output=logs/%x-%A_%a.out
 #SBATCH --error=logs/%x-%A_%a.out
 #
@@ -24,6 +24,14 @@
 # see build_soragni_query_pool.py). Output carries multiple rows per patient
 # (obs["gen_logit"]); run fmharness.stack_aggregate.aggregate_generated_replicates on
 # OUTDIR before scoring, same as the Tahoe pipeline.
+#
+# Multi-checkpoint (2026-08-20): to match Tahoe's Check 1/2 checkpoint comparison, run
+# this a second time against the drug-aligned (sci-Plex fine-tuned) checkpoint -- the
+# exact file that produced this week's published drug-aligned Tahoe numbers:
+#   sbatch --export=CKPT=/scratch/alpine/$USER/sciplex_finetune/finetuned-epoch=5-val_loss=6.1078.ckpt,GENELIST=stack-aligned/basecount_1000per_15000max.pkl,OUTDIR=generated_soragni_drug_aligned \
+#       scripts/alpine/11_soragni_generate.sbatch
+# Then score it with 12_soragni_score.sbatch's matching GENDIR/AGGDIR/LABEL=drug_aligned
+# override (see that script's own comment).
 # CONFIRM BEFORE RUNNING:
 #   * --checkpoint / --genelist   your Stack-Aligned checkpoint + genelist paths.
 #   * --array bound against context_by_drug_soragni/manifest.tsv (see 10).

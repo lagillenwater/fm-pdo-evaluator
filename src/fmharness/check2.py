@@ -19,32 +19,13 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse, spmatrix
-from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.preprocessing import StandardScaler
 
-from fmharness.adapters import build_adapters
+from fmharness.adapters import PENALTY_NAMES, build_adapters, make_penalty
 from fmharness.evaluation import score_predictions
+from fmharness.signatures import PROLIFERATION
 
-# The Hallmark proliferation sets -- the two that cleared the gate's random-gene-set control
-# (G2M clearly, E2F marginally); the death sets (P53, apoptosis) add only noise on Tahoe. A
-# ``proliferation`` readout scores just these, so a real but weak signal is not diluted away.
-PROLIFERATION = ("HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT")
 FIXED_READOUTS = ("hallmark", "proliferation")  # fixed-signature readouts, applied to delta sources
-PENALTY_NAMES = ("l2", "l1", "en")  # penalized regressions for the representation-controlled grid
-
-
-def make_penalty(name: str) -> object:
-    """A fresh ALPHA-CV-TUNED penalized model: l2=RidgeCV (efficient GCV), l1=LassoCV, en=
-    ElasticNetCV (both inner 3-fold on the training lines). Tuning the penalty per representation
-    makes the grid model-fair -- a fixed alpha over-/under-regularizes some representations and
-    flips the ranking (Kurilov 2020)."""
-    if name == "l2":
-        return RidgeCV(alphas=np.logspace(-2, 3, 12))
-    if name == "l1":
-        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
-    if name == "en":
-        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
-    raise ValueError(f"unknown penalty {name!r}")
 
 
 def load_line_matrix(path: Path) -> pd.DataFrame:

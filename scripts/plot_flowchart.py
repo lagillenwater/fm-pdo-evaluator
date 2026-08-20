@@ -10,9 +10,10 @@ glyphs, so "delta"/"->"/"x" are spelled out rather than typeset as symbols.
 
 The diagram is split into the two cohorts the harness actually keeps separate:
 
-  TRAIN band -- the supervised readout (szalai, xgboost) is FIT on the cell-line
-  cohort: real perturbation deltas (L1000 / Tahoe) paired with GDSC2 AUC. The fit
-  readout is then FROZEN. hallmark is a fixed signature and skips training entirely.
+  TRAIN band -- the supervised readout (l1, l2 CV-tuned penalized regression) is FIT
+  on the cell-line cohort: real perturbation deltas (L1000 / Tahoe) paired with GDSC2
+  AUC. The fit readout is then FROZEN. hallmark is a fixed signature and skips
+  training entirely.
 
   TEST band -- the frozen readout is APPLIED to held-out deltas from every delta
   source (additive / learned / k-NN / Stack), turned into a predicted sensitivity,
@@ -148,8 +149,8 @@ def build() -> str:
     trainvia = Node(240, 234, 300, 54, [("Training viability", True),
                                         ("GDSC2 AUC (cell-line screen)", False)], "label")
     fit = Node(685, 192, 330, 78, [("Fit supervised readout", True),
-                                   ("szalai: Ridge L2 linear", False),
-                                   ("xgboost: elastic-net + boosted trees", False)], "readout")
+                                   ("l2: RidgeCV (dense)", False),
+                                   ("l1: LassoCV (sparse)", False)], "readout")
     frozen = Node(1085, 192, 236, 58, [("FROZEN readout", True),
                                        ("Δ -> sensitivity", False)], "readout")
     TH_train = (455, 192)
@@ -175,7 +176,7 @@ def build() -> str:
     ]
     TH_ro = (880, 560)
     apply = Node(1085, 560, 250, 84, [("Apply readout", True), ("Δ -> sensitivity", False),
-                                      ("frozen szalai / xgboost", False),
+                                      ("frozen l1 / l2", False),
                                       ("+ hallmark (fixed)", False)], "readout")
     pred = Node(1400, 452, 250, 48, [("Predicted sensitivity", True),
                                      ("per (sample, drug)", False)], "pred")

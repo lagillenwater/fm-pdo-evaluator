@@ -1,8 +1,8 @@
 """Compare delta sources x viability adapters against the Soragni AUC target.
 
-The generation axis must be fair: the readout adapters (szalai/xgboost supervised on
-real L1000 deltas vs GDSC2 AUC; hallmark unsupervised) are applied to EVERY delta
-source, not just Stack's. Sources:
+The generation axis must be fair: the readout adapters (l1/l2 CV-tuned penalized
+regression supervised on real L1000 deltas vs GDSC2 AUC; hallmark unsupervised) are
+applied to EVERY delta source, not just Stack's. Sources:
 
   - ``additive`` (always): each drug's mean real L1000 delta, applied to every patient
     (patient-independent) -- the generation analogue of the drug-mean baseline. The
@@ -46,7 +46,7 @@ from fmharness.deltas import (
     soragni_pert_map,
 )
 from fmharness.evaluation import build_sample_design, score_predictions
-from fmharness.signatures import load_hallmark
+from fmharness.signatures import SIGNATURES, load_hallmark
 
 
 def _read_baseline(path: Path) -> pd.DataFrame:
@@ -74,13 +74,23 @@ def main() -> None:
     ap.add_argument(
         "--methods",
         default=",".join(ALL_METHODS),
-        help="comma-separated subset of hallmark,szalai,xgboost",
+        help="comma-separated subset of hallmark,l1,l2",
     )
     ap.add_argument(
         "--signatures",
         choices=["curated", "hallmark"],
         default="hallmark",
         help="gene sets for the hallmark adapter",
+    )
+    ap.add_argument(
+        "--hallmark-sets",
+        default=None,
+        help="comma-separated Hallmark set names to restrict the hallmark adapter to "
+        "(default: all four loaded from --signatures hallmark); pass "
+        "HALLMARK_E2F_TARGETS,HALLMARK_G2M_CHECKPOINT to score proliferation only -- "
+        "on Tahoe, the only two sets that beat a random gene set (docs/tahoe_generation_"
+        "results.md's Gate table), so averaging in P53/apoptosis may just be diluting "
+        "signal with noise. Requires --signatures hallmark.",
     )
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
@@ -96,11 +106,23 @@ def main() -> None:
 
     repo = Path(__file__).resolve().parent.parent
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
-    sigs = (
-        load_hallmark(repo / "data/static/hallmark_signatures.gmt")
-        if "hallmark" in methods
-        else None
-    )
+    sigs: dict[str, tuple[tuple[str, ...], int]] | None = None
+    if "hallmark" in methods:
+        sigs = (
+            load_hallmark(repo / "data/static/hallmark_signatures.gmt")
+            if args.signatures == "hallmark"
+            else SIGNATURES
+        )
+        if args.hallmark_sets:
+            if args.signatures != "hallmark":
+                raise ValueError("--hallmark-sets requires --signatures hallmark")
+            keep = {s.strip() for s in args.hallmark_sets.split(",") if s.strip()}
+            missing = keep - set(sigs)
+            if missing:
+                raise ValueError(
+                    f"--hallmark-sets: unknown set(s) {sorted(missing)}; have {sorted(sigs)}"
+                )
+            sigs = {k: v for k, v in sigs.items() if k in keep}
 
     # Key the Soragni target by PubChem CID: the delta sources (additive / learned /
     # stack) all key drugs by CID, so the target must too or the merge below is empty.

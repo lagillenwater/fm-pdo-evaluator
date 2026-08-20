@@ -94,6 +94,12 @@ _HALLMARK_DIRECTION: dict[str, int] = {
     "HALLMARK_G2M_CHECKPOINT": -1,
 }
 
+# The two Hallmark proliferation sets -- on Tahoe, the only ones that cleared the gate's
+# random-gene-set control (G2M clearly, E2F marginally); the death sets (P53, apoptosis) add
+# only noise there (docs/tahoe_generation_results.md's Gate table). A signature score restricted
+# to just these avoids diluting a real but weak proliferation signal with two null components.
+PROLIFERATION: tuple[str, ...] = ("HALLMARK_E2F_TARGETS", "HALLMARK_G2M_CHECKPOINT")
+
 
 def load_hallmark(path: str | Path) -> dict[str, tuple[tuple[str, ...], int]]:
     """Load the four Hallmark sets from a GMT, each tagged with its sensitivity

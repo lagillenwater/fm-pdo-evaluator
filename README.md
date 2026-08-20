@@ -30,7 +30,7 @@ flowchart LR
     L --> ADD[additive baseline:<br/>drug-mean delta]
     L --> LRN[PCA / NMF predictors:<br/>learned patient-specific delta]
     SB --> LRN
-    GEN --> RO[readout adapters<br/>hallmark / szalai / xgboost:<br/>delta to viability]
+    GEN --> RO[readout adapters<br/>hallmark / l1 / l2:<br/>delta to viability]
     ADD --> RO
     LRN --> RO
     RO --> M[metrics:<br/>global / interaction / within-drug rho,<br/>regret@k]
@@ -52,7 +52,7 @@ See [docs/models.md](docs/models.md) for each model and [docs/adapter_contract.m
 | Layer | Options |
 |---|---|
 | **Delta source** (predict the treated transcriptome) | Stack-Aligned generation (patient-specific); PCA/NMF learned predictors (patient-specific, linear baseline→delta map on L1000); additive drug-mean baseline (patient-independent floor) |
-| **Readout adapter** (delta → viability) | `hallmark` (unsupervised death/proliferation signature), `szalai` (L2 linear), `xgboost` (elastic-net selection + boosted trees) — supervised readouts fit on real L1000 deltas vs GDSC2 AUC |
+| **Readout adapter** (delta → viability) | `hallmark` (unsupervised death/proliferation signature), `l1`/`l2` (CV-tuned LassoCV/RidgeCV, Kurilov 2020) — supervised readouts fit on real L1000 deltas vs GDSC2 AUC |
 | **Metrics** | global / within-drug / interaction Spearman; normalized regret@k; within-drug permutation null |
 
 Every model implements one `ModelAdapter` ([src/fmharness/models/adapter.py](src/fmharness/models/adapter.py)) so splits, metrics, and controls stay model-agnostic. Operational detail per model is in [docs/models.md](docs/models.md).

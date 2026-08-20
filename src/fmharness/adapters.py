@@ -1,22 +1,23 @@
 """Viability adapters: map a treated-minus-control transcriptome delta to a
-per-sample drug-sensitivity score (higher = more sensitive). Three published
-approaches, selected with ``build_adapters(methods=...)``; the default is all three.
+per-sample drug-sensitivity score (higher = more sensitive). Selected with
+``build_adapters(methods=...)``; the default is all of ``ALL_METHODS``.
 
 - ``"hallmark"`` -- fixed signature scoring: the direction-signed mean of z-scored
   signature genes (apoptosis / p53 up, proliferation down), averaged across sets.
   No training. MSigDB Hallmark gene sets (Liberzon et al., Cell Systems 2015);
   single-sample scoring in the spirit of ssGSEA (Barbie et al., Nature 2009).
-- ``"szalai"`` -- L2-regularized linear regression from the delta to viability, fit
-  on real perturbation->viability pairs and applied to the target delta. Szalai et
-  al., "Signatures of cell death and proliferation in perturbation transcriptomics
-  data -- from confounding factor to effective prediction", Nucleic Acids Research 2019.
-- ``"xgboost"`` -- elastic-net gene selection + gradient-boosted trees, fit on
-  perturbation->viability pairs. Lu, Chen & Qin, "Drug-induced cell viability prediction
-  from LINCS-L1000 through WRFEN-XGBoost algorithm", BMC Bioinformatics 2021.
+- ``"l1"`` / ``"l2"`` -- CV-tuned penalized linear regression (LassoCV / RidgeCV,
+  ``make_penalty``) from the delta to viability, fit on real perturbation->viability
+  pairs and applied to the target delta. Replaces the earlier Szalai/WRFEN-XGBoost
+  adapters (2026-08-20): both fit dense, weakly-regularized models over thousands of
+  genes on a few hundred real training pairs, which transfers poorly under domain
+  shift onto a generated delta with very different covariance structure -- an
+  overfitting-under-distribution-shift failure mode a properly CV-tuned, optionally
+  sparse penalty is less prone to.
 
-The supervised adapters (szalai, xgboost) are trained on a perturbation->viability
-cohort (e.g. real L1000 deltas vs GDSC2 AUC) and applied to a held-out delta (e.g.
-Stack-generated organoid deltas). Each cohort is z-scored by its own per-gene
+The supervised adapters (l1, l2) are trained on a perturbation->viability cohort
+(e.g. real L1000 deltas vs GDSC2 AUC) and applied to a held-out delta (e.g.
+Stack-generated patient deltas). Each cohort is z-scored by its own per-gene
 statistics, so ``predict`` must be given a cohort (many samples), not one row, and
 the learned coefficients transfer across the platform gap in standardized units.
 """
@@ -27,9 +28,26 @@ from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import ElasticNet, Ridge
+from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 
-ALL_METHODS: tuple[str, ...] = ("hallmark", "szalai", "xgboost")
+ALL_METHODS: tuple[str, ...] = ("hallmark", "l1", "l2")
+PENALTY_NAMES: tuple[str, ...] = ("l2", "l1", "en")  # every penalty make_penalty knows, not
+# just the two ALL_METHODS exposes as adapters -- "en" stays available for fmharness.check2's
+# own 3-way representation-controlled grid, which imports both from here.
+
+
+def make_penalty(name: str) -> object:
+    """A fresh ALPHA-CV-TUNED penalized model: l2=RidgeCV (efficient GCV), l1=LassoCV, en=
+    ElasticNetCV (both inner 3-fold on the training lines). Tuning the penalty per
+    representation/cohort makes a comparison model-fair -- a fixed alpha over-/under-
+    regularizes some inputs and flips the ranking (Kurilov 2020)."""
+    if name == "l2":
+        return RidgeCV(alphas=np.logspace(-2, 3, 12))
+    if name == "l1":
+        return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
+    if name == "en":
+        return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
+    raise ValueError(f"unknown penalty {name!r}")
 
 
 class ViabilityAdapter(Protocol):
@@ -77,77 +95,26 @@ class SignatureAdapter:
         return np.asarray(parts, dtype=np.float64).mean(axis=0)
 
 
-class SzalaiLinearAdapter:
-    """L2 linear regression delta -> viability (Szalai et al., Nucleic Acids Research 2019)."""
+class PenalizedRegressionAdapter:
+    """CV-tuned penalized linear regression, delta -> viability (``make_penalty``, Kurilov
+    2020). ``penalty`` is ``"l1"`` (LassoCV, sparse) or ``"l2"`` (RidgeCV, dense)."""
 
-    name = "szalai"
     supervised = True
-    citation = "Szalai et al., Nucleic Acids Research 2019"
+    citation = "Kurilov et al., iScience 2020 (CV-tuned penalized regression)"
 
-    def __init__(self, alpha: float = 1.0) -> None:
-        self._alpha = alpha
+    def __init__(self, penalty: str) -> None:
+        self._model: Any = make_penalty(penalty)  # raises ValueError on an unknown penalty
+        self.name = penalty
         self._genes: list[str] = []
-        self._model: Any = None
 
-    def fit(self, delta: pd.DataFrame, viability: np.ndarray) -> SzalaiLinearAdapter:
+    def fit(self, delta: pd.DataFrame, viability: np.ndarray) -> PenalizedRegressionAdapter:
         self._genes = [str(c) for c in delta.columns]
-        self._model = Ridge(alpha=self._alpha).fit(
-            _zscore(delta).to_numpy(), np.asarray(viability, dtype=np.float64)
-        )
+        self._model.fit(_zscore(delta).to_numpy(), np.asarray(viability, dtype=np.float64))
         return self
 
     def predict(self, delta: pd.DataFrame) -> np.ndarray:
         z = _zscore(delta.reindex(columns=self._genes, fill_value=0.0)).to_numpy()
         return -np.asarray(self._model.predict(z), dtype=np.float64)  # higher = more sensitive
-
-
-class XGBoostAdapter:
-    """Elastic-net gene selection + gradient-boosted trees (WRFEN-XGBoost; Wang et al.,
-    BMC Bioinformatics 2020). ``xgboost`` is imported lazily (it needs OpenMP/libomp)."""
-
-    name = "xgboost"
-    supervised = True
-    citation = "Lu, Chen & Qin, BMC Bioinformatics 2021 (WRFEN-XGBoost)"
-
-    def __init__(
-        self, n_features: int = 300, n_estimators: int = 400, max_depth: int = 4, seed: int = 0
-    ) -> None:
-        self._n_features = n_features
-        self._n_estimators = n_estimators
-        self._max_depth = max_depth
-        self._seed = seed
-        self._genes: list[str] = []
-        self._model: Any = None
-
-    def fit(self, delta: pd.DataFrame, viability: np.ndarray) -> XGBoostAdapter:
-        try:
-            import xgboost as xgb
-        except (ImportError, OSError, ValueError) as e:  # ValueError: XGBoostError (libomp)
-            raise RuntimeError("xgboost unavailable (on macOS: `brew install libomp`)") from e
-        z = _zscore(delta).to_numpy()
-        y = np.asarray(viability, dtype=np.float64)
-        # elastic-net key-gene selection before boosting (WRFEN selects genes first)
-        coef = (
-            ElasticNet(alpha=0.01, l1_ratio=0.5, max_iter=5000, random_state=self._seed)
-            .fit(z, y)
-            .coef_
-        )
-        nonzero = int(np.sum(coef != 0))
-        k = min(self._n_features, nonzero) if nonzero else min(self._n_features, z.shape[1])
-        idx = np.argsort(-np.abs(coef))[:k]
-        self._genes = [str(delta.columns[i]) for i in idx]
-        self._model = xgb.XGBRegressor(
-            n_estimators=self._n_estimators,
-            max_depth=self._max_depth,
-            learning_rate=0.05,
-            subsample=0.8,
-            random_state=self._seed,
-        ).fit(z[:, idx], y)
-        return self
-
-    def predict(self, delta: pd.DataFrame) -> np.ndarray:
-        z = _zscore(delta.reindex(columns=self._genes, fill_value=0.0)).to_numpy()
-        return -np.asarray(self._model.predict(z), dtype=np.float64)
 
 
 def build_adapters(
@@ -166,10 +133,8 @@ def build_adapters(
             if signatures is None:
                 raise ValueError("the hallmark adapter requires signatures=")
             out.append(SignatureAdapter(signatures))
-        elif m == "szalai":
-            out.append(SzalaiLinearAdapter())
-        elif m == "xgboost":
-            out.append(XGBoostAdapter())
+        elif m in ("l1", "l2"):
+            out.append(PenalizedRegressionAdapter(m))
         else:
             raise ValueError(f"unknown method {m!r}; choose from {ALL_METHODS}")
     return out

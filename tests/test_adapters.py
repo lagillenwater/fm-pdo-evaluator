@@ -8,8 +8,8 @@ import pytest
 
 from fmharness.adapters import (
     ALL_METHODS,
+    PenalizedRegressionAdapter,
     SignatureAdapter,
-    SzalaiLinearAdapter,
     build_adapters,
 )
 
@@ -23,9 +23,9 @@ def test_build_default_is_all_methods() -> None:
 
 
 def test_build_subset_selects_methods() -> None:
-    adapters = build_adapters(["szalai"], signatures=SIGS)
+    adapters = build_adapters(["l1"], signatures=SIGS)
     assert len(adapters) == 1
-    assert adapters[0].name == "szalai" and adapters[0].supervised
+    assert adapters[0].name == "l1" and adapters[0].supervised
 
 
 def test_hallmark_requires_signatures() -> None:
@@ -46,28 +46,20 @@ def test_hallmark_scores_induced_death_most_sensitive() -> None:
     assert int(np.argmax(scores)) == 0
 
 
-def test_szalai_transfers_direction_to_heldout_cohort() -> None:
+@pytest.mark.parametrize("penalty", ["l1", "l2"])
+def test_penalized_regression_transfers_direction_to_heldout_cohort(penalty: str) -> None:
     rng = np.random.default_rng(1)
     cols = pd.Index(list("abcd"))
     x_tr = pd.DataFrame(rng.normal(size=(80, 4)), columns=cols)
     via_tr = x_tr["a"].to_numpy() * 2 + rng.normal(0, 0.1, 80)  # viability tracks gene a
-    adapter = SzalaiLinearAdapter().fit(x_tr, via_tr)
+    adapter = PenalizedRegressionAdapter(penalty).fit(x_tr, via_tr)
+    assert adapter.name == penalty and adapter.supervised
     x_te = pd.DataFrame(rng.normal(size=(40, 4)), columns=cols)
     via_te = x_te["a"].to_numpy() * 2
     sens = adapter.predict(x_te)  # higher = more sensitive = lower viability
     assert float(np.corrcoef(sens, via_te)[0, 1]) < -0.5
 
 
-def test_xgboost_runs_or_skips_without_libomp() -> None:
-    from fmharness.adapters import XGBoostAdapter
-
-    rng = np.random.default_rng(2)
-    cols = pd.Index([f"g{i}" for i in range(8)])
-    x_tr = pd.DataFrame(rng.normal(size=(60, 8)), columns=cols)
-    via_tr = x_tr["g0"].to_numpy() + rng.normal(0, 0.1, 60)
-    try:
-        adapter = XGBoostAdapter(n_features=5, n_estimators=20).fit(x_tr, via_tr)
-    except RuntimeError as e:
-        pytest.skip(str(e))  # libomp missing on this machine
-    pred = adapter.predict(pd.DataFrame(rng.normal(size=(10, 8)), columns=cols))
-    assert pred.shape == (10,)
+def test_penalized_regression_rejects_unknown_penalty() -> None:
+    with pytest.raises(ValueError, match="unknown penalty"):
+        PenalizedRegressionAdapter("bogus")

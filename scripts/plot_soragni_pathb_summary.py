@@ -1,5 +1,5 @@
 """Summary figure for Path B's faithful-generation rerun: the fair source (additive/PCA/NMF/
-Stack) x readout-adapter (hallmark/szalai/xgboost) grid against real Soragni organoid viability.
+Stack) x readout-adapter (hallmark/l1/l2) grid against real Soragni organoid viability.
 
 Reads docs/soragni_pathb_results.csv (written by scripts/score_viability_adapters.py's
 --out-csv against 24-synthetic-replicate/patient, --mode mdm generation -- see
@@ -22,8 +22,8 @@ import numpy as np
 import pandas as pd
 
 SOURCES = ("additive", "pca", "nmf", "stack")
-METHODS = ("hallmark", "szalai", "xgboost")
-METHOD_COLOR = {"hallmark": "#2C6FAF", "szalai": "#D98C29", "xgboost": "#7B52A8"}
+METHODS = ("hallmark", "l1", "l2")
+METHOD_COLOR = {"hallmark": "#2C6FAF", "l1": "#D98C29", "l2": "#7B52A8"}
 STACK_RED = "#C0392B"
 BONFERRONI = 0.05 / (len(SOURCES) * len(METHODS))  # 12 independent-ish cells in the grid
 
