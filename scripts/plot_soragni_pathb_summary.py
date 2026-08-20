@@ -89,6 +89,7 @@ def main() -> None:
 
     df = pd.read_csv(args.results)
     best = df.loc[df["p_label"].idxmin()]
+    any_sig = bool((df["p_label"] < 0.05).any())
 
     fig = plt.figure(figsize=(13.5, 6.4), dpi=150)
     grid = fig.add_gridspec(1, 2, wspace=0.3)
@@ -113,11 +114,19 @@ def main() -> None:
         legend_loc="lower right",
     )
 
+    if any_sig:
+        headline = (
+            f"{best['source']}+{best['method']} is the only significant cell of 12 "
+            f"(interaction {best['interaction']:+.2f}, p={best['p_label']:.3f}) -- "
+            f"does not survive Bonferroni across the grid (p<{BONFERRONI:.4f})"
+        )
+    else:
+        headline = (
+            f"NULL -- no cell of 12 reaches p<0.05; best is {best['source']}+{best['method']} "
+            f"(interaction {best['interaction']:+.2f}, p={best['p_label']:.3f})"
+        )
     fig.suptitle(
-        f"Path B faithful generation (24 synthetic replicates/patient, --mode mdm): "
-        f"{best['source']}+{best['method']} is the only significant cell of 12 "
-        f"(interaction {best['interaction']:+.2f}, p={best['p_label']:.3f}) -- "
-        f"does not survive Bonferroni across the grid (p<{BONFERRONI:.4f})",
+        f"Path B faithful generation (24 synthetic replicates/patient, --mode mdm): {headline}",
         fontsize=12.5,
         fontweight="bold",
         x=0.01,
@@ -126,9 +135,10 @@ def main() -> None:
     fig.text(
         0.01,
         0.005,
-        "Reverses the June (vanilla-mode) Path B run's null; n=17 patients underlies every "
-        "interaction/regret estimate regardless of pair count. One suggestive readout, not a "
-        "confirmed result.",
+        "Matches the June (vanilla-mode) Path B run's null; n=17 patients underlies every "
+        "interaction/regret estimate regardless of pair count. Corrected 2026-08-20: an earlier "
+        "run of this pipeline scored against a stale, mismatched (organoid-RNA) baseline file "
+        "and found a significant stack+hallmark cell that did not survive fixing the baseline.",
         fontsize=9,
         color="#444444",
     )
