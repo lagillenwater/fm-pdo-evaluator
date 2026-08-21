@@ -22,6 +22,7 @@ from fmharness.deltas import (
     logcpm,
     loo_baseline_source,
     pseudobulk_de_to_deltas,
+    restrict_common_support,
 )
 
 
@@ -381,3 +382,41 @@ def test_learned_gene_panel_ranks_variance_skipping_nan(tmp_path: Path) -> None:
     )
     panel = learned_gene_panel(real_delta, gmt, n_hvg=1)
     assert set(panel) == {"NANVAR", "SIGGENE1", "SIGGENE2"}
+
+
+def _source(pairs: list[tuple[str, str]]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    # one-column delta whose value encodes the pair's position, so a test can confirm
+    # row alignment survives the restriction (not just the row count).
+    delta = pd.DataFrame({"g": [float(i) for i in range(len(pairs))]})
+    key = pd.DataFrame(pairs, columns=pd.Index(["patient", "drug"]))
+    return delta, key
+
+
+def test_restrict_common_support_keeps_only_shared_labeled_pairs() -> None:
+    # "wide" covers 3 patients x 2 drugs, but design only labels 3 of those 6 pairs; "narrow"
+    # (like Stack's generated delta) covers just 2 pairs, both labeled -- the real Path-B
+    # shape where a broadcast baseline's native coverage is much wider than Stack's but
+    # mostly unlabeled, and comparing raw scores across sources with different (patient,
+    # drug) support silently compares different evaluation sets, not just different methods.
+    wide = _source([("p1", "d1"), ("p2", "d1"), ("p3", "d1"), ("p1", "d2"), ("p2", "d2"), ("p3", "d2")])
+    narrow = _source([("p1", "d1"), ("p2", "d1")])
+    design = pd.DataFrame(
+        {"patient": ["p1", "p2", "p1"], "drug": ["d1", "d1", "d2"], "y": [0.1, 0.2, 0.3]}
+    )
+
+    out = restrict_common_support({"wide": wide, "narrow": narrow}, design)
+
+    wide_delta, wide_key = out["wide"]
+    assert list(zip(wide_key["patient"], wide_key["drug"])) == [("p1", "d1"), ("p2", "d1")]
+    assert wide_delta["g"].tolist() == [0.0, 1.0]  # rows stay aligned to their original pair
+    narrow_delta, narrow_key = out["narrow"]
+    assert list(zip(narrow_key["patient"], narrow_key["drug"])) == [("p1", "d1"), ("p2", "d1")]
+    assert narrow_delta["g"].tolist() == [0.0, 1.0]
+
+
+def test_restrict_common_support_raises_when_no_shared_pairs() -> None:
+    a = _source([("p1", "d1")])
+    b = _source([("p2", "d2")])
+    design = pd.DataFrame({"patient": ["p1", "p2"], "drug": ["d1", "d2"]})
+    with pytest.raises(ValueError, match="no .* shared"):
+        restrict_common_support({"a": a, "b": b}, design)

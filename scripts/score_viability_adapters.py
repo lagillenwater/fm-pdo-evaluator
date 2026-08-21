@@ -15,6 +15,14 @@ global / interaction rho + within-drug label-permutation null, so Stack's genera
 delta is compared head-to-head against the additive baseline under each readout.
 Run on Alpine (needs the L1000 .gctx for the training cohort and additive source).
 
+Before scoring, every source is restricted to the SAME (patient, drug) support
+(``restrict_common_support``, 2026-08-21): sources have very different native
+coverage -- additive/pca/nmf broadcast over the whole L1000 training cohort (mostly
+unlabeled for a given patient) while stack only covers its own generated drug set --
+so without this, each source's ``n`` differed (stack n=202 vs additive/pca/nmf n=150
+in the first l1/l2 rerun) and the interaction/global numbers were being compared
+across different evaluation sets, not just different methods.
+
 --baseline must be the same tumor-RNA query file the generation step used
 (``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
 model input" switch), NOT ``stack_input_soragni.h5ad`` -- a pre-switch, organoid-RNA
@@ -43,6 +51,7 @@ from fmharness.deltas import (
     build_generated_deltas,
     build_l1000_gdsc_pairs,
     build_learned_deltas,
+    restrict_common_support,
     soragni_pert_map,
 )
 from fmharness.evaluation import build_sample_design, score_predictions
@@ -170,6 +179,19 @@ def main() -> None:
         sources["stack"] = build_generated_deltas(
             Path(args.generated_dir), base_path, soragni_pert_map(repo)
         )
+
+    # Restrict every source to the SAME (patient, drug) support before scoring: sources have
+    # very different native coverage (stack only covers its own generated drug set; additive/
+    # pca/nmf broadcast over the whole L1000 training cohort, mostly unlabeled for a given
+    # patient), so scoring each against its own native intersection with `design` compares
+    # different evaluation sets, not just different methods (see restrict_common_support).
+    native_n = {name: len(skey) for name, (_, skey) in sources.items()}
+    sources = restrict_common_support(sources, design)
+    common_n = len(next(iter(sources.values()))[1])
+    print(
+        f"\ncommon (patient, drug) support across {list(sources)}: {common_n} pairs "
+        f"(native source rows: {', '.join(f'{k}={v}' for k, v in native_n.items())})"
+    )
 
     out: list[dict[str, object]] = []
     for src_name, (sdelta, skey) in sources.items():

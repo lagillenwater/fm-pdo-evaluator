@@ -237,6 +237,43 @@ def build_additive_deltas(
     return delta, key
 
 
+def restrict_common_support(
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    design: pd.DataFrame,
+) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
+    """Restrict every delta source to the (patient, drug) pairs ALL of them share -- and
+    that carry a real label in ``design`` -- so a head-to-head comparison across sources
+    scores every method on the identical evaluation set.
+
+    Sources can have very different native coverage: a broadcast baseline like
+    ``build_additive_deltas`` spans every drug in the training cohort (mostly unlabeled
+    for a given patient), while ``build_generated_deltas`` only covers whatever was
+    actually generated. Scoring each source against its own native intersection with
+    ``design`` (as a naive per-source inner join does) compares different evaluation
+    sets, not just different methods -- a source with denser native coverage on its own
+    drug set can look better or worse for that reason alone. Returns a dict shaped like
+    ``sources``, each (delta, key) row-filtered (order-preserving) to the common support.
+    """
+    def _pairs(frame: pd.DataFrame) -> pd.MultiIndex:
+        return pd.MultiIndex.from_frame(cast("pd.DataFrame", frame[["patient", "drug"]].astype(str)))
+
+    design_pairs = _pairs(design)
+    labeled: dict[str, pd.Index] = {}
+    for name, (_, key) in sources.items():
+        pairs = _pairs(key)
+        labeled[name] = cast("pd.MultiIndex", pairs[pairs.isin(design_pairs)]).unique()
+    common = labeled[next(iter(labeled))]
+    for idx in list(labeled.values())[1:]:
+        common = common.intersection(idx)
+    if len(common) == 0:
+        raise ValueError("no (patient, drug) pairs shared across every source and design")
+    out: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
+    for name, (delta, key) in sources.items():
+        mask = _pairs(key).isin(common)
+        out[name] = (delta.loc[mask].reset_index(drop=True), key.loc[mask].reset_index(drop=True))
+    return out
+
+
 def build_learned_deltas(
     train_base: pd.DataFrame,
     train_delta: pd.DataFrame,
