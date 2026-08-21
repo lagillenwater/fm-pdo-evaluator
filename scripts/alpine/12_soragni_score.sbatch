@@ -41,8 +41,10 @@ set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
-module load anaconda
-conda activate stack
+# Bypass `module load anaconda` -- confirmed gone from amem's module tree 2026-08-21 (see
+# 10_soragni_context.sbatch's comment for how this was confirmed).
+export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
+export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 

@@ -8,10 +8,19 @@
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:h200:1
 #SBATCH --time=04:00:00
-#SBATCH --array=0-18%16              # 19 L1000-matched Soragni drugs (confirmed via
+#SBATCH --array=0-18%4               # 19 L1000-matched Soragni drugs (confirmed via
                                       # context_by_drug_soragni/manifest.tsv's line count,
                                       # 2026-08-20) = tasks 0-18. Reconfirm if 10's context
                                       # build ever changes the L1000<->Soragni drug match.
+                                      # Concurrency capped at 4 (2026-08-21, down from 16):
+                                      # ah200 nodes (c3gpu-g5-*) carry 4 H200s each; the
+                                      # first 19-task/%16 run put 6-7 tasks concurrently on
+                                      # one node and 17/19 failed with "CUDA unknown error"
+                                      # (torch _lazy_init, confirmed via sacct+per-task logs
+                                      # on the actual compute node) -- GPU device isolation
+                                      # under rapid concurrent launch on one shared node, not
+                                      # a code bug. %4 keeps launches at or under one node's
+                                      # physical GPU count.
 #SBATCH --output=logs/%x-%A_%a.out
 #SBATCH --error=logs/%x-%A_%a.out
 #

@@ -28,8 +28,13 @@ set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
-module load anaconda
-conda activate stack
+# Bypass `module load anaconda` -- confirmed gone from amem's module tree 2026-08-21 (a
+# job-log Lmod "Unable to find: anaconda" error, verified from an actual amem compute node
+# via a throwaway diagnostic job, not the login node's module list). Invoke the stack env
+# directly instead, same workaround already used for non-interactive SSH elsewhere in this
+# project.
+export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
+export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
