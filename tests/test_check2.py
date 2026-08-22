@@ -15,10 +15,12 @@ from fmharness.check2 import (
     load_line_matrix,
     make_penalty,
     penalized_preds,
+    random_control_representation,
     random_feature_control,
     repr_by_drug,
     restrict_representation_support,
     score_check2,
+    seed_for_name,
 )
 
 
@@ -240,28 +242,44 @@ def test_score_check2_includes_a_planted_interaction_positive_control() -> None:
     # (distinct from the oracle/random-feature controls, which use real data or noise,
     # not a simulation). plant_interaction needs >=2 drugs (it centers per-drug
     # directions, which zeroes out with only one).
-    genes = pd.Index(["A", "B"])
-    lines = [f"L{i}" for i in range(12)]
+    #
+    # Fitting RidgeCV directly on a HIGH-dimensional raw gene space with only ~n/folds
+    # training lines per fold cannot recover any signal at any effect size (verified
+    # empirically: r2 stayed negative even at 30x effect on unreduced features -- p >> n
+    # with p in the thousands and n in the tens is not fittable). This fixture -- 17 lines
+    # (Path B's real scale) and 30 genes -- exercises that regime for real, not just a
+    # 2-gene toy that always fits trivially regardless of whether the reduce-before-fit
+    # logic is present.
+    genes = pd.Index([f"g{i}" for i in range(30)])
+    lines = [f"L{i}" for i in range(17)]
+    n_drugs = 5
+    drug_names = [f"d{i}" for i in range(n_drugs)]
     rng = np.random.default_rng(2)
-    delta = pd.DataFrame(rng.standard_normal((12, 2)), columns=genes)
-    key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 12})
+    delta = pd.DataFrame(rng.standard_normal((17, 30)), columns=genes)
+    key = pd.DataFrame({"patient": lines, "drug": ["d0"] * 17})
     sources = {"additive": (delta, key)}
-    base = pd.DataFrame(rng.standard_normal((12, 2)), columns=genes, index=pd.Index(lines))
-    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("A",), 1)}
-    real_key = pd.DataFrame({"patient": lines * 2, "drug": ["d1"] * 12 + ["d2"] * 12})
+    base = pd.DataFrame(rng.standard_normal((17, 30)), columns=genes, index=pd.Index(lines))
+    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("g0",), 1)}
+    real_key = pd.DataFrame(
+        {"patient": lines * n_drugs, "drug": np.repeat(drug_names, 17).tolist()}
+    )
     design = pd.DataFrame(
         {
-            "patient": lines * 2,
-            "drug": ["d1"] * 12 + ["d2"] * 12,
-            "y": rng.standard_normal(24).tolist(),
+            "patient": lines * n_drugs,
+            "drug": np.repeat(drug_names, 17).tolist(),
+            "y": rng.standard_normal(17 * n_drugs).tolist(),
         }
     )
 
-    table = score_check2(sources, real_key, base, genes, design, hallmark=hallmark, folds=2)
+    table = score_check2(sources, real_key, base, genes, design, hallmark=hallmark, folds=5)
 
     planted = table[table["source"] == "planted"]
     assert not planted.empty
     assert (planted["n"] > 0).all()
+    # a "positive control" should be a near-guaranteed, unambiguous recovery, not a
+    # borderline result -- p_label small confirms the pipeline actually detects a real
+    # interaction when one is deliberately, verifiably present.
+    assert (planted["p_label"] < 0.1).any()
 
 
 def test_score_check2_scores_a_random_control_for_every_representation() -> None:
@@ -286,3 +304,34 @@ def test_random_feature_control_matches_shape_and_is_seed_deterministic() -> Non
     assert np.allclose(ctrl1.to_numpy(), ctrl2.to_numpy())
     ctrl3 = random_feature_control(real, seed=1)
     assert not np.allclose(ctrl1.to_numpy(), ctrl3.to_numpy())
+
+
+def test_seed_for_name_is_stable_and_differs_by_name() -> None:
+    assert seed_for_name("pca") == seed_for_name("pca")
+    assert seed_for_name("pca") != seed_for_name("nmf")
+
+
+def test_random_control_representation_gives_independent_draws_per_drug() -> None:
+    # a drug-independent representation (like "expr") hands every drug the exact same
+    # frame -- without a per-drug seed offset, every drug's "random" control would be the
+    # identical draw instead of independent noise.
+    lines = ["L1", "L2", "L3"]
+    same_frame = pd.DataFrame({"x": [1.0, 2.0, 3.0]}, index=pd.Index(lines))
+    rep = lambda _drug: same_frame  # noqa: E731
+
+    out = random_control_representation(rep, ["d1", "d2"], seed=seed_for_name("expr"))
+
+    assert not np.allclose(out["d1"].to_numpy(), out["d2"].to_numpy())
+
+
+def test_random_control_representation_differs_across_same_shaped_representations() -> None:
+    # two DIFFERENT representations (e.g. pca/nmf) that happen to reduce to the same
+    # shape must not get the identical random control either.
+    lines = ["L1", "L2", "L3"]
+    frame = pd.DataFrame({"x": [1.0, 2.0, 3.0]}, index=pd.Index(lines))
+    rep = lambda _drug: frame  # noqa: E731
+
+    out_pca = random_control_representation(rep, ["d1"], seed=seed_for_name("pca"))
+    out_nmf = random_control_representation(rep, ["d1"], seed=seed_for_name("nmf"))
+
+    assert not np.allclose(out_pca["d1"].to_numpy(), out_nmf["d1"].to_numpy())

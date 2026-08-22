@@ -70,9 +70,11 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from fmharness.adapters import ALL_METHODS, ViabilityAdapter, build_adapters, build_hallmark_breakout
-from fmharness.check2 import load_line_matrix, penalized_preds, random_feature_control
+from fmharness.check2 import load_line_matrix, penalized_preds, random_feature_control, seed_for_name
 from fmharness.controls import plant_interaction
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
@@ -309,8 +311,12 @@ def main() -> None:
     # (fmharness.check2.random_feature_control).
     for src_name, (sdelta, skey) in sources.items():
         common = tr_delta_fit.columns.intersection(sdelta.columns)
-        tr_x_rand = random_feature_control(tr_delta_fit[common], seed=0)
-        sx_rand = random_feature_control(sdelta[common], seed=1)
+        # seed derived from src_name (not a fixed literal): two sources that happen to
+        # reduce to the same shared-gene shape (e.g. pca/nmf) would otherwise get the
+        # exact same "random" draw instead of independent ones.
+        src_seed = seed_for_name(src_name)
+        tr_x_rand = random_feature_control(tr_delta_fit[common], seed=src_seed)
+        sx_rand = random_feature_control(sdelta[common], seed=(src_seed + 1) & 0xFFFFFFFF)
         for adapter in _build_readout_adapters(methods, sigs):
             if not adapter.supervised:
                 continue
@@ -366,8 +372,13 @@ def main() -> None:
             print(f"[{label}] embedding: {len(emb)} patients x {emb.shape[1]} dims | methods {emb_methods}")
             # same-width random-feature negative control (random_feature_control) -- must clear
             # this by a real margin, or an apparent win is attributable to raw embedding width
-            # rather than learned structure (same treatment as Check 2's stack_emb loop).
-            emb_sources = {label: emb, f"{label}_random": random_feature_control(emb, seed=0)}
+            # rather than learned structure (same treatment as Check 2's stack_emb loop). Seed
+            # derived from label (not a fixed literal) -- two labels of the same width (e.g.
+            # base/aligned) would otherwise get the identical "random" draw.
+            emb_sources = {
+                label: emb,
+                f"{label}_random": random_feature_control(emb, seed=seed_for_name(label)),
+            }
             for src_label, src_emb in emb_sources.items():
                 for pen in emb_methods:
                     preds = penalized_preds(
@@ -427,7 +438,22 @@ def main() -> None:
         uniq_lines = patients
         n_folds = max(1, min(args.folds, len(uniq_lines)))
         fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
-        emb_per_row = soragni_base.reindex(design["patient"]).to_numpy()
+        # Plant AND score in the SAME small PCA subspace of soragni_base -- planting in the
+        # raw gene space (thousands of genes) and then fitting RidgeCV directly on it with
+        # only ~n/folds training patients per fold cannot recover ANY signal at any effect
+        # size (verified empirically against fmharness.check2.penalized_preds: r2/interaction
+        # stayed negative even at 30x effect on unreduced features). n_components is capped
+        # well below the smallest per-fold training-patient count so the fit is well-posed.
+        plant_k = max(
+            1,
+            min(5, len(uniq_lines) // (n_folds + 2), soragni_base.shape[1], len(uniq_lines) - 1),
+        )
+        plant_sc = StandardScaler().fit(soragni_base.to_numpy())
+        plant_z = PCA(n_components=plant_k, random_state=0).fit_transform(
+            plant_sc.transform(soragni_base.to_numpy())
+        )
+        plant_z_df = pd.DataFrame(plant_z, index=soragni_base.index)
+        emb_per_row = plant_z_df.reindex(design["patient"]).to_numpy()
         within_drug_sd = float(
             np.std(
                 design["y"].to_numpy() - design.groupby("drug")["y"].transform("mean").to_numpy()
@@ -438,14 +464,15 @@ def main() -> None:
             design["drug"],
             design["y"],
             emb_per_row,
-            effect=plant_scale,
+            effect=2 * plant_scale,
             noise_sd=plant_scale,
             rng=np.random.default_rng(0),
+            n_components=plant_k,
         )
         planted_design = design.assign(y=planted_y)
         for pen in [m for m in methods if m in ("l1", "l2")]:
             preds = penalized_preds(
-                lambda _drug: soragni_base, planted_design, fold_of, n_folds, uniq_lines, pen
+                lambda _drug: plant_z_df, planted_design, fold_of, n_folds, uniq_lines, pen
             )
             if preds.empty:
                 print(f"  planted/{pen}: no scorable (patient, drug) pairs -- skipping")

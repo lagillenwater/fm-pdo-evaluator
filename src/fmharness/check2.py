@@ -11,6 +11,7 @@ caller's job, not this module's.
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -19,6 +20,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse, spmatrix
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 from fmharness.adapters import PENALTY_NAMES, build_adapters, make_penalty
@@ -163,6 +165,19 @@ def restrict_representation_support(
     return out
 
 
+def seed_for_name(name: str) -> int:
+    """A stable, deterministic seed derived from ``name`` (CRC32, not Python's salted
+    ``hash()``) -- so two DIFFERENT representations/sources that happen to share a shape
+    (e.g. ``pca``/``nmf`` reduced to the same HVG panel) get INDEPENDENT random-feature
+    controls instead of the exact same draw. A fixed literal seed (e.g. ``seed=0`` for
+    every caller) reproduced the identical noise matrix for same-shaped representations --
+    each row still individually functions as a valid random control, but two supposedly
+    independent negative-control rows silently being the same draw is confusing and wastes
+    the chance to catch a shape-specific fluke.
+    """
+    return zlib.crc32(name.encode()) & 0xFFFFFFFF
+
+
 def random_feature_control(shape: pd.DataFrame, *, seed: int = 0) -> pd.DataFrame:
     """A same-shape (index, n_features), i.i.d. standard-normal negative control for a
     high-dimensional FM-embedding representation (Stack now, scFoundation later).
@@ -197,13 +212,18 @@ def random_control_representation(
     a single global shape. Every representation in the grid gets one (not just a
     foundation-model embedding): an apparent win from ANY representation should be checked
     against raw capacity alone, not assumed away because it isn't obviously high-dimensional.
+
+    Each drug's control uses ``seed`` combined with a drug-derived offset (``seed_for_name``),
+    not ``seed`` verbatim -- a drug-independent representation (e.g. ``"expr"``) hands every
+    drug the exact same frame, so a single shared seed would make every drug's "random"
+    control the identical draw too.
     """
     out: dict[str, pd.DataFrame] = {}
     for d in drugs:
         frame = rep(d) if callable(rep) else rep.get(d)
         if frame is None or frame.empty:
             continue
-        out[d] = random_feature_control(frame, seed=seed)
+        out[d] = random_feature_control(frame, seed=(seed + seed_for_name(d)) & 0xFFFFFFFF)
     return out
 
 
@@ -317,7 +337,7 @@ def score_check2(
     # the grid has a matching "<name>_random" row scored through the identical pipeline.
     for name in list(representations):
         representations[f"{name}_random"] = random_control_representation(
-            representations[name], target_drugs, seed=0
+            representations[name], target_drugs, seed=seed_for_name(name)
         )
     # restrict_representation_support: "expr"/stack_emb are drug-independent (always the full
     # line index for every drug) while a delta-source representation only has the lines its own
@@ -339,7 +359,21 @@ def score_check2(
     # a real interaction when one is guaranteed to exist, the flowchart's "positive control:
     # planted interaction, recovered" (distinct from the oracle/random-feature controls,
     # which use real data or noise, not a simulation with a known, controlled effect size).
-    emb_per_row = base_hvg.reindex(design_target["patient"]).to_numpy()
+    #
+    # Plant AND score in the SAME small PCA subspace of base_hvg -- planting in the raw
+    # gene space and then fitting RidgeCV directly on thousands of raw genes with ~n/folds
+    # training lines per fold cannot recover ANY signal at any effect size (verified
+    # empirically: r2 stayed negative even at 30x effect on unreduced features -- p >> n
+    # with p in the thousands and n in the tens is simply not fittable, regardless of
+    # regularization). n_components is capped well below the smallest per-fold training-line
+    # count so the fit is actually well-posed.
+    plant_k = max(1, min(5, len(uniq_lines) // (n_folds + 2), base_hvg.shape[1], len(uniq_lines) - 1))
+    plant_sc = StandardScaler().fit(base_hvg.to_numpy())
+    plant_z = PCA(n_components=plant_k, random_state=0).fit_transform(
+        plant_sc.transform(base_hvg.to_numpy())
+    )
+    plant_z_df = pd.DataFrame(plant_z, index=base_hvg.index)
+    emb_per_row = plant_z_df.reindex(design_target["patient"]).to_numpy()
     within_drug_sd = float(
         np.std(
             design_target["y"].to_numpy()
@@ -351,14 +385,15 @@ def score_check2(
         cast("pd.Series", design_target["drug"]),
         cast("pd.Series", design_target["y"]),
         emb_per_row,
-        effect=plant_scale,
+        effect=2 * plant_scale,
         noise_sd=plant_scale,
         rng=np.random.default_rng(0),
+        n_components=plant_k,
     )
     planted_design = design_target.assign(y=planted_y)
     for pen in penalties:
         preds = penalized_preds(
-            lambda _drug: base_hvg, planted_design, fold_of, n_folds, uniq_lines, pen
+            lambda _drug: plant_z_df, planted_design, fold_of, n_folds, uniq_lines, pen
         )
         if preds.empty:
             continue
