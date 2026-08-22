@@ -282,6 +282,47 @@ def test_score_check2_includes_a_planted_interaction_positive_control() -> None:
     assert (planted["p_label"] < 0.1).any()
 
 
+def test_score_check2_planted_control_ignores_design_lines_outside_the_baseline() -> None:
+    # design is filtered by drug only (score_check2's design_target), so a real caller's
+    # design (e.g. full GDSC2, many more lines than the Tahoe-context baseline) can carry
+    # lines base_hvg/real_key don't cover. Reindexing the planted PCA embedding against
+    # those extra lines directly (instead of restricting first) introduces NaN rows and
+    # PCA/plant_interaction raises -- this is exactly what job 31564266 hit on real data.
+    genes = pd.Index([f"g{i}" for i in range(30)])
+    lines = [f"L{i}" for i in range(17)]
+    n_drugs = 5
+    drug_names = [f"d{i}" for i in range(n_drugs)]
+    rng = np.random.default_rng(2)
+    delta = pd.DataFrame(rng.standard_normal((17, 30)), columns=genes)
+    key = pd.DataFrame({"patient": lines, "drug": ["d0"] * 17})
+    sources = {"additive": (delta, key)}
+    base = pd.DataFrame(rng.standard_normal((17, 30)), columns=genes, index=pd.Index(lines))
+    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("g0",), 1)}
+    real_key = pd.DataFrame(
+        {"patient": lines * n_drugs, "drug": np.repeat(drug_names, 17).tolist()}
+    )
+    # design carries extra lines (E0..E4) that base_hvg/real_key never see -- the shape
+    # mismatch a wider real-world design (e.g. GDSC2) has against a narrower generation-eval
+    # baseline (e.g. Tahoe-context lines).
+    extra_lines = [f"E{i}" for i in range(5)]
+    all_lines = lines + extra_lines
+    design = pd.DataFrame(
+        {
+            "patient": all_lines * n_drugs,
+            "drug": np.repeat(drug_names, len(all_lines)).tolist(),
+            "y": rng.standard_normal(len(all_lines) * n_drugs).tolist(),
+        }
+    )
+
+    table = score_check2(sources, real_key, base, genes, design, hallmark=hallmark, folds=5)
+
+    planted = table[table["source"] == "planted"]
+    assert not planted.empty
+    assert (planted["n"] > 0).all()
+    # every scored row is restricted to the 17 baseline lines, never the 5 extra ones.
+    assert (planted["n"] <= 17 * n_drugs).all()
+
+
 def test_score_check2_scores_a_random_control_for_every_representation() -> None:
     # not just stack_emb: "expr" and every delta source ("additive" here) must ALSO get a
     # same-shape random-feature negative control in the SAME penalized grid, so an apparent

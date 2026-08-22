@@ -373,24 +373,31 @@ def score_check2(
         plant_sc.transform(base_hvg.to_numpy())
     )
     plant_z_df = pd.DataFrame(plant_z, index=base_hvg.index)
-    emb_per_row = plant_z_df.reindex(design_target["patient"]).to_numpy()
+    # design_target is filtered by drug only, so it can carry lines design has that base_hvg
+    # (the Tahoe-context 50-line baseline) doesn't -- reindexing plant_z_df against those would
+    # silently introduce NaN rows into the PCA embedding. Restrict to base_hvg's own lines first.
+    design_planted = cast(
+        pd.DataFrame,
+        design_target[design_target["patient"].astype(str).isin(set(base_hvg.index.astype(str)))],
+    )
+    emb_per_row = plant_z_df.reindex(design_planted["patient"]).to_numpy()
     within_drug_sd = float(
         np.std(
-            design_target["y"].to_numpy()
-            - design_target.groupby("drug")["y"].transform("mean").to_numpy()
+            design_planted["y"].to_numpy()
+            - design_planted.groupby("drug")["y"].transform("mean").to_numpy()
         )
     )
     plant_scale = within_drug_sd if within_drug_sd > 0 else 1.0
     planted_y = plant_interaction(
-        cast("pd.Series", design_target["drug"]),
-        cast("pd.Series", design_target["y"]),
+        cast("pd.Series", design_planted["drug"]),
+        cast("pd.Series", design_planted["y"]),
         emb_per_row,
         effect=2 * plant_scale,
         noise_sd=plant_scale,
         rng=np.random.default_rng(0),
         n_components=plant_k,
     )
-    planted_design = design_target.assign(y=planted_y)
+    planted_design = design_planted.assign(y=planted_y)
     for pen in penalties:
         preds = penalized_preds(
             lambda _drug: plant_z_df, planted_design, fold_of, n_folds, uniq_lines, pen
