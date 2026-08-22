@@ -85,7 +85,7 @@ def _edges(labels: list[str]) -> tuple[list[str], list[float]]:
 
 
 def _annotate(ax, xs, values, *, fmt="{:.2f}", pad=0.012, bold_idx=()):
-    for i, (x, v) in enumerate(zip(xs, values)):
+    for i, (x, v) in enumerate(zip(xs, values, strict=True)):
         v = 0.0 if abs(v) < 0.005 else v
         ax.annotate(
             fmt.format(v),
@@ -103,12 +103,25 @@ def panel_check1(ax) -> None:
     x = np.arange(len(labels))
     ec, lw = _edges(labels)
     ax.bar(
-        x - 0.19, vals[:, 0], 0.36, color=BLUE, edgecolor=ec, linewidth=lw,
+        x - 0.19,
+        vals[:, 0],
+        0.36,
+        color=BLUE,
+        edgecolor=ec,
+        linewidth=lw,
         label="predicted vs real change",
     )
     ax.bar(x + 0.19, vals[:, 1], 0.36, color=BLUE_LT, label="match to the WRONG condition")
-    ax.axhline(DELTA_CEILING, ls="--", color="#C0392B", lw=1.4, label=f"ceiling {DELTA_CEILING:.2f}")
-    ax.axhline(DELTA_SPLIT_HALF, ls=":", color="#E08214", lw=1.4, label=f"split-half {DELTA_SPLIT_HALF:.2f}")
+    ax.axhline(
+        DELTA_CEILING, ls="--", color="#C0392B", lw=1.4, label=f"ceiling {DELTA_CEILING:.2f}"
+    )
+    ax.axhline(
+        DELTA_SPLIT_HALF,
+        ls=":",
+        color="#E08214",
+        lw=1.4,
+        label=f"split-half {DELTA_SPLIT_HALF:.2f}",
+    )
     _annotate(ax, x - 0.19, vals[:, 0], bold_idx=(len(labels) - 1,))
     ax.set_xticks(x, labels)
     ax.set_ylim(-0.05, 0.55)
@@ -129,32 +142,57 @@ def panel_toxic_share(ax) -> None:
     ks = (1, 3)
     x = np.arange(len(ks))
     obs = [TOXIC_SHARE_OBSERVED[k][0] for k in ks]
-    err = np.array([[TOXIC_SHARE_OBSERVED[k][0] - TOXIC_SHARE_OBSERVED[k][1] for k in ks],
-                    [TOXIC_SHARE_OBSERVED[k][2] - TOXIC_SHARE_OBSERVED[k][0] for k in ks]])
-    ax.bar(x - 0.26, obs, 0.24, color=BLUE, yerr=err, capsize=4,
-           label="observed best drug (the truth)")
-    ax.bar(x, [TOXIC_SHARE_PRIOR[k] for k in ks], 0.24, color=ORANGE,
-           label="potency prior (ignores the cell line)")
-    ax.bar(x + 0.26, [1.0, 1.0], 0.24, facecolor="none", edgecolor="#999999", hatch="///",
-           linewidth=1.2, label="each representation (not yet computable)")
-    for xi, k in zip(x, ks):
-        ax.annotate(f"{TOXIC_SHARE_OBSERVED[k][0]:.2f}",
-                    (xi - 0.26, TOXIC_SHARE_OBSERVED[k][2] + 0.03),
-                    ha="center", fontsize=9)
+    err = np.array(
+        [
+            [TOXIC_SHARE_OBSERVED[k][0] - TOXIC_SHARE_OBSERVED[k][1] for k in ks],
+            [TOXIC_SHARE_OBSERVED[k][2] - TOXIC_SHARE_OBSERVED[k][0] for k in ks],
+        ]
+    )
+    ax.bar(
+        x - 0.26, obs, 0.24, color=BLUE, yerr=err, capsize=4, label="observed best drug (the truth)"
+    )
+    ax.bar(
+        x,
+        [TOXIC_SHARE_PRIOR[k] for k in ks],
+        0.24,
+        color=ORANGE,
+        label="potency prior (ignores the cell line)",
+    )
+    ax.bar(
+        x + 0.26,
+        [1.0, 1.0],
+        0.24,
+        facecolor="none",
+        edgecolor="#999999",
+        hatch="///",
+        linewidth=1.2,
+        label="each representation (not yet computable)",
+    )
+    for xi, k in zip(x, ks, strict=True):
+        ax.annotate(
+            f"{TOXIC_SHARE_OBSERVED[k][0]:.2f}",
+            (xi - 0.26, TOXIC_SHARE_OBSERVED[k][2] + 0.03),
+            ha="center",
+            fontsize=9,
+        )
     for xi in x:
-        ax.annotate("?", (xi + 0.26, 0.46), ha="center", fontsize=15, color="#777777",
-                    fontweight="bold")
+        ax.annotate(
+            "?", (xi + 0.26, 0.46), ha="center", fontsize=15, color="#777777", fontweight="bold"
+        )
     ax.set_xticks(x, [f"top-{k}" for k in ks])
     ax.set_ylim(0, 1.32)
     ax.set_ylabel("share of picks containing a pan-toxic drug")
     ax.set_title("Are the top picks just the pan-toxic drugs?", fontweight="bold")
     ax.legend(fontsize=8, loc="upper left", framealpha=0.95)
     ax.set_xlabel(
-        f"even the TRUTH is {obs[0]:.0%} pan-toxic at top-1 and {obs[1]:.0%} at top-3, so this share\n"
+        f"even the TRUTH is {obs[0]:.0%} pan-toxic at top-1 and {obs[1]:.0%} at "
+        f"top-3, so this share\n"
         f"saturates; the separating view is how many DISTINCT drugs get picked #1\n"
         f"(truth {DISTINCT_TOP1_OBSERVED[0]:.1f} of 26, 95% {DISTINCT_TOP1_OBSERVED[1]:.0f}-"
         f"{DISTINCT_TOP1_OBSERVED[2]:.0f}; prior 1 by construction)",
-        fontsize=8.5, color="#444444", labelpad=8,
+        fontsize=8.5,
+        color="#444444",
+        labelpad=8,
     )
 
 
@@ -165,13 +203,26 @@ def panel_check2(ax) -> None:
     ax.bar(x - 0.19, vals[:, 0], 0.36, color=BLUE, label="overall potency (global)")
     ec, lw = _edges(labels)
     ax.bar(
-        x + 0.19, vals[:, 1], 0.36, color=ORANGE, edgecolor=ec, linewidth=lw,
+        x + 0.19,
+        vals[:, 1],
+        0.36,
+        color=ORANGE,
+        edgecolor=ec,
+        linewidth=lw,
         label="cell-line-specific (interaction)",
     )
-    ax.axhline(INTERACTION_CEILING, ls="--", color="#C0392B", lw=1.4, label=f"interaction ceiling {INTERACTION_CEILING:.2f}")
+    ax.axhline(
+        INTERACTION_CEILING,
+        ls="--",
+        color="#C0392B",
+        lw=1.4,
+        label=f"interaction ceiling {INTERACTION_CEILING:.2f}",
+    )
     ax.axhline(0, color="#666666", lw=0.8)
     _annotate(ax, x - 0.19, vals[:, 0])
-    _annotate(ax, x + 0.19, vals[:, 1], fmt="{:+.2f}", pad=0.02, bold_idx=(labels.index("base\n(embed)"),))
+    _annotate(
+        ax, x + 0.19, vals[:, 1], fmt="{:+.2f}", pad=0.02, bold_idx=(labels.index("base\n(embed)"),)
+    )
     ax.set_xticks(x, labels, fontsize=8.5)
     ax.set_ylim(-0.22, 0.95)
     ax.set_ylabel("Spearman (higher = better)")
@@ -185,11 +236,18 @@ def panel_selection_gap(ax) -> None:
     x = np.arange(len(labels))
     ec, lw = _edges(labels)
     ax.bar(
-        x - 0.19, vals[:, 0], 0.36, color=PURPLE, edgecolor=ec, linewidth=lw,
+        x - 0.19,
+        vals[:, 0],
+        0.36,
+        color=PURPLE,
+        edgecolor=ec,
+        linewidth=lw,
         label="selection gap@1 (top pick)",
     )
     ax.bar(x + 0.19, vals[:, 1], 0.36, color=PURPLE_LT, label="selection gap@3 (top-3 list)")
-    ax.axhline(RANDOM_TOP1, ls="--", color="#C0392B", lw=1.4, label=f"random top-1 ~ {RANDOM_TOP1:.2f}")
+    ax.axhline(
+        RANDOM_TOP1, ls="--", color="#C0392B", lw=1.4, label=f"random top-1 ~ {RANDOM_TOP1:.2f}"
+    )
     _annotate(ax, x - 0.19, vals[:, 0])
     ax.set_xticks(x, labels, fontsize=8.5)
     ax.set_ylim(0, 0.86)

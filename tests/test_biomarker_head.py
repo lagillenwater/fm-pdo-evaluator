@@ -10,7 +10,16 @@ from fmharness.probe.biomarker_head import BiomarkerEstimator
 from fmharness.probe.estimator import Estimator
 
 
-def _synthetic() -> tuple[pd.DataFrame, list[str], list[str], list[float], list[dict[str, str]], dict[str, dict[str, set[str]]], set[str], dict[str, int]]:
+def _synthetic() -> tuple[
+    pd.DataFrame,
+    list[str],
+    list[str],
+    list[float],
+    list[dict[str, str]],
+    dict[str, dict[str, set[str]]],
+    set[str],
+    dict[str, int],
+]:
     # 4 patients, 2 drugs. drugA has an "expr" biomarker rule keyed on entrez "100";
     # drugB has a "mut" rule. patients p1/p3 carry the mutation.
     x_log = pd.DataFrame(

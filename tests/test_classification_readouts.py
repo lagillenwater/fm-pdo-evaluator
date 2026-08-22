@@ -71,9 +71,7 @@ def test_top_k_hit_rate_null_on_unbalanced_zero_info_predictor() -> None:
     from . import readout_contract
 
     panel = readout_contract.unbalanced_zero_info_panel(seed=0)
-    thresholded = panel.assign(
-        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-    )
+    thresholded = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
     k = len(thresholded) // 2
     expected = float((thresholded.nlargest(k, "y_pred")["y_true"] == 1.0).mean())
     # A zero-info predictor's top-k selection is arbitrary among ties (many
@@ -89,9 +87,7 @@ def test_brier_score_null_on_unbalanced_zero_info_predictor() -> None:
     from . import readout_contract
 
     panel = readout_contract.unbalanced_zero_info_panel(seed=0)
-    thresholded = panel.assign(
-        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-    )
+    thresholded = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
     # A drug-constant y_pred is not itself a probability in [0,1] here (it's a
     # raw y_true mean); rescale isn't needed for the null check -- brier_score
     # on a panel where y_pred carries no patient information should equal the
@@ -110,24 +106,18 @@ def test_brier_score_via_helper() -> None:
     # Create a readout function that applies brier_score to a binarized panel.
     # The null value is the MSE when y_pred is the drug mean of binarized y_true.
     def brier_on_binary(panel: pd.DataFrame) -> float:
-        panel = panel.assign(
-            y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-        )
+        panel = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
         drug_mean = panel.groupby("drug")["y_true"].transform("mean")
         return brier_score(panel.assign(y_pred=drug_mean))
 
     # Compute expected null value: MSE of drug mean predictions.
     panel = readout_contract.unbalanced_zero_info_panel(seed=0)
-    thresholded = panel.assign(
-        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-    )
+    thresholded = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
     drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
     expected_null = float(np.mean((drug_rate - thresholded["y_true"]) ** 2))
 
     # Verify via the helper.
-    readout_contract.assert_null_on_unbalanced_zero_info_predictor(
-        brier_on_binary, expected_null
-    )
+    readout_contract.assert_null_on_unbalanced_zero_info_predictor(brier_on_binary, expected_null)
 
 
 def test_expected_calibration_error_null_on_unbalanced_zero_info_predictor() -> None:
@@ -141,17 +131,13 @@ def test_expected_calibration_error_null_on_unbalanced_zero_info_predictor() -> 
     from . import readout_contract
 
     def ece_on_binary(panel: pd.DataFrame) -> float:
-        panel = panel.assign(
-            y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-        )
+        panel = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
         drug_mean = panel.groupby("drug")["y_true"].transform("mean")
         return expected_calibration_error(panel.assign(y_pred=drug_mean), n_bins=10)
 
     # The null claim is verified directly before it is asserted through the helper.
     panel = readout_contract.unbalanced_zero_info_panel(seed=0)
-    thresholded = panel.assign(
-        y_true=(panel["y_true"] > panel["y_true"].median()).astype(float)
-    )
+    thresholded = panel.assign(y_true=(panel["y_true"] > panel["y_true"].median()).astype(float))
     drug_rate = thresholded.groupby("drug")["y_true"].transform("mean")
     assert np.isclose(
         expected_calibration_error(thresholded.assign(y_pred=drug_rate), n_bins=10), 0.0

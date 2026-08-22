@@ -169,9 +169,7 @@ def test_known_corpus_adapter_forwards_supports_native() -> None:
     a = _adata(n_obs=4)
     off = KnownCorpusAdapter(pretraining_lines=set(), pretraining_drugs=set())
     assert off.predict_native(a, ["d1"]) is None
-    on = KnownCorpusAdapter(
-        pretraining_lines=set(), pretraining_drugs=set(), supports_native=True
-    )
+    on = KnownCorpusAdapter(pretraining_lines=set(), pretraining_drugs=set(), supports_native=True)
     out = on.predict_native(a, ["d1", "d2"])
     assert out is not None
     assert out.shape == (4, 2)

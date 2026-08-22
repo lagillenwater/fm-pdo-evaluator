@@ -79,9 +79,7 @@ class BilinearEstimator(ProbeBase):
                 n_g = len(np.unique(grp))
                 if n_g >= 2:
                     cv = list(
-                        GroupKFold(n_splits=min(5, n_g)).split(
-                            feats, residual[known], groups=grp
-                        )
+                        GroupKFold(n_splits=min(5, n_g)).split(feats, residual[known], groups=grp)
                     )
             self._ridge = RidgeCV(alphas=np.asarray(self.alphas, dtype=np.float64), cv=cv)
             self._ridge.fit(feats, residual[known])

@@ -95,9 +95,9 @@ _ASCII = str.maketrans(
         "Δ": "delta",  # Δ  treated-minus-control difference
         "δ": "delta",  # δ
         "→": "->",  # →
-        "−": "-",  # − minus
+        "\u2212": "-",  # unicode minus sign (U+2212)
         "—": "-",  # — em dash
-        "×": "x",  # ×
+        "\u00d7": "x",  # unicode multiplication sign (U+00D7)
         "·": " | ",  # ·
         "↑": "up",  # ↑
         "↓": "down",  # ↓
@@ -142,70 +142,222 @@ def build() -> str:
     body: list[str] = []
 
     # ===== TRAIN band: fit the supervised readout, then freeze it =============
-    realdelta = Node(240, 150, 300, 62, [("Real perturbation Δ", True),
-                                         ("L1000 / Tahoe treated − DMSO", False),
-                                         ("(cell lines)", False)], "input")
-    trainvia = Node(240, 234, 300, 54, [("Training viability", True),
-                                        ("GDSC2 AUC (cell-line screen)", False)], "label")
-    fit = Node(685, 192, 330, 78, [("Fit supervised readout", True),
-                                   ("szalai: Ridge L2 linear", False),
-                                   ("xgboost: elastic-net + boosted trees", False)], "readout")
-    frozen = Node(1085, 192, 236, 58, [("FROZEN readout", True),
-                                       ("Δ -> sensitivity", False)], "readout")
+    realdelta = Node(
+        240,
+        150,
+        300,
+        62,
+        [
+            ("Real perturbation Δ", True),
+            ("L1000 / Tahoe treated - DMSO", False),
+            ("(cell lines)", False),
+        ],
+        "input",
+    )
+    trainvia = Node(
+        240,
+        234,
+        300,
+        54,
+        [("Training viability", True), ("GDSC2 AUC (cell-line screen)", False)],
+        "label",
+    )
+    fit = Node(
+        685,
+        192,
+        330,
+        78,
+        [
+            ("Fit supervised readout", True),
+            ("szalai: Ridge L2 linear", False),
+            ("xgboost: elastic-net + boosted trees", False),
+        ],
+        "readout",
+    )
+    frozen = Node(
+        1085, 192, 236, 58, [("FROZEN readout", True), ("Δ -> sensitivity", False)], "readout"
+    )
     TH_train = (455, 192)
 
     # ===== TEST band: apply the frozen readout to held-out deltas =============
-    qbase = Node(240, 452, 300, 62, [("Held-out query baseline", True),
-                                     ("patient tumor / held-out", False),
-                                     ("cell-line DMSO (log-CPM)", False)], "input")
-    pctx = Node(240, 602, 300, 54, [("Perturbation context", True),
-                                    ("drug-treated cells (for Stack)", False)], "input")
+    qbase = Node(
+        240,
+        452,
+        300,
+        62,
+        [
+            ("Held-out query baseline", True),
+            ("patient tumor / held-out", False),
+            ("cell-line DMSO (log-CPM)", False),
+        ],
+        "input",
+    )
+    pctx = Node(
+        240,
+        602,
+        300,
+        54,
+        [("Perturbation context", True), ("drug-treated cells (for Stack)", False)],
+        "input",
+    )
     TH_in = (445, 527)
 
     deltas = [
-        Node(635, 400, 292, 62, [("additive  (floor)", True), ("each drug's mean real Δ", False),
-                                 ("no patient × drug interaction", False)], "delta"),
-        Node(635, 500, 292, 62, [("learned  PCA / NMF", True), ("baseline → Δ residual (ridge)", False),
-                                 ("drug-mean + sample correction", False)], "delta"),
-        Node(635, 600, 292, 62, [("k-NN", True), ("mean real Δ of nearest-", False),
-                                 ("baseline lines (cosine)", False)], "delta"),
-        Node(635, 712, 292, 66, [("Stack-Aligned generation", True),
-                                 ("in-context generated treated − baseline", False),
-                                 ("[ foundation model under test ]", False)], "stack"),
+        Node(
+            635,
+            400,
+            292,
+            62,
+            [
+                ("additive  (floor)", True),
+                ("each drug's mean real Δ", False),
+                ("no patient x drug interaction", False),
+            ],
+            "delta",
+        ),
+        Node(
+            635,
+            500,
+            292,
+            62,
+            [
+                ("learned  PCA / NMF", True),
+                ("baseline → Δ residual (ridge)", False),
+                ("drug-mean + sample correction", False),
+            ],
+            "delta",
+        ),
+        Node(
+            635,
+            600,
+            292,
+            62,
+            [
+                ("k-NN", True),
+                ("mean real Δ of nearest-", False),
+                ("baseline lines (cosine)", False),
+            ],
+            "delta",
+        ),
+        Node(
+            635,
+            712,
+            292,
+            66,
+            [
+                ("Stack-Aligned generation", True),
+                ("in-context generated treated - baseline", False),
+                ("[ foundation model under test ]", False),
+            ],
+            "stack",
+        ),
     ]
     TH_ro = (880, 560)
-    apply = Node(1085, 560, 250, 84, [("Apply readout", True), ("Δ -> sensitivity", False),
-                                      ("frozen szalai / xgboost", False),
-                                      ("+ hallmark (fixed)", False)], "readout")
-    pred = Node(1400, 452, 250, 48, [("Predicted sensitivity", True),
-                                     ("per (sample, drug)", False)], "pred")
-    metrics = Node(1400, 642, 250, 108, [("Metrics", True), ("global / interaction /", False),
-                                         ("within-drug Spearman", False),
-                                         ("normalized regret@k", False),
-                                         ("Δ-fidelity Pearson (check 1)", False)], "metric")
-    testvia = Node(1400, 808, 310, 54, [("Test viability  (held out)", True),
-                                        ("Soragni organoid AUC / held-out GDSC2 AUC", False)], "label")
+    apply = Node(
+        1085,
+        560,
+        250,
+        84,
+        [
+            ("Apply readout", True),
+            ("Δ -> sensitivity", False),
+            ("frozen szalai / xgboost", False),
+            ("+ hallmark (fixed)", False),
+        ],
+        "readout",
+    )
+    pred = Node(
+        1400, 452, 250, 48, [("Predicted sensitivity", True), ("per (sample, drug)", False)], "pred"
+    )
+    metrics = Node(
+        1400,
+        642,
+        250,
+        108,
+        [
+            ("Metrics", True),
+            ("global / interaction /", False),
+            ("within-drug Spearman", False),
+            ("normalized regret@k", False),
+            ("Δ-fidelity Pearson (check 1)", False),
+        ],
+        "metric",
+    )
+    testvia = Node(
+        1400,
+        808,
+        310,
+        54,
+        [
+            ("Test viability  (held out)", True),
+            ("Soragni organoid AUC / held-out GDSC2 AUC", False),
+        ],
+        "label",
+    )
     controls = [
-        Node(1680, 432, 232, 58, [("negative control", True), ("within-drug perm null", False)],
-             "control", dashed_border=True),
-        Node(1680, 556, 232, 58, [("negative control", True), ("random gene-set", False)],
-             "control", dashed_border=True),
-        Node(1680, 680, 232, 58, [("positive control", True), ("planted interaction, recovered", False)],
-             "control", dashed_border=True),
-        Node(1680, 804, 232, 58, [("validation", True), ("readout gate on real Δ", False)],
-             "control", dashed_border=True),
+        Node(
+            1680,
+            432,
+            232,
+            58,
+            [("negative control", True), ("within-drug perm null", False)],
+            "control",
+            dashed_border=True,
+        ),
+        Node(
+            1680,
+            556,
+            232,
+            58,
+            [("negative control", True), ("random gene-set", False)],
+            "control",
+            dashed_border=True,
+        ),
+        Node(
+            1680,
+            680,
+            232,
+            58,
+            [("positive control", True), ("planted interaction, recovered", False)],
+            "control",
+            dashed_border=True,
+        ),
+        Node(
+            1680,
+            804,
+            232,
+            58,
+            [("validation", True), ("readout gate on real Δ", False)],
+            "control",
+            dashed_border=True,
+        ),
     ]
 
     # ----- band frame ---------------------------------------------------------
     body += [
-        label(W / 2, 30, "fm-pdo-evaluator  —  transcript → viability evaluation",
-              size=17, color=INK),
+        label(
+            W / 2, 30, "fm-pdo-evaluator  —  transcript → viability evaluation", size=17, color=INK
+        ),
         f'<line x1="30" y1="300" x2="{W - 30}" y2="300" stroke="#cccccc" '
         f'stroke-width="1.2" stroke-dasharray="3 5"/>',
-        label(38, 74, "TRAIN  —  fit the supervised readout   (cell-line cohort)",
-              size=14, color="#555", anchor="start", bold=True),
-        label(38, 340, "TEST  —  held-out evaluation", size=14, color="#555",
-              anchor="start", bold=True),
+        label(
+            38,
+            74,
+            "TRAIN  —  fit the supervised readout   (cell-line cohort)",
+            size=14,
+            color="#555",
+            anchor="start",
+            bold=True,
+        ),
+        label(
+            38,
+            340,
+            "TEST  —  held-out evaluation",
+            size=14,
+            color="#555",
+            anchor="start",
+            bold=True,
+        ),
     ]
 
     # ----- TRAIN wiring -------------------------------------------------------
@@ -232,37 +384,92 @@ def build() -> str:
         arrow(testvia.top(), metrics.bottom(), color=AUX, dashed=True),
     ]
     mx = metrics.cx + metrics.w / 2
-    for n, my in zip(controls, (metrics.cy - 45, metrics.cy - 15, metrics.cy + 15,
-                                metrics.cy + 45)):
+    for n, my in zip(
+        controls, (metrics.cy - 45, metrics.cy - 15, metrics.cy + 15, metrics.cy + 45), strict=True
+    ):
         body.append(arrow(n.left(), (mx, my), color=AUX, dashed=True))
 
     # ----- boxes on top -------------------------------------------------------
-    for n in [realdelta, trainvia, fit, frozen, qbase, pctx, *deltas, apply, pred,
-              metrics, testvia, *controls]:
+    for n in [
+        realdelta,
+        trainvia,
+        fit,
+        frozen,
+        qbase,
+        pctx,
+        *deltas,
+        apply,
+        pred,
+        metrics,
+        testvia,
+        *controls,
+    ]:
         body.append(n.svg())
 
     # ----- annotations --------------------------------------------------------
     body += [
-        label(685, 250, "hallmark: unsupervised signature -- skips training",
-              size=10, color=AUX, italic=True),
-        label(1140, 380, "frozen readout applied to every test delta",
-              size=10, color=BRIDGE, italic=True, anchor="start"),
-        label(880, 528, "every source through the same frozen readout",
-              size=10, color=INK, italic=True),
-        label(635, 356,
-              "additive / learned / k-NN reuse the train-cohort real Δ;  Stack generates from the query",
-              size=10, color=AUX, italic=True),
+        label(
+            685,
+            250,
+            "hallmark: unsupervised signature -- skips training",
+            size=10,
+            color=AUX,
+            italic=True,
+        ),
+        label(
+            1140,
+            380,
+            "frozen readout applied to every test delta",
+            size=10,
+            color=BRIDGE,
+            italic=True,
+            anchor="start",
+        ),
+        label(
+            880,
+            528,
+            "every source through the same frozen readout",
+            size=10,
+            color=INK,
+            italic=True,
+        ),
+        label(
+            635,
+            356,
+            "additive / learned / k-NN reuse the train-cohort real Δ;  "
+            "Stack generates from the query",
+            size=10,
+            color=AUX,
+            italic=True,
+        ),
         label(1412, 748, "measured y", size=10, color=AUX, anchor="start"),
-        label(1680, 852, "null (neg) / recovery (pos) / gate (validation)",
-              size=9.5, color=AUX, italic=True),
-        label(30, H - 34,
-              "Supervised readout is fit on the cell-line cohort, frozen, then applied to held-out "
-              "test deltas -- train and test viability are different screens on different samples.",
-              size=10.5, color="#666", anchor="start"),
-        label(30, H - 18,
-              "All Δ on log-CPM fold-change; each gene z-scored per cohort before the readout.  "
-              "Purple = the readout (fit -> frozen -> applied).  Amber = FM under test.  Dashed = labels / controls.",
-              size=10.5, color="#666", anchor="start"),
+        label(
+            1680,
+            852,
+            "null (neg) / recovery (pos) / gate (validation)",
+            size=9.5,
+            color=AUX,
+            italic=True,
+        ),
+        label(
+            30,
+            H - 34,
+            "Supervised readout is fit on the cell-line cohort, frozen, then applied to held-out "
+            "test deltas -- train and test viability are different screens on different samples.",
+            size=10.5,
+            color="#666",
+            anchor="start",
+        ),
+        label(
+            30,
+            H - 18,
+            "All Δ on log-CPM fold-change; each gene z-scored per cohort before the readout.  "
+            "Purple = the readout (fit -> frozen -> applied).  Amber = FM under test.  "
+            "Dashed = labels / controls.",
+            size=10.5,
+            color="#666",
+            anchor="start",
+        ),
     ]
 
     inner = "\n".join(body)
