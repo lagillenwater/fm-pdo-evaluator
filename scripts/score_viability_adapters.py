@@ -2,7 +2,11 @@
 
 The generation axis must be fair: the readout adapters (l1/l2 CV-tuned penalized
 regression supervised on real L1000 deltas vs GDSC2 AUC; hallmark unsupervised) are
-applied to EVERY delta source, not just Stack's. Sources:
+applied to EVERY delta source, not just Stack's. The "hallmark" method expands to one
+row per individual Hallmark signature (``_build_readout_adapters`` /
+``build_hallmark_breakout``, 2026-08-21), not one score averaged across all of them --
+pass ``--hallmark-sets`` to restrict which signatures are scored at all (e.g. just
+HALLMARK_E2F_TARGETS,HALLMARK_G2M_CHECKPOINT for proliferation only). Sources:
 
   - ``additive`` (always): each drug's mean real L1000 delta, applied to every patient
     (patient-independent) -- the generation analogue of the drug-mean baseline. The
@@ -30,6 +34,29 @@ artifact left behind as a stale default until 2026-08-20 (correlation as low as 
 against stack_input_sarcoma.h5ad on the same patient IDs; using it silently subtracts
 a mismatched-substrate baseline from every non-additive delta source).
 
+--stack-emb width vs pca/nmf's small, sample-size-capped component counts is not truncated
+to match: ``load_line_matrix`` loads the embedding as-is (no dimensionality reduction), and
+it flows UNTRUNCATED into ``penalized_preds``' CV-tuned RidgeCV/LassoCV (``make_penalty``).
+Ridge is well-posed for p >> n, so the CV-tuned penalty automatically shrinks effective
+capacity to what the small Soragni cohort supports, without needing to truncate the
+embedding itself -- truncating would throw away real learned structure to force a capacity
+match that the CV-tuned penalty already provides for free. Each --stack-emb representation
+is also scored against a same-width i.i.d.-standard-normal negative control
+(``fmharness.check2.random_feature_control``, as ``f"{label}_random"``) through the
+identical penalized_preds pipeline, so an apparent win is attributable to learned structure
+rather than raw embedding width (same treatment as Check 2's stack_emb loop). Every
+generation-based source (additive/pca/nmf/stack) gets the SAME random-feature control for
+its l1/l2 rows too, fit AND applied on matching-shape noise (not just noise fed through a
+model trained on real genes, which would test something unrelated) -- ``f"{source}_random"``.
+
+No oracle/ceiling VALIDATION (the real measured post-treatment delta scored as its own
+"prediction", as Check 1/2's driver scripts now add via ``score_check2``'s ``oracle=``):
+Soragni has no real treated-organoid RNA-seq, only the untreated tumor-RNA baseline -- there
+is nothing to feed as a ceiling input here, unlike Tahoe/GDSC2 where the real per-(line, drug)
+delta exists. DOES get the flowchart's actual "positive control" (planted interaction,
+recovered, ``fmharness.controls.plant_interaction``) -- a ``"planted"`` row using the
+tumor-RNA baseline, since that data gap doesn't apply to a simulation.
+
   PYTHONPATH=src python scripts/score_viability_adapters.py --l1000-dir . \\
       --gctx GSE92742_Broad_LINCS_Level3_INF_mlr12k_n1319138x12328.gctx \\
       --generated-dir generated_rich/ --baseline data/reference/stack_input_sarcoma.h5ad
@@ -44,7 +71,9 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-from fmharness.adapters import ALL_METHODS, build_adapters
+from fmharness.adapters import ALL_METHODS, ViabilityAdapter, build_adapters, build_hallmark_breakout
+from fmharness.check2 import load_line_matrix, penalized_preds, random_feature_control
+from fmharness.controls import plant_interaction
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     build_additive_deltas,
@@ -54,8 +83,28 @@ from fmharness.deltas import (
     restrict_common_support,
     soragni_pert_map,
 )
+from fmharness.drug_targets import score_target_gene_predictors
 from fmharness.evaluation import build_sample_design, score_predictions
 from fmharness.signatures import SIGNATURES, load_hallmark
+
+
+def _build_readout_adapters(
+    methods: list[str], sigs: dict[str, tuple[tuple[str, ...], int]] | None
+) -> list[ViabilityAdapter]:
+    """Same selection as ``build_adapters``, except ``"hallmark"`` expands to one adapter
+    PER Hallmark signature (``build_hallmark_breakout``) instead of one score averaged
+    across every signature -- on Tahoe only the proliferation sets (E2F/G2M) cleared the
+    random-gene-set control while P53/apoptosis added noise, so a blended score can hide
+    a real per-pathway signal (docs/tahoe_generation_results.md's Gate table)."""
+    rest = [m for m in methods if m != "hallmark"]
+    out: list[ViabilityAdapter] = []
+    if "hallmark" in methods:
+        if sigs is None:
+            raise ValueError("the hallmark adapter requires signatures=")
+        out.extend(build_hallmark_breakout(sigs))
+    if rest:
+        out.extend(build_adapters(rest, signatures=sigs))
+    return out
 
 
 def _read_baseline(path: Path) -> pd.DataFrame:
@@ -102,6 +151,24 @@ def main() -> None:
         "signal with noise. Requires --signatures hallmark.",
     )
     ap.add_argument("--n-permutations", type=int, default=1000)
+    ap.add_argument(
+        "--stack-emb",
+        nargs="+",
+        default=None,
+        metavar="LABEL=PATH",
+        help="Stack embedding representations (label=path.h5ad, one row per patient -- e.g. "
+        "base=emb_soragni_base.h5ad aligned=emb_soragni_aligned.h5ad, from "
+        "scripts/alpine/13_soragni_embed.sbatch). Scored via leave-patient-out penalized "
+        "regression against the real Soragni AUC design, same treatment as Check 2's "
+        "stack_emb representations (fmharness.check2.penalized_preds) -- l1/l2 only, no "
+        "hallmark (an embedding has no gene identity to score a signature against).",
+    )
+    ap.add_argument(
+        "--folds",
+        type=int,
+        default=5,
+        help="leave-patient-out CV folds for --stack-emb scoring (same default as Check 2)",
+    )
     ap.add_argument(
         "--out-csv",
         default=None,
@@ -201,7 +268,7 @@ def main() -> None:
             f"[{src_name}] train {len(tr_x)} pairs | source {len(sx)} pairs | "
             f"{len(common)} shared genes | methods {methods}"
         )
-        for adapter in build_adapters(methods, signatures=sigs):
+        for adapter in _build_readout_adapters(methods, sigs):
             if adapter.supervised:
                 adapter.fit(tr_x, tr_via)
             sens = adapter.predict(sx)
@@ -225,6 +292,169 @@ def main() -> None:
                 {
                     "source": src_name,
                     "method": adapter.name,
+                    "global": s["global"],
+                    "interaction": s["interaction"],
+                    "p_label": s["p_label"],
+                    "regret@1": s["regret@1"],
+                    "regret@3": s["regret@3"],
+                    "n": int(s["n"]),
+                }
+            )
+
+    # Same-width random-feature negative control for the supervised (l1/l2) adapters, per
+    # source -- not just --stack-emb: fit AND apply on matching-shape random noise (not just
+    # predict noise through a model trained on real genes, which would test something
+    # unrelated) so an apparent l1/l2 win on ANY delta source can be checked against raw
+    # dimensionality alone, the same treatment every representation gets in Check 2's grid
+    # (fmharness.check2.random_feature_control).
+    for src_name, (sdelta, skey) in sources.items():
+        common = tr_delta_fit.columns.intersection(sdelta.columns)
+        tr_x_rand = random_feature_control(tr_delta_fit[common], seed=0)
+        sx_rand = random_feature_control(sdelta[common], seed=1)
+        for adapter in _build_readout_adapters(methods, sigs):
+            if not adapter.supervised:
+                continue
+            adapter.fit(tr_x_rand, tr_via)
+            sens = adapter.predict(sx_rand)
+            merged = pd.DataFrame(
+                {
+                    "patient": skey["patient"].to_numpy(),
+                    "drug": skey["drug"].to_numpy(),
+                    "_sens": sens,
+                }
+            ).merge(design.rename(columns={"y": "y_true"}), on=["patient", "drug"], how="inner")
+            preds = pd.DataFrame(
+                {
+                    "patient": merged["patient"],
+                    "drug": merged["drug"],
+                    "y_true": merged["y_true"].to_numpy(),
+                    "y_pred": -merged["_sens"].to_numpy(),
+                }
+            )
+            s = score_predictions(preds, n_perm=args.n_permutations)
+            out.append(
+                {
+                    "source": f"{src_name}_random",
+                    "method": adapter.name,
+                    "global": s["global"],
+                    "interaction": s["interaction"],
+                    "p_label": s["p_label"],
+                    "regret@1": s["regret@1"],
+                    "regret@3": s["regret@3"],
+                    "n": int(s["n"]),
+                }
+            )
+
+    # Stack embedding representations (base / aligned checkpoints, --stack-emb): unlike the
+    # generation-based sources above, these fit/predict directly on the real Soragni AUC via
+    # leave-patient-out CV (fmharness.check2.penalized_preds) -- the same treatment Check 2
+    # gives its stack_emb representations, no cross-domain L1000->GDSC2 transfer involved, so
+    # they are not run through restrict_common_support (that's a delta-source, key-frame
+    # concept; penalized_preds already scores every representation on its own per-drug CV
+    # folds against the same design_target the same way Check 2 does).
+    if args.stack_emb:
+        uniq_lines = patients
+        n_folds = max(1, min(args.folds, len(uniq_lines)))
+        fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+        emb_methods = [m for m in methods if m in ("l1", "l2")]
+        for spec in args.stack_emb:
+            label, sep, path = spec.partition("=")
+            if not sep or not label or not path:
+                raise ValueError(f"--stack-emb expects 'label=path', got {spec!r}")
+            emb_path = Path(path) if Path(path).is_absolute() else repo / path
+            emb = load_line_matrix(emb_path)
+            print(f"[{label}] embedding: {len(emb)} patients x {emb.shape[1]} dims | methods {emb_methods}")
+            # same-width random-feature negative control (random_feature_control) -- must clear
+            # this by a real margin, or an apparent win is attributable to raw embedding width
+            # rather than learned structure (same treatment as Check 2's stack_emb loop).
+            emb_sources = {label: emb, f"{label}_random": random_feature_control(emb, seed=0)}
+            for src_label, src_emb in emb_sources.items():
+                for pen in emb_methods:
+                    preds = penalized_preds(
+                        (lambda e: lambda _drug: e)(src_emb), design, fold_of, n_folds, uniq_lines, pen
+                    )
+                    if preds.empty:
+                        print(f"  {src_label}/{pen}: no scorable (patient, drug) pairs -- skipping")
+                        continue
+                    s = score_predictions(preds, n_perm=args.n_permutations)
+                    out.append(
+                        {
+                            "source": src_label,
+                            "method": pen,
+                            "global": s["global"],
+                            "interaction": s["interaction"],
+                            "p_label": s["p_label"],
+                            "regret@1": s["regret@1"],
+                            "regret@3": s["regret@3"],
+                            "n": int(s["n"]),
+                        }
+                    )
+
+    # Known-biology positive control: each drug's own molecular target gene's baseline
+    # expression (fmharness.drug_targets, target-dependency hypothesis: higher target
+    # expression -> more sensitive to inhibiting it). Complements the oracle/ceiling
+    # VALIDATION Check 1/2's driver scripts add via score_check2's oracle= -- Soragni has
+    # no real treated-organoid RNA to build that kind of oracle/validation from (see this
+    # script's module docstring), but DOES have the tumor-RNA baseline this control needs.
+    if base_path.exists():
+        tgt = score_target_gene_predictors(design, soragni_base, n_perm=args.n_permutations)
+        if tgt["n"]:
+            print(f"\n[target_gene] known-biology positive control: n={int(tgt['n'])} pairs")
+            out.append(
+                {
+                    "source": "target_gene",
+                    "method": "direct",
+                    "global": tgt["global"],
+                    "interaction": tgt["interaction"],
+                    "p_label": tgt["p_label"],
+                    "regret@1": tgt["regret@1"],
+                    "regret@3": tgt["regret@3"],
+                    "n": int(tgt["n"]),
+                }
+            )
+        else:
+            print("\n[target_gene] no drug's target gene covered by this baseline -- skipping")
+
+    # Positive control: plant a KNOWN organoid x drug interaction into the tumor-RNA baseline
+    # space (fmharness.controls.plant_interaction) and confirm the SAME leave-patient-out
+    # penalized grid recovers it -- the flowchart's actual "positive control: planted
+    # interaction, recovered" (distinct from the oracle/ceiling VALIDATION Check 1/2 add,
+    # which uses real data with no controlled effect size, and from the known-biology
+    # target_gene control, which is a real hypothesis, not a simulation). Soragni's data gap
+    # (no real treated-organoid RNA) doesn't apply here since nothing is measured -- it's
+    # simulated on top of the real tumor-RNA baseline every other Path-B source is built from.
+    if base_path.exists():
+        uniq_lines = patients
+        n_folds = max(1, min(args.folds, len(uniq_lines)))
+        fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+        emb_per_row = soragni_base.reindex(design["patient"]).to_numpy()
+        within_drug_sd = float(
+            np.std(
+                design["y"].to_numpy() - design.groupby("drug")["y"].transform("mean").to_numpy()
+            )
+        )
+        plant_scale = within_drug_sd if within_drug_sd > 0 else 1.0
+        planted_y = plant_interaction(
+            design["drug"],
+            design["y"],
+            emb_per_row,
+            effect=plant_scale,
+            noise_sd=plant_scale,
+            rng=np.random.default_rng(0),
+        )
+        planted_design = design.assign(y=planted_y)
+        for pen in [m for m in methods if m in ("l1", "l2")]:
+            preds = penalized_preds(
+                lambda _drug: soragni_base, planted_design, fold_of, n_folds, uniq_lines, pen
+            )
+            if preds.empty:
+                print(f"  planted/{pen}: no scorable (patient, drug) pairs -- skipping")
+                continue
+            s = score_predictions(preds, n_perm=args.n_permutations)
+            out.append(
+                {
+                    "source": "planted",
+                    "method": pen,
                     "global": s["global"],
                     "interaction": s["interaction"],
                     "p_label": s["p_label"],

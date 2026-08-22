@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -35,12 +36,59 @@ import pandas as pd
 import scanpy as sc
 from scipy import sparse
 from sklearn.decomposition import NMF, PCA
-from sklearn.linear_model import Ridge
+from sklearn.model_selection import KFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
 
+from fmharness.adapters import make_penalty
 from fmharness.data.loaders import load_tranche
 from fmharness.evaluation import build_sample_design
 from fmharness.signatures import load_hallmark
+
+# candidate grid for CV-selecting a reducer/neighbor count (build_learned_deltas' n_components,
+# build_knn_deltas' k) instead of a hardcoded default -- the same "let CV choose it" principle
+# fmharness.adapters.make_penalty already applies to Ridge/Lasso/ElasticNet's penalty strength
+# (Kurilov 2020), extended to the reducer's own capacity so kNN/PCA/NMF aren't compared against
+# Stack's embedding (or each other) at an arbitrary, undertuned fixed capacity.
+_K_GRID: tuple[int, ...] = (2, 3, 5, 10, 15, 20, 30)
+
+
+def _cv_select_k(
+    feat_by_k: Callable[[int], np.ndarray],
+    y: np.ndarray,
+    candidates: tuple[int, ...],
+    seed: int,
+) -> int:
+    """Pick the candidate ``k`` (from ``candidates``) minimizing 3-fold CV error of a
+    CV-tuned ridge fit (``make_penalty("l2")``) on ``(feat_by_k(k), y)``.
+
+    ``feat_by_k`` must build its features from TRAINING data only (never the held-out
+    line/patient this whole call is ultimately predicting) -- the caller is responsible for
+    that; this function only does the inner selection. Falls back to the smallest candidate
+    if every candidate fails to produce a usable CV score (e.g. too few samples).
+    """
+    n = len(y)
+    folds = min(3, n)
+    if folds < 2:
+        return candidates[0]
+    best_k, best_score = candidates[0], -np.inf
+    for k in candidates:
+        x = feat_by_k(k)
+        if x.shape[1] == 0:
+            continue
+        try:
+            scores = cross_val_score(
+                make_penalty("l2"),  # type: ignore[arg-type]
+                x,
+                y,
+                cv=KFold(folds, shuffle=True, random_state=seed),
+                scoring="r2",
+            )
+        except ValueError:
+            continue
+        mean_score = float(np.mean(scores))
+        if mean_score > best_score:
+            best_score, best_k = mean_score, k
+    return best_k
 
 PERT_INFO_URL = (
     "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/"
@@ -282,22 +330,28 @@ def build_learned_deltas(
     patients: list[str],
     *,
     reducer: str = "pca",
-    k: int = 20,
-    alpha: float = 1.0,
+    k: int | None = None,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Organoid-specific delta predictor -- the generation analogue of the expression
     baselines, sitting between the additive floor and Stack.
 
     Learns a baseline -> delta map on real L1000: reduce each training cell line's DMSO
-    baseline by PCA/NMF, regress (ridge) the treated-minus-DMSO delta *residual* (delta
-    minus the per-drug mean) on those components, then predict each Soragni organoid's
-    correction from its own baseline. The prediction is
+    baseline by PCA/NMF, regress (CV-tuned ridge, ``make_penalty``) the treated-minus-DMSO
+    delta *residual* (delta minus the per-drug mean) on those components, then predict each
+    Soragni organoid's correction from its own baseline. The prediction is
     ``delta(organoid, drug) = drug_mean[drug] + correction(organoid)`` -- organoid-
     specific (so it can express within-drug interaction) but driven by a simple linear
     map. The correction transfers across the L1000<->Soragni platform gap in standardized
     units (PCA z-scores per cohort; NMF clips to non-negative). Returns ``(delta[pairs x
     genes], key[patient, drug])`` in the same shape as the other delta sources.
+
+    ``k`` (n_components) defaults to ``None``, CV-selecting it from ``_K_GRID`` (inner 3-fold
+    CV on the training fold only, never touching ``target_base``/``patients``) instead of a
+    hardcoded fixed value -- the same principle ``make_penalty`` already applies to the ridge
+    penalty, extended to the reducer's own capacity so PCA/NMF aren't compared against a
+    foundation-model embedding (or each other) at an arbitrary, undertuned component count.
+    Pass an explicit int to keep the old fixed-k behavior.
     """
     if reducer not in ("pca", "nmf"):
         raise ValueError("reducer must be 'pca' or 'nmf'")
@@ -315,23 +369,45 @@ def build_learned_deltas(
     )
 
     cells = train_base[g]
-    k_eff = max(1, min(k, len(cells) - 1, len(g)))
-    tgt = np.nan_to_num(target_base.reindex(columns=g).to_numpy(dtype=np.float64))
-    if reducer == "nmf":
-        # sklearn-stubs mis-types n_components as str; the API takes an int.
-        red = NMF(n_components=k_eff, init="nndsvda", random_state=seed, max_iter=2000)  # type: ignore[arg-type]
-        z_cell = red.fit_transform(np.maximum(cells.to_numpy(dtype=np.float64), 0.0))
-        z_org = red.transform(np.maximum(tgt, 0.0))
+    cap = max(1, min(len(cells) - 1, len(g)))
+    candidates: tuple[int, ...]
+    if k is not None:
+        candidates = (min(max(k, 1), cap),)
     else:
-        sc = StandardScaler().fit(cells.to_numpy(dtype=np.float64))
-        pca = PCA(n_components=k_eff, random_state=seed)
-        z_cell = pca.fit_transform(sc.transform(cells.to_numpy(dtype=np.float64)))
-        z_org = pca.transform(sc.transform(tgt))
+        candidates = tuple(sorted({c for c in _K_GRID if c <= cap} | {cap}))
+    tgt = np.nan_to_num(target_base.reindex(columns=g).to_numpy(dtype=np.float64))
+    cells_arr = cells.to_numpy(dtype=np.float64)
+    sc = StandardScaler().fit(cells_arr) if reducer != "nmf" else None
+    tr_pats = [str(p) for p in train_key["patient"]]
+    ok = pd.Index(tr_pats).isin({str(c) for c in cells.index})
 
-    z_cell_df = pd.DataFrame(z_cell, index=pd.Index([str(c) for c in cells.index]))
-    pair_feat = z_cell_df.reindex([str(p) for p in train_key["patient"]]).to_numpy()
-    ok = ~np.isnan(pair_feat).any(axis=1)  # drop pairs whose cell-line baseline is missing
-    model = Ridge(alpha=alpha).fit(pair_feat[ok], resid[ok])
+    def _reduce(k_try: int) -> tuple[np.ndarray, np.ndarray]:
+        if reducer == "nmf":
+            # sklearn-stubs mis-types n_components as str; the API takes an int.
+            red = NMF(n_components=k_try, init="nndsvda", random_state=seed, max_iter=2000)  # type: ignore[arg-type]
+            zc = red.fit_transform(np.maximum(cells_arr, 0.0))
+            zo = red.transform(np.maximum(tgt, 0.0))
+        else:
+            assert sc is not None
+            pca = PCA(n_components=k_try, random_state=seed)
+            zc = pca.fit_transform(sc.transform(cells_arr))
+            zo = pca.transform(sc.transform(tgt))
+        return zc, zo
+
+    def _pair_feat(zc: np.ndarray) -> np.ndarray:
+        zdf = pd.DataFrame(zc, index=pd.Index([str(c) for c in cells.index]))
+        return zdf.reindex(tr_pats).to_numpy()
+
+    if len(candidates) > 1:
+        k_eff = _cv_select_k(
+            lambda k_try: _pair_feat(_reduce(k_try)[0])[ok], resid[ok], candidates, seed
+        )
+    else:
+        k_eff = next(iter(candidates))
+
+    z_cell, z_org = _reduce(k_eff)
+    pair_feat = _pair_feat(z_cell)
+    model = make_penalty("l2").fit(pair_feat[ok], resid[ok])  # type: ignore[attr-defined]
 
     z_org_df = pd.DataFrame(z_org, index=pd.Index([str(o) for o in target_base.index]))
     pats = [str(p) for p in patients]
@@ -340,7 +416,7 @@ def build_learned_deltas(
     pats_keep = [p for p, kp in zip(pats, keep, strict=True) if kp]
     if not pats_keep:
         raise ValueError("no target organoids have a usable baseline")
-    correction = model.predict(z_use[keep].to_numpy())  # (n_keep, gene), organoid-specific
+    correction = model.predict(z_use[keep].to_numpy())  # type: ignore[attr-defined]
 
     drugs = np.asarray(drug_mean.index, dtype=object)
     n_p = len(pats_keep)
@@ -364,7 +440,7 @@ def build_knn_deltas(
     target_base: pd.DataFrame,
     patients: list[str],
     *,
-    k: int = 10,
+    k: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """k-NN delta predictor -- the cell-specific baseline matched to Stack's information.
 
@@ -380,6 +456,13 @@ def build_knn_deltas(
     Baselines are compared on standardized, L2-normalized shared-gene profiles (cosine
     similarity, scale-free). Returns ``(delta[pairs x genes], key[patient, drug])`` in the
     same shape as the other delta sources.
+
+    ``k`` (neighbor count) defaults to ``None``, CV-selecting it from ``_K_GRID`` via a
+    leave-one-training-line-out prediction error (never touching ``target_base``/
+    ``patients``) -- the same "don't hardcode capacity" principle
+    ``build_learned_deltas``/``make_penalty`` apply to n_components/penalty strength,
+    extended here to kNN's own neighbor count. Pass an explicit int to keep the old
+    fixed-k behavior.
     """
     g = sorted(
         {str(c) for c in train_base.columns}
@@ -411,6 +494,38 @@ def build_knn_deltas(
     row_line = pd.Series(train_key["patient"].astype(str).to_numpy()).map(line_pos).to_numpy()
     td = train_delta[g].to_numpy(dtype=np.float64)
 
+    def _loo_error(k_try: int) -> float:
+        # leave-one-training-line-out: predict each training line's OWN delta from its
+        # (excluding itself) nearest same-drug training neighbors, at this k -- training-only,
+        # never the held-out target this call ultimately predicts.
+        errs: list[np.ndarray] = []
+        for d in sorted(set(tk_drug)):
+            rows_d = np.flatnonzero(tk_drug == d)
+            li_d = row_line[rows_d]
+            keep_d = ~pd.isna(li_d)
+            rows_d, li_d = rows_d[keep_d], li_d[keep_d].astype(int)
+            if rows_d.size < 2:
+                continue
+            sims_d = line_emb[li_d] @ line_emb[li_d].T
+            np.fill_diagonal(sims_d, -np.inf)  # exclude self as its own neighbor
+            kk_d = min(k_try, rows_d.size - 1)
+            if kk_d < 1:
+                continue
+            nn_d = np.argpartition(-sims_d, kk_d - 1, axis=1)[:, :kk_d]
+            pred_d = td[rows_d][nn_d].mean(axis=1)
+            errs.append(((pred_d - td[rows_d]) ** 2).mean(axis=1))
+        return float(np.concatenate(errs).mean()) if errs else float("inf")
+
+    if k is None:
+        n_lines = len(line_ids)
+        knn_candidates: tuple[int, ...] = tuple(sorted({c for c in _K_GRID if c < n_lines} | {1}))
+        if len(knn_candidates) > 1:
+            k_eff = min(knn_candidates, key=_loo_error)
+        else:
+            k_eff = next(iter(knn_candidates))
+    else:
+        k_eff = max(1, k)
+
     # one pass per drug (drugs are few); the query x line neighbor search is vectorized.
     delta_blocks: list[np.ndarray] = []
     keys: list[tuple[str, str]] = []
@@ -422,7 +537,7 @@ def build_knn_deltas(
         if rows.size == 0:
             continue
         sims = q_emb @ line_emb[li].T  # (n_have x n_d) cosine, unit vectors
-        kk = min(k, rows.size)
+        kk = min(k_eff, rows.size)
         nn = np.argpartition(-sims, kk - 1, axis=1)[:, :kk]  # k nearest lines per target
         delta_blocks.append(td[rows][nn].mean(axis=1))  # (n_have x genes)
         keys.extend((p, d) for p in have)
@@ -439,7 +554,7 @@ def loo_baseline_source(
     real_key: pd.DataFrame,
     base: pd.DataFrame,
     *,
-    k: int,
+    k: int | None,
     genes: pd.Index | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Leave-one-cell-line-out baseline deltas: for each line, rebuild the source from the
@@ -448,6 +563,10 @@ def loo_baseline_source(
     ``additive``/``knn`` use all genes; ``pca``/``nmf`` (``build_learned_deltas``) reduce on
     the ``genes`` HVG panel, which keeps the per-line PCA/NMF fast and well-conditioned (49
     lines vs ~50k genes is hopelessly p>>n; on ~2k informative genes it is sane).
+
+    ``k`` is ``build_knn_deltas``'/``build_learned_deltas``'s neighbor-count/n_components --
+    ``None`` CV-selects it per held-out-line fold (training-fold-only, see those functions'
+    docstrings); an explicit int keeps it fixed.
     """
     pats = real_key["patient"].astype(str).to_numpy()
     rdl = (
@@ -480,6 +599,7 @@ def loo_baseline_source(
                 bl.loc[[line]],
                 [line],
                 reducer=kind,
+                k=k,
             )
         else:
             raise ValueError(f"unknown baseline source {kind!r}")

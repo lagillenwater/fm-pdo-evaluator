@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import anndata as ad
@@ -14,7 +15,9 @@ from fmharness.check2 import (
     load_line_matrix,
     make_penalty,
     penalized_preds,
+    random_feature_control,
     repr_by_drug,
+    restrict_representation_support,
     score_check2,
 )
 
@@ -144,6 +147,65 @@ def test_score_check2_reports_fixed_readout_and_representation_grid_rows() -> No
     assert "expr" in set(table["source"])
 
 
+def test_score_check2_restricts_fixed_readout_rows_to_common_support() -> None:
+    # "additive" covers all 10 lines for d1; "narrow" only covers 5 of them. Without a
+    # common-support restriction, additive's fixed-readout n would be 10 and narrow's 5 --
+    # a different evaluation set per source in the same table.
+    genes = pd.Index(["A", "B"])
+    lines = [f"L{i}" for i in range(10)]
+    rng = np.random.default_rng(1)
+    wide_delta = pd.DataFrame(rng.standard_normal((10, 2)), columns=genes)
+    wide_key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 10})
+    narrow_delta = wide_delta.iloc[:5].reset_index(drop=True)
+    narrow_key = pd.DataFrame({"patient": lines[:5], "drug": ["d1"] * 5})
+    sources = {"additive": (wide_delta, wide_key), "narrow": (narrow_delta, narrow_key)}
+    base = pd.DataFrame(rng.standard_normal((10, 2)), columns=genes, index=pd.Index(lines))
+    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("A",), 1)}
+    design = pd.DataFrame(
+        {"patient": lines, "drug": ["d1"] * 10, "y": rng.standard_normal(10).tolist()}
+    )
+    table = score_check2(
+        sources, wide_key, base, genes, design, hallmark=hallmark, fixed_methods=("hallmark",), penalties=()
+    )
+    fixed = table[table["method"] == "hallmark"].set_index("source")
+    assert fixed.loc["additive", "n"] == fixed.loc["narrow", "n"] == 5
+
+
+def test_restrict_representation_support_intersects_per_drug_line_coverage() -> None:
+    # "expr" is drug-independent (always the full 4-line frame); "narrow" only has d1, and
+    # only 2 of its 4 lines. After restriction, "expr"'s d1 frame must be cut to those same
+    # 2 lines too -- not left at its own wider native coverage.
+    lines = ["L1", "L2", "L3", "L4"]
+    expr = pd.DataFrame({"x": [1.0, 2.0, 3.0, 4.0]}, index=pd.Index(lines))
+    narrow = {"d1": pd.DataFrame({"x": [10.0, 20.0]}, index=pd.Index(["L1", "L2"]))}
+    representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
+        "expr": lambda _drug: expr,
+        "narrow": narrow,
+    }
+    design = pd.DataFrame({"patient": lines, "drug": ["d1"] * 4, "y": [0.0] * 4})
+
+    out = restrict_representation_support(representations, design)
+
+    assert set(out["expr"]) == {"d1"}
+    assert list(out["expr"]["d1"].index) == ["L1", "L2"]
+    assert list(out["narrow"]["d1"].index) == ["L1", "L2"]
+
+
+def test_restrict_representation_support_drops_a_drug_missing_from_any_representation() -> None:
+    lines = ["L1", "L2"]
+    expr = pd.DataFrame({"x": [1.0, 2.0]}, index=pd.Index(lines))
+    representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
+        "expr": lambda _drug: expr,
+        "narrow": {"d1": pd.DataFrame({"x": [1.0]}, index=pd.Index(["L1"]))},  # no d2 at all
+    }
+    design = pd.DataFrame({"patient": lines, "drug": ["d1", "d2"], "y": [0.0, 0.0]})
+
+    out = restrict_representation_support(representations, design)
+
+    assert set(out["expr"]) == {"d1"}
+    assert set(out["narrow"]) == {"d1"}
+
+
 def test_score_check2_includes_a_stack_emb_representation_when_given() -> None:
     sources, real_key, base, hvg, design, hallmark = _check2_fixture()
     emb = pd.DataFrame(
@@ -154,3 +216,73 @@ def test_score_check2_includes_a_stack_emb_representation_when_given() -> None:
         stack_emb={"base_embed": emb},
     )
     assert "base_embed" in set(table["source"])
+
+
+def test_score_check2_scores_a_random_control_alongside_each_stack_emb() -> None:
+    # a reviewer must be able to see that a stack_emb representation's apparent win isn't
+    # just from raw parameter count: a same-shape random-feature control is scored through
+    # the identical pipeline, right alongside the real embedding.
+    sources, real_key, base, hvg, design, hallmark = _check2_fixture()
+    emb = pd.DataFrame(
+        {"x": range(10), "y": range(10, 20)}, index=pd.Index([f"L{i}" for i in range(10)])
+    )
+    table = score_check2(
+        sources, real_key, base, hvg, design, hallmark=hallmark, folds=2,
+        stack_emb={"base_embed": emb},
+    )
+    assert "base_embed_random" in set(table["source"])
+
+
+def test_score_check2_includes_a_planted_interaction_positive_control() -> None:
+    # a "planted" row: a KNOWN, controlled-effect-size interaction injected into the
+    # untreated baseline expression space, scored through the same penalized grid --
+    # proves the pipeline recovers a real interaction when one is guaranteed to exist
+    # (distinct from the oracle/random-feature controls, which use real data or noise,
+    # not a simulation). plant_interaction needs >=2 drugs (it centers per-drug
+    # directions, which zeroes out with only one).
+    genes = pd.Index(["A", "B"])
+    lines = [f"L{i}" for i in range(12)]
+    rng = np.random.default_rng(2)
+    delta = pd.DataFrame(rng.standard_normal((12, 2)), columns=genes)
+    key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 12})
+    sources = {"additive": (delta, key)}
+    base = pd.DataFrame(rng.standard_normal((12, 2)), columns=genes, index=pd.Index(lines))
+    hallmark: dict[str, tuple[tuple[str, ...], int]] = {"HALLMARK_TEST": (("A",), 1)}
+    real_key = pd.DataFrame({"patient": lines * 2, "drug": ["d1"] * 12 + ["d2"] * 12})
+    design = pd.DataFrame(
+        {
+            "patient": lines * 2,
+            "drug": ["d1"] * 12 + ["d2"] * 12,
+            "y": rng.standard_normal(24).tolist(),
+        }
+    )
+
+    table = score_check2(sources, real_key, base, genes, design, hallmark=hallmark, folds=2)
+
+    planted = table[table["source"] == "planted"]
+    assert not planted.empty
+    assert (planted["n"] > 0).all()
+
+
+def test_score_check2_scores_a_random_control_for_every_representation() -> None:
+    # not just stack_emb: "expr" and every delta source ("additive" here) must ALSO get a
+    # same-shape random-feature negative control in the SAME penalized grid, so an apparent
+    # win for ANY representation -- not only a foundation-model embedding -- can be checked
+    # against raw-capacity alone.
+    sources, real_key, base, hvg, design, hallmark = _check2_fixture()
+    table = score_check2(sources, real_key, base, hvg, design, hallmark=hallmark, folds=2)
+    assert "expr_random" in set(table["source"])
+    assert "additive_random" in set(table["source"])
+
+
+def test_random_feature_control_matches_shape_and_is_seed_deterministic() -> None:
+    real = pd.DataFrame(
+        {"a": [1.0, 2.0], "b": [3.0, 4.0], "c": [5.0, 6.0]}, index=pd.Index(["L1", "L2"])
+    )
+    ctrl1 = random_feature_control(real, seed=0)
+    ctrl2 = random_feature_control(real, seed=0)
+    assert ctrl1.shape == real.shape
+    assert list(ctrl1.index) == list(real.index)
+    assert np.allclose(ctrl1.to_numpy(), ctrl2.to_numpy())
+    ctrl3 = random_feature_control(real, seed=1)
+    assert not np.allclose(ctrl1.to_numpy(), ctrl3.to_numpy())

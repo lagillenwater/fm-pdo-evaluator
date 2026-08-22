@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from functools import partial
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -97,6 +98,37 @@ def _wes_alterations(repo: Path) -> tuple[dict[str, dict[str, set[str]]], set[st
         for s in pd.concat([snv["Sample_ID"], cnv["Sample_ID"]]).astype(str)
     }
     return alt, wes
+
+
+def restrict_biomarker_support(
+    bm_all: pd.DataFrame, glob: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Restrict the two head-to-head prediction frames to their shared (patient, drug)
+    support before scoring, so the two within-drug rho figures are comparable.
+
+    ``bm_all`` (per-biomarker oriented predictions) only covers organoids where the
+    specific biomarker is defined (WES coverage, >= 3 patients), while ``glob``
+    (``grouped_cv_predict`` over every actionable drug) is unrestricted -- every Soragni
+    tumor-RNA row for those drugs. Scoring each on its own native support compares
+    different evaluation sets, not just different methods (the same pattern
+    ``fmharness.deltas.restrict_common_support`` fixes for the delta-source comparison).
+
+    ``bm_all`` can also carry duplicate (patient, drug) rows when more than one biomarker
+    anchors to the same drug for a WES-covered patient (e.g. CDK4-amp AND RB1-del both ->
+    Palbociclib) -- deduped first (keep the first row, matching the "keep the first"
+    duplicate-guard already used for generated deltas in
+    ``fmharness.deltas.build_generated_deltas``) so that patient doesn't get double weight
+    in the pooled within-drug correlation.
+    """
+
+    def pairs(df: pd.DataFrame) -> pd.MultiIndex:
+        return pd.MultiIndex.from_frame(cast("pd.DataFrame", df[["patient", "drug"]].astype(str)))
+
+    bm_dedup = bm_all.drop_duplicates(subset=["patient", "drug"], keep="first")
+    common = pairs(bm_dedup).intersection(pairs(glob))
+    bm_common = cast("pd.DataFrame", bm_dedup[pairs(bm_dedup).isin(common)]).reset_index(drop=True)
+    gl_common = cast("pd.DataFrame", glob[pairs(glob).isin(common)]).reset_index(drop=True)
+    return bm_common, gl_common
 
 
 def main() -> None:
@@ -191,12 +223,17 @@ def main() -> None:
         )
         return obs, float(np.mean(null >= obs))
 
-    bm_rho, bm_p = perm_p(bm_all, "y_pred")
-    gl_rho, gl_p = perm_p(glob, "y_resid")
+    bm_common, gl_common = restrict_biomarker_support(bm_all, glob)
+    n_common = len(bm_common)
+    bm_rho, bm_p = perm_p(bm_common, "y_pred")
+    gl_rho, gl_p = perm_p(gl_common, "y_resid")
     print("\n=== Head-to-head: drug-specific signal on the biomarker-anchored drugs ===")
-    print(f"  biomarker (single gene)   within-drug rho = {bm_rho:+.3f}  (p={bm_p:.3f})")
-    print(f"  global PCA-of-expression  within-drug rho = {gl_rho:+.3f}  (p={gl_p:.3f})")
-    print(f"  (within-Soragni grouped CV, {n_splits} folds, {len(bm_drugs)} actionable drugs)")
+    print(f"  biomarker (single gene)   within-drug rho = {bm_rho:+.3f}  (p={bm_p:.3f})  n={n_common}")
+    print(f"  global PCA-of-expression  within-drug rho = {gl_rho:+.3f}  (p={gl_p:.3f})  n={n_common}")
+    print(
+        f"  (within-Soragni grouped CV, {n_splits} folds, {len(bm_drugs)} actionable drugs, "
+        f"common (patient, drug) support n={n_common})"
+    )
 
 
 if __name__ == "__main__":

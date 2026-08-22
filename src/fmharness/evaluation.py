@@ -386,11 +386,23 @@ def score_delta_sources(
 
     ``sources`` maps a source name (``"additive"``, ``"stack"``, ...) to its own
     ``(delta, key)`` pair, exactly as produced by ``loo_baseline_source`` /
-    ``build_generated_deltas``. Each is scored independently via ``delta_fidelity``
-    against the same ``real_delta``/``real_key`` -- the shared scoring step both
+    ``build_generated_deltas``. Every source is first restricted to the (patient, drug)
+    support they all share (``restrict_common_support``, 2026-08-21) -- a broadcast
+    baseline like ``additive`` can natively cover a much wider (patient, drug) set than a
+    narrowly-generated source like ``stack``, and scoring each against its own native
+    intersection with ``real_key`` (as a per-source ``delta_fidelity`` call alone would)
+    compares different evaluation sets, not just different methods -- exactly the bug
+    fixed in ``scripts/score_viability_adapters.py`` (commit d9f94ec). Each restricted
+    source is then scored independently via ``delta_fidelity`` against the same
+    ``real_delta``/``real_key`` -- the shared scoring step both
     ``scripts/score_generation_eval.py`` and ``scripts/check1_registry_driver.py``
-    need, kept here so the two never drift on how a row is built.
+    need, kept here so the two never drift on how a row is built, and both get the
+    common-support restriction for free.
     """
+    from fmharness.deltas import restrict_common_support  # local import: avoid an import
+    # cycle -- fmharness.deltas imports build_sample_design from this module.
+
+    sources = restrict_common_support(sources, real_key)
     rows: list[dict[str, object]] = []
     for name, (d, kk) in sources.items():
         f = delta_fidelity(d, kk, real_delta, real_key, n_hvg=n_hvg)

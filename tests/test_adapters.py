@@ -11,6 +11,7 @@ from fmharness.adapters import (
     PenalizedRegressionAdapter,
     SignatureAdapter,
     build_adapters,
+    build_hallmark_breakout,
 )
 
 SIGS: dict[str, tuple[tuple[str, ...], int]] = {"death": (("A", "B", "C"), 1)}
@@ -63,3 +64,29 @@ def test_penalized_regression_transfers_direction_to_heldout_cohort(penalty: str
 def test_penalized_regression_rejects_unknown_penalty() -> None:
     with pytest.raises(ValueError, match="unknown penalty"):
         PenalizedRegressionAdapter("bogus")
+
+
+def test_build_hallmark_breakout_returns_one_adapter_per_signature() -> None:
+    # two disjoint-gene signatures, each with its own perturbed sample; the combined
+    # SignatureAdapter would average both into one number per sample, hiding which
+    # signature actually moved -- per-signature adapters must not cross-talk.
+    sigs: dict[str, tuple[tuple[str, ...], int]] = {
+        "up": (("A", "B"), 1),
+        "down": (("C", "D"), -1),
+    }
+    cols = ["A", "B", "C", "D"]
+    rng = np.random.default_rng(2)
+    delta = pd.DataFrame(
+        rng.normal(0, 0.1, (6, 4)), columns=pd.Index(cols), index=pd.Index([f"s{i}" for i in range(6)])
+    )
+    delta.loc["s0", ["A", "B"]] += 5.0  # only "up"'s genes move (up) in s0
+    delta.loc["s1", ["C", "D"]] -= 5.0  # only "down"'s genes move (down) in s1
+
+    adapters = build_hallmark_breakout(sigs)
+    names = {a.name for a in adapters}
+    assert names == {"up", "down"}
+    assert all(not a.supervised and a.citation for a in adapters)
+
+    scores = {a.name: a.predict(delta) for a in adapters}
+    assert int(np.argmax(scores["up"])) == 0  # "up" fires on s0, not s1
+    assert int(np.argmax(scores["down"])) == 1  # "down" fires on s1, not s0 -- no cross-talk

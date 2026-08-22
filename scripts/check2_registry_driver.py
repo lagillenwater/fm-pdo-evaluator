@@ -5,10 +5,14 @@ Filters the GDSC2 AUC ``design`` frame (not the Tahoe ``real_key``) via the same
 ``check1_registry_driver.py`` uses -- ``design`` is Check 2's actual evaluation set. Every
 representation (``expr``, ``additive``, ``knn``, ``pca``, ``nmf``, ``stack``, any
 ``--stack-emb``) is scored via a merge/groupby against ``design`` downstream (inside
-``fmharness.check2.score_check2``), so filtering it once uniformly restricts every
-representation to the same surviving (patient, drug) pairs -- the same same-pair-count parity
-Check 1's table has, without needing to filter the delta sources themselves; they stay built
-from the full, unfiltered Tahoe triple. See
+``fmharness.check2.score_check2``); filtering it once bounds the leakage-safe universe every
+representation draws from, but does NOT by itself equalize each representation's own native
+coverage of that universe (2026-08-21 audit finding: additive/knn/pca/nmf broadcast to
+essentially every drug while stack only covers its own generated set) -- same-pair-count
+parity across the table is now ``score_check2``'s own job (``restrict_common_support`` for
+the fixed-readout rows, ``restrict_representation_support`` for the penalized grid), not a
+side effect of filtering ``design``. Delta sources still stay built from the full,
+unfiltered Tahoe triple. See
 docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned-design.md for the full
 design rationale.
 
@@ -125,6 +129,13 @@ def run_check2(
         "stack": build_generated_deltas(generated_dir, query_baseline, pert_to_drug),
     }
 
+    # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+    # plant_interaction/"planted", the flowchart's real "planted interaction, recovered"):
+    # the REAL measured delta as its own "prediction", the best-case ceiling for the
+    # penalized grid (score_check2's part b), passed via
+    # oracle= rather than folded into `sources` (part a) -- see score_check2's oracle=
+    # docstring for why (this driver has no Gate print of its own, but score_check2's own
+    # part (a)/part (b) split stays consistent regardless of caller).
     return score_check2(
         sources,
         real_key,
@@ -136,6 +147,7 @@ def run_check2(
         penalties=penalties,
         folds=folds,
         stack_emb=stack_emb,
+        oracle=(real_delta.copy(), real_key.copy()),
         n_permutations=n_permutations,
     )
 
@@ -159,7 +171,13 @@ def main() -> None:
     ap.add_argument("--checkpoint-label", required=True, help="e.g. cytokine- or drug-aligned")
     ap.add_argument("--auc-tranche", default="gdscv2", help="measured-AUC cohort for check 2")
     ap.add_argument("--n-hvg", type=int, default=2000)
-    ap.add_argument("--k", type=int, default=10)
+    ap.add_argument(
+        "--k",
+        type=int,
+        default=None,
+        help="neighbors for k-NN / n_components for PCA/NMF; omit to CV-select per fold "
+        "(fmharness.deltas._K_GRID) instead of a fixed value",
+    )
     ap.add_argument(
         "--hallmark-path", default="data/static/hallmark_signatures.gmt", help="Hallmark .gmt path"
     )

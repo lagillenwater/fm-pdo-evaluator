@@ -102,6 +102,26 @@ def test_score_delta_sources_builds_one_row_per_source() -> None:
     assert by_source.loc["bad", "r"] == -1.0
 
 
+def test_score_delta_sources_restricts_to_common_support_before_scoring() -> None:
+    # "wide" covers 3 (patient, drug) pairs against real_key; "narrow" only covers 2 of
+    # them. Without a common-support restriction (fmharness.deltas.restrict_common_support,
+    # the Path-B fix), "wide" would be scored on 3 matched pairs and "narrow" on 2 --
+    # different evaluation sets in the same table, not a fair head-to-head.
+    genes = pd.Index(list("ab"))
+    real_delta = pd.DataFrame([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], columns=genes)
+    real_key = pd.DataFrame({"patient": ["P1", "P2", "P3"], "drug": ["d1", "d1", "d1"]})
+    wide_delta = real_delta.copy()
+    wide_key = real_key.copy()
+    narrow_delta = pd.DataFrame([[1.0, 0.0], [0.0, 1.0]], columns=genes)
+    narrow_key = pd.DataFrame({"patient": ["P1", "P2"], "drug": ["d1", "d1"]})
+
+    sources = {"wide": (wide_delta, wide_key), "narrow": (narrow_delta, narrow_key)}
+    table = score_delta_sources(sources, real_delta, real_key, n_hvg=None)
+    by_source = table.set_index("source")
+    assert by_source.loc["wide", "n_pairs"] == 2
+    assert by_source.loc["narrow", "n_pairs"] == 2
+
+
 def test_de_fidelity_scores_spearman_lfc_overlap_pr_auc_jaccard() -> None:
     # one (patient, drug) pair, 4 genes; real DE calls: A, B significant (padj<0.05,
     # |log2fc|>0.25), C, D not. Predicted delta ranks A, B highest by |value| -- matches the real

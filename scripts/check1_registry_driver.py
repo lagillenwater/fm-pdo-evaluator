@@ -123,14 +123,18 @@ def run_check1(
         "pca": loo_baseline_source("pca", fd, fk, base, k=k, genes=learned_genes),
         "nmf": loo_baseline_source("nmf", fd, fk, base, k=k, genes=learned_genes),
         "stack": build_generated_deltas(generated_dir, query_baseline, pert_to_drug),
+        # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+        # plant_interaction/"planted" for the real one, the flowchart's "planted interaction,
+        # recovered"): the REAL measured delta as its own "prediction", a pipeline sanity
+        # check (trivially r=1) and the best-case ceiling every other row is judged against.
+        "oracle": (fd.copy(), fk.copy()),
     }
 
-    # delta_fidelity (inside score_delta_sources) inner-joins pred_key/real_key on
-    # (patient, drug) itself (evaluation.py's own pk.merge(rk, on=["patient","drug"],
-    # how="inner")) -- the stack source's key (built from the full generated directory,
-    # independent of the leakage filter above) is automatically restricted to fk's
-    # already-filtered pairs by that join; no separate pre-filter is needed here, and
-    # adding one would just duplicate delta_fidelity's own contract.
+    # score_delta_sources restricts every source to their shared (patient, drug) support
+    # (fmharness.deltas.restrict_common_support) before scoring -- the stack source's key
+    # (built from the full generated directory, independent of the leakage filter above) no
+    # longer needs a separate pre-filter here; that guarantee is now score_delta_sources' own
+    # contract, not delta_fidelity's inner join alone (2026-08-21).
     return score_delta_sources(sources, fd, fk, n_hvg=n_hvg)
 
 
@@ -155,7 +159,13 @@ def main() -> None:
     ap.add_argument("--pert-map", required=True, help="TSV 'pert_id<TAB>cid' (context split)")
     ap.add_argument("--checkpoint-label", required=True, help="e.g. cytokine- or drug-aligned")
     ap.add_argument("--n-hvg", type=int, default=2000)
-    ap.add_argument("--k", type=int, default=10)
+    ap.add_argument(
+        "--k",
+        type=int,
+        default=None,
+        help="neighbors for k-NN / n_components for PCA/NMF; omit to CV-select per fold "
+        "(fmharness.deltas._K_GRID) instead of a fixed value",
+    )
     ap.add_argument(
         "--hallmark-path", default="data/static/hallmark_signatures.gmt", help="Hallmark .gmt path"
     )

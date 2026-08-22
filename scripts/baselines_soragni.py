@@ -173,6 +173,42 @@ def direct_l1000(
     return out
 
 
+def build_reference_rows(
+    ds: pd.DataFrame,
+    gdsc_drugs: set[str],
+    l1000_rows_raw: list[tuple[str, pd.DataFrame]],
+) -> tuple[set[str], list[str], list[tuple[str, pd.DataFrame]]]:
+    """Compute the drug set every row is scored on, and build the drug-mean +
+    l1000:<sig> rows narrowed to it.
+
+    ``ref`` is the L1000-matched drug set when ``l1000_rows_raw`` is non-empty (i.e.
+    ``--l1000-context`` was given), else Soragni's own drugs intersected with GDSC2's.
+    ``shared`` further narrows ``ref`` to drugs GDSC2 also screened -- the pca/nmf
+    transfer's requirement, since it is trained on GDSC2. Both drug-mean and every
+    l1000:<sig> row are narrowed to ``shared`` here (not just ``ref``) so that, together
+    with the caller narrowing ds_t/dg_t to ``shared`` for the pca/nmf transfer, EVERY
+    row in the printed table shares the identical drug support -- a fair head-to-head,
+    not drug-mean/l1000 scored on the wider ``ref`` set while pca/nmf alone gets the
+    narrower ``shared`` set.
+
+    Returns ``(ref, shared, rows)``.
+    """
+    ref = (
+        set(l1000_rows_raw[0][1]["drug"].astype(str))
+        if l1000_rows_raw
+        else set(ds["drug"].astype(str)) & gdsc_drugs
+    )
+    shared = sorted(ref & gdsc_drugs)
+    rows: list[tuple[str, pd.DataFrame]] = [
+        ("drug-mean", drug_mean(ds[ds["drug"].astype(str).isin(shared)].copy())),
+        *[
+            (name, tbl[tbl["drug"].astype(str).isin(shared)].copy())
+            for name, tbl in l1000_rows_raw
+        ],
+    ]
+    return ref, shared, rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--l1000-context", default=None, help="context .h5ad for direct-L1000")
@@ -197,21 +233,13 @@ def main() -> None:
     gdsc_drugs = set(dg["drug"].astype(str))
 
     # direct-L1000 defines Path B's drug set (the L1000-matched drugs) when a context is given
-    l1000_rows = (
+    l1000_rows_raw = (
         direct_l1000(Path(args.l1000_context), ds, sigs, repo) if args.l1000_context else []
     )
-    ref = (
-        set(l1000_rows[0][1]["drug"].astype(str))
-        if l1000_rows
-        else set(ds["drug"].astype(str)) & gdsc_drugs
-    )
-
-    rows: list[tuple[str, pd.DataFrame]] = [
-        ("drug-mean", drug_mean(ds[ds["drug"].astype(str).isin(ref)].copy())),
-        *l1000_rows,
-    ]
-    # PCA/NMF transfer is limited to ref drugs GDSC2 also screened
-    shared = sorted(ref & gdsc_drugs)
+    # Every row -- drug-mean, each l1000:<sig>, AND the pca/nmf transfer below -- is
+    # narrowed to "shared" (ref drugs GDSC2 also screened), so the printed table is a
+    # fair head-to-head on identical drug support (build_reference_rows).
+    ref, shared, rows = build_reference_rows(ds, gdsc_drugs, l1000_rows_raw)
     ds_t = ds[ds["drug"].astype(str).isin(shared)].copy()
     dg_t = dg[dg["drug"].astype(str).isin(shared)].copy()
     genes = sorted(set(xs.columns) & set(xg.columns))

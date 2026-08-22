@@ -117,6 +117,28 @@ class PenalizedRegressionAdapter:
         return -np.asarray(self._model.predict(z), dtype=np.float64)  # higher = more sensitive
 
 
+def build_hallmark_breakout(
+    signatures: dict[str, tuple[tuple[str, ...], int]],
+) -> list[ViabilityAdapter]:
+    """One ``SignatureAdapter`` per individual signature, each named after it.
+
+    The combined ``hallmark`` method (``SignatureAdapter`` over the whole dict) averages
+    every signature into one blended score -- on Tahoe, only the proliferation sets
+    (E2F/G2M) cleared the gate's random-gene-set control while P53/apoptosis added only
+    noise (docs/tahoe_generation_results.md's Gate table), so a blended score can dilute a
+    real signal with a null one. This reports each signature's score separately (still
+    z-scored / averaged over its own genes only, via ``SignatureAdapter``), so a
+    proliferation-only or per-pathway breakdown falls out for free -- pair with
+    ``--hallmark-sets`` to restrict which signatures are even computed.
+    """
+    out: list[ViabilityAdapter] = []
+    for name, sig in signatures.items():
+        a = SignatureAdapter({name: sig})
+        a.name = name
+        out.append(a)
+    return out
+
+
 def build_adapters(
     methods: list[str] | None = None,
     *,

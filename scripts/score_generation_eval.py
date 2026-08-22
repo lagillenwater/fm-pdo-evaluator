@@ -78,7 +78,13 @@ def main() -> None:
         help="dir with real_delta/real_key/base parquet (build_tahoe_pseudobulk_deltas shortcut)",
     )
     ap.add_argument("--auc-tranche", default="gdscv2", help="measured-AUC cohort for check 2")
-    ap.add_argument("--k", type=int, default=10, help="neighbors for the k-NN source")
+    ap.add_argument(
+        "--k",
+        type=int,
+        default=None,
+        help="neighbors for k-NN / n_components for PCA/NMF; omit to CV-select per fold "
+        "(fmharness.deltas._K_GRID) instead of a fixed value",
+    )
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs for the generation metric")
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
@@ -168,6 +174,16 @@ def main() -> None:
         "nmf": loo_baseline_source(
             "nmf", real_delta, real_key, base, k=args.k, genes=learned_genes
         ),
+        # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+        # plant_interaction, wired into score_check2's part b below as the "planted" row, the
+        # flowchart's real "planted interaction, recovered"): the REAL measured delta as its
+        # own "prediction", a Check-1 pipeline sanity check (trivially r=1). Passed to Check
+        # 2's penalized grid
+        # separately below (score_check2's own oracle= param), NOT included here in `sources`
+        # for the score_check2 call -- Check 2's part (a) real-delta-vs-real-AUC validation is
+        # already the Gate print below (Hallmark + a random-gene-set null, richer than a plain
+        # oracle row there would be); see score_check2's oracle= docstring.
+        "oracle": (real_delta.copy(), real_key.copy()),
     }
     # Stack's generated delta joins the same ladder when a generation run is supplied:
     # delta = logcpm(generated) - logcpm(query baseline), keyed (query line, drug CID). It
@@ -224,8 +240,9 @@ def main() -> None:
 
     fixed_methods = tuple(m.strip() for m in args.methods.split(",") if m.strip())
     penalties = tuple(p.strip() for p in args.penalties.split(",") if p.strip())
+    sources_check2 = {k: v for k, v in sources.items() if k != "oracle"}
     out_df = score_check2(
-        sources,
+        sources_check2,
         real_key,
         base,
         hvg,
@@ -235,6 +252,7 @@ def main() -> None:
         penalties=penalties,
         folds=args.folds,
         stack_emb=stack_emb_map,
+        oracle=sources["oracle"],
         n_permutations=args.n_permutations,
     )
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")

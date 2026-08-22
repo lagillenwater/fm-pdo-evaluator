@@ -33,6 +33,15 @@
 #   sbatch --export=GENDIR=generated_soragni_drug_aligned,AGGDIR=generated_soragni_drug_aligned_agg,LABEL=drug_aligned \
 #       scripts/alpine/12_soragni_score.sbatch
 # LABEL unset (the default) reproduces the original unlabeled filenames.
+# Stack embedding representations (2026-08-21): base/aligned checkpoints are a SEPARATE axis
+# from GENDIR/AGGDIR/LABEL above (embedding-mode, not generation) -- see 13_soragni_embed.sbatch
+# and score_viability_adapters.py's --stack-emb. They don't depend on which generation
+# checkpoint this run is scoring, so leave STACK_EMB unset on the drug-aligned (LABEL=drug_
+# aligned) pass to avoid duplicating base/aligned rows into both output CSVs; set it on the
+# default (unlabeled) pass once 13 has produced emb_soragni_base.h5ad / emb_soragni_aligned.h5ad:
+#   sbatch --export=STACK_EMB="base=emb_soragni_base.h5ad aligned=emb_soragni_aligned.h5ad" \
+#       scripts/alpine/12_soragni_score.sbatch
+#
 # CONFIRM BEFORE RUNNING:
 #   * GCTX matches the file already staged in $REPO (see build_l1000_context.py's docstring
 #     for the download recipe if it's ever missing).
@@ -63,6 +72,8 @@ THRESHOLD="${THRESHOLD:-0.0}"        # gen_logit < 0 -- same confidence-filter b
                                       # docs/tahoe_generation_results.md, Reproducibility);
                                       # not independently re-tuned for Soragni -- there is no
                                       # delta-fidelity ground truth here to calibrate against.
+STACK_EMB="${STACK_EMB:-}"           # e.g. "base=emb_soragni_base.h5ad aligned=emb_soragni_
+                                      # aligned.h5ad" (unset -> no embedding rows scored).
 
 # ---- filename suffix: "" when LABEL is unset, "_<label>" otherwise -------------------------
 SUFFIX=""
@@ -87,10 +98,14 @@ print(
 summary.to_csv("soragni_aggregation_summary$SUFFIX.csv", index=False)
 PY
 
-# ---- fair source (additive/pca/nmf/stack) x readout-adapter (hallmark/l1/l2) grid -----------
+# ---- fair source (additive/pca/nmf/stack[/base/aligned]) x readout-adapter grid -------------
 HALLMARK_SETS_FLAG=()
 if [[ -n "$HALLMARK_SETS" ]]; then
   HALLMARK_SETS_FLAG=(--hallmark-sets "$HALLMARK_SETS")
+fi
+STACK_EMB_FLAG=()
+if [[ -n "$STACK_EMB" ]]; then
+  STACK_EMB_FLAG=(--stack-emb $STACK_EMB)  # intentionally unquoted: splits "label=path label=path"
 fi
 python scripts/score_viability_adapters.py \
     --l1000-dir . \
@@ -98,4 +113,5 @@ python scripts/score_viability_adapters.py \
     --generated-dir "$AGGDIR" \
     --baseline data/reference/stack_input_sarcoma.h5ad \
     "${HALLMARK_SETS_FLAG[@]}" \
+    "${STACK_EMB_FLAG[@]}" \
     --out-csv "soragni_pathb_results$SUFFIX.csv"

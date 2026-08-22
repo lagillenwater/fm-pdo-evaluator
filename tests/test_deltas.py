@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import anndata as ad
 import numpy as np
@@ -152,6 +153,43 @@ def test_build_learned_deltas_is_drug_mean_plus_organoid_correction() -> None:
     assert not np.allclose(o1, o2)
 
 
+def test_build_learned_deltas_cv_selects_k_by_default() -> None:
+    # a correction that genuinely needs several latent dims to recover: k=None (the new
+    # default) must beat a deliberately-too-small fixed k=1 -- not just run without error --
+    # proving CV-selection picks a better-fitting component count instead of a hardcoded one
+    # (the same "let CV choose it" principle make_penalty already applies to penalty
+    # strength, extended here to the reducer's own component count).
+    rng = np.random.default_rng(3)
+    genes = pd.Index([f"g{i}" for i in range(6)])
+    lines = [f"C{i}" for i in range(14)]
+    latent = rng.standard_normal((14, 3))
+    noise_dims = rng.standard_normal((14, 3)) * 0.01
+    train_base = pd.DataFrame(
+        np.hstack([latent, noise_dims]), columns=genes, index=pd.Index(lines)
+    )
+    true_shift = latent @ np.array([2.0, -1.0, 0.5])  # needs all 3 latent dims to recover
+    drug_mean_val = 5.0
+    train_delta = cast(
+        "pd.DataFrame",
+        pd.DataFrame(
+            {str(genes[0]): drug_mean_val + true_shift, **{str(g): 0.0 for g in genes[1:]}}
+        )[genes],
+    )
+    train_key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 14})
+    target_base = train_base.iloc[[0]]
+
+    delta_cv, _ = build_learned_deltas(
+        train_base, train_delta, train_key, target_base, [lines[0]], reducer="pca", k=None, seed=0
+    )
+    delta_bad, _ = build_learned_deltas(
+        train_base, train_delta, train_key, target_base, [lines[0]], reducer="pca", k=1, seed=0
+    )
+    true_val = drug_mean_val + true_shift[0]
+    err_cv = abs(float(delta_cv[genes[0]].iloc[0]) - true_val)
+    err_bad = abs(float(delta_bad[genes[0]].iloc[0]) - true_val)
+    assert err_cv < err_bad
+
+
 def test_build_knn_deltas_picks_nearest_line() -> None:
     # 3 training lines with orthogonal baselines; each query points along one line's
     # direction, so its k=1 neighbor (per drug) is that line -> it inherits that line's
@@ -185,6 +223,34 @@ def test_build_knn_deltas_picks_nearest_line() -> None:
     # determinism: identical inputs -> identical output
     d2, _ = build_knn_deltas(train_base, train_delta, train_key, target_base, ["o1", "o2"], k=1)
     assert np.allclose(delta.to_numpy(), d2.to_numpy())
+
+
+def test_build_knn_deltas_cv_selects_k_by_default() -> None:
+    # all training baselines point the same direction (every line is everyone's neighbor);
+    # deltas are a true constant plus noise. Averaging over more neighbors cancels noise, so
+    # CV-selection (k=None) should beat a deliberately-too-small fixed k=1 that just copies
+    # one noisy line's delta verbatim.
+    rng = np.random.default_rng(4)
+    genes = pd.Index(["A", "B", "C"])
+    lines = [f"L{i}" for i in range(12)]
+    train_base = pd.DataFrame(
+        np.tile([10.0, 0.0, 0.0], (12, 1)) + rng.standard_normal((12, 3)) * 0.01,
+        index=pd.Index(lines),
+        columns=genes,
+    )
+    true_val = 5.0
+    train_delta = cast(
+        "pd.DataFrame",
+        pd.DataFrame({"A": true_val + rng.standard_normal(12) * 2.0, "B": 0.0, "C": 0.0})[genes],
+    )
+    train_key = pd.DataFrame({"patient": lines, "drug": ["d1"] * 12})
+    target_base = pd.DataFrame([[10.0, 0.0, 0.0]], index=pd.Index(["o1"]), columns=genes)
+
+    delta_cv, _ = build_knn_deltas(train_base, train_delta, train_key, target_base, ["o1"], k=None)
+    delta_bad, _ = build_knn_deltas(train_base, train_delta, train_key, target_base, ["o1"], k=1)
+    err_cv = abs(float(delta_cv["A"].iloc[0]) - true_val)
+    err_bad = abs(float(delta_bad["A"].iloc[0]) - true_val)
+    assert err_cv < err_bad
 
 
 def test_build_tahoe_deltas_pseudobulks_and_logfc() -> None:

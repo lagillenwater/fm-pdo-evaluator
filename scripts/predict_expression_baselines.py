@@ -39,6 +39,7 @@ from sklearn.decomposition import NMF, PCA
 from sklearn.linear_model import Ridge
 
 from fmharness.data.loaders import load_tranche
+from fmharness.deltas import restrict_common_support
 from fmharness.evaluation import build_sample_design
 from fmharness.signatures import load_hallmark, score_signatures
 
@@ -80,7 +81,7 @@ def pertid_to_drug(repo: Path, drugs: set[str]) -> dict[str, str]:
     return out
 
 
-def _broadcast(
+def broadcast(
     per_drug: dict[str, np.ndarray],
     orgs: list[str],
     genes: pd.Index,
@@ -182,13 +183,27 @@ def main() -> None:
     # --- assemble each predictor's delta ---
     methods: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
     zero = dict.fromkeys(drugs, np.zeros(len(genes)))
-    methods["control"] = _broadcast(zero, orgs, genes)
+    methods["control"] = broadcast(zero, orgs, genes)
     mean_delta = {
         p2d[p]: cx[(pert == p) & ~isc].mean(0) - dmso for p in np.unique(pert[~isc]) if p in p2d
     }
-    methods["mean"] = _broadcast(mean_delta, orgs, genes)
+    methods["mean"] = broadcast(mean_delta, orgs, genes)
     methods["pca"] = conditional("pca")
     methods["nmf"] = conditional("nmf")
+
+    # Restrict every method to the SAME (patient, drug) support before scoring: control/mean
+    # broadcast every drug to every organoid, while pca/nmf additionally require >= min_lines
+    # profiled L1000 cell lines per drug and silently drop low-coverage drugs -- so scoring
+    # each method's native key against `design` independently (a per-method inner join) would
+    # match them to different (patient, drug) pairs in the same printed table. See
+    # restrict_common_support's docstring.
+    native_n = {name: len(skey) for name, (_, skey) in methods.items()}
+    methods = restrict_common_support(methods, design)
+    common_n = len(next(iter(methods.values()))[1])
+    print(
+        f"\ncommon (patient, drug) support across {list(methods)}: {common_n} pairs "
+        f"(native method rows: {', '.join(f'{k}={v}' for k, v in native_n.items())})"
+    )
 
     res = []
     for name, (delta, key) in methods.items():
