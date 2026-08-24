@@ -1,4 +1,7 @@
-# fm-pdo-evaluator
+# fm-pm-evaluator
+
+[![CI](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml/badge.svg)](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/lagillenwater/fm-pm-evaluator/graph/badge.svg)](https://codecov.io/gh/lagillenwater/fm-pm-evaluator)
 
 Foundation-model evaluation harness for patient-derived tumor organoid (PDTO) drug-response prediction. Realizing the benefits of foundation models requires careful evaluations that map the boundaries of generalization — and that test a model in the mode it was actually designed for.
 
