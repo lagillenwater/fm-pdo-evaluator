@@ -65,9 +65,7 @@ class _LeaveSubtypeOutScheme:
         self.patient_subtypes = patient_subtypes
         self._lso = LeaveSubtypeOut(seed=seed, granularity=granularity, subtype_map=subtype_map)
 
-    def splits(
-        self, design: pd.DataFrame
-    ) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
+    def splits(self, design: pd.DataFrame) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
         patient_ids = sorted(design["patient"].unique())
         missing = [p for p in patient_ids if p not in self.patient_subtypes]
         if missing:
@@ -76,9 +74,7 @@ class _LeaveSubtypeOutScheme:
             Sequence[SplittablePatient],
             [_PatientRow(p, self.patient_subtypes[p]) for p in patient_ids],
         )
-        patient_pos = pd.Series(np.arange(len(design)), index=design["patient"]).groupby(
-            level=0
-        )
+        patient_pos = pd.Series(np.arange(len(design)), index=design["patient"]).groupby(level=0)
         for fold in self._lso.split(patients):
             train_idx = np.concatenate(
                 [patient_pos.get_group(p).to_numpy() for p in fold.train_patient_ids]
@@ -111,9 +107,7 @@ class _GroupKFoldScheme:
     def __init__(self, n_splits: int | None) -> None:
         self.n_splits = n_splits
 
-    def splits(
-        self, design: pd.DataFrame
-    ) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
+    def splits(self, design: pd.DataFrame) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
         patients = design["patient"].to_numpy()
         n_unique = int(design["patient"].nunique())
         # None means true leave-one-patient-out: one fold per patient, not a

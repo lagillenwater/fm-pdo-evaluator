@@ -42,8 +42,9 @@ CHECK1_ROWS = [
     ("stack (generated)", "0.012", "-0.002", "0.644", "1568", "red"),
 ]
 CHECK1_TAKEAWAY = (
-    "Stack generation is null: r = 0.012, off-diagonal ~ 0, specificity rank 0.64 (random ~ 0.5) — "
-    "below the line-independent additive floor (0.225) and far below the 0.46 reproducibility ceiling."
+    "Stack generation is null: r = 0.012, off-diagonal ~ 0, specificity rank 0.64 "
+    "(random ~ 0.5) — below the line-independent additive floor (0.225) and far "
+    "below the 0.46 reproducibility ceiling."
 )
 
 # --- Hallmark gate ------------------------------------------------------------------------
@@ -60,7 +61,16 @@ GATE_TAKEAWAY = (
 )
 
 # --- Check 2, fixed-signature readouts ----------------------------------------------------
-SIG_HEAD = ["source", "method", "global", "interaction", "per-drug", "sel. gap@1", "sel. gap@3", "p_label"]
+SIG_HEAD = [
+    "source",
+    "method",
+    "global",
+    "interaction",
+    "per-drug",
+    "sel. gap@1",
+    "sel. gap@3",
+    "p_label",
+]
 SIG_ROWS = [
     ("additive", "hallmark", "0.088", "-0.063", "-0.033", "0.855", "0.579", "0.979", None),
     ("additive", "proliferation", "0.097", "-0.016", "-0.035", "0.585", "0.547", "0.884", None),
@@ -71,7 +81,17 @@ SIG_ROWS = [
     ("nmf", "hallmark", "0.077", "-0.068", "-0.072", "0.855", "0.579", "0.981", None),
     ("nmf", "proliferation", "0.094", "-0.016", "-0.023", "0.585", "0.549", "0.882", None),
     ("stack (gen)", "hallmark", "-0.128", "-0.029", "-0.089", "0.742", "0.580", "0.798", "red"),
-    ("stack (gen)", "proliferation", "-0.150", "-0.014", "-0.086", "0.849", "0.674", "0.568", "red"),
+    (
+        "stack (gen)",
+        "proliferation",
+        "-0.150",
+        "-0.014",
+        "-0.086",
+        "0.849",
+        "0.674",
+        "0.568",
+        "red",
+    ),
 ]
 
 # --- Check 2, trained penalized ladder ----------------------------------------------------
@@ -86,21 +106,103 @@ LADDER_HEAD = [
     "sel. gap@3",
 ]
 LADDER_ROWS = [
-    ("expr", "0.475 / -0.037", "0.598 / -0.105", "0.605 / -0.121", "-0.011", "0.863", "0.360", "0.114", None),
-    ("additive", "0.628 / -0.095", "0.602 / -0.161", "0.601 / -0.151", "-0.149", "0.997", "0.264", "0.091", None),
-    ("knn", "0.547 / -0.068", "0.617 / -0.171", "0.618 / -0.168", "-0.067", "0.975", "0.250", "0.101", None),
-    ("pca", "0.585 / +0.007", "0.634 / -0.108", "0.634 / -0.103", "+0.018", "0.498", "0.219", "0.102", None),
-    ("nmf", "0.550 / +0.007", "0.610 / -0.198", "0.614 / -0.178", "-0.101", "0.596", "0.251", "0.082", None),
-    ("stack (gen delta)", "0.540 / -0.003", "0.567 / -0.194", "0.571 / -0.187", "-0.065", "0.631", "0.320", "0.140", "red"),
-    ("base (embed)", "0.644 / +0.119", "0.612 / -0.166", "0.613 / -0.170", "+0.200", "0.001", "0.273", "0.102", "green"),
-    ("aligned (embed)", "0.618 / +0.045", "0.623 / -0.097", "0.625 / -0.103", "+0.059", "0.175", "0.240", "0.096", None),
+    (
+        "expr",
+        "0.475 / -0.037",
+        "0.598 / -0.105",
+        "0.605 / -0.121",
+        "-0.011",
+        "0.863",
+        "0.360",
+        "0.114",
+        None,
+    ),
+    (
+        "additive",
+        "0.628 / -0.095",
+        "0.602 / -0.161",
+        "0.601 / -0.151",
+        "-0.149",
+        "0.997",
+        "0.264",
+        "0.091",
+        None,
+    ),
+    (
+        "knn",
+        "0.547 / -0.068",
+        "0.617 / -0.171",
+        "0.618 / -0.168",
+        "-0.067",
+        "0.975",
+        "0.250",
+        "0.101",
+        None,
+    ),
+    (
+        "pca",
+        "0.585 / +0.007",
+        "0.634 / -0.108",
+        "0.634 / -0.103",
+        "+0.018",
+        "0.498",
+        "0.219",
+        "0.102",
+        None,
+    ),
+    (
+        "nmf",
+        "0.550 / +0.007",
+        "0.610 / -0.198",
+        "0.614 / -0.178",
+        "-0.101",
+        "0.596",
+        "0.251",
+        "0.082",
+        None,
+    ),
+    (
+        "stack (gen delta)",
+        "0.540 / -0.003",
+        "0.567 / -0.194",
+        "0.571 / -0.187",
+        "-0.065",
+        "0.631",
+        "0.320",
+        "0.140",
+        "red",
+    ),
+    (
+        "base (embed)",
+        "0.644 / +0.119",
+        "0.612 / -0.166",
+        "0.613 / -0.170",
+        "+0.200",
+        "0.001",
+        "0.273",
+        "0.102",
+        "green",
+    ),
+    (
+        "aligned (embed)",
+        "0.618 / +0.045",
+        "0.623 / -0.097",
+        "0.625 / -0.103",
+        "+0.059",
+        "0.175",
+        "0.240",
+        "0.096",
+        None,
+    ),
 ]
 LADDER_TAKEAWAY = (
-    "The base (unaligned) Stack embedding is the only representation that captures cell-line-specific "
-    "response: interaction +0.119, per-drug +0.200, p_label 0.001 under ridge, where expression, PCA, NMF "
-    "and every generated delta sit at ~0 and non-significant. The signal is dense — L1/EN sparsify it away "
-    "(interaction ~ -0.17) — and cytokine alignment does not transfer (base > aligned on every interaction "
-    "metric). Overall potency (~0.6) is solved by everything; the interaction ceiling is 0.31-0.47."
+    "The base (unaligned) Stack embedding is the only representation that captures "
+    "cell-line-specific response: interaction +0.119, per-drug +0.200, p_label 0.001 "
+    "under ridge, where expression, PCA, NMF and every generated delta sit at ~0 and "
+    "non-significant. The signal is dense — L1/EN sparsify it away "
+    "(interaction ~ -0.17) — and cytokine alignment does not transfer (base > "
+    "aligned on every interaction metric). Overall potency (~0.6) is solved by "
+    "everything; the interaction ceiling is 0.31-0.47."
 )
 
 
@@ -156,7 +258,12 @@ def _style_cell(cell, text, *, size, bold, fg, bg, align):
 def _add_table(slide, header, rows, *, left, top, widths, row_height, head_size, body_size):
     """Deck-styled table: dark header, zebra body, optional per-row pass/fail tint."""
     shape = slide.shapes.add_table(
-        len(rows) + 1, len(header), Inches(left), Inches(top), Inches(sum(widths)), Inches(row_height * (len(rows) + 1))
+        len(rows) + 1,
+        len(header),
+        Inches(left),
+        Inches(top),
+        Inches(sum(widths)),
+        Inches(row_height * (len(rows) + 1)),
     )
     table = shape.table
     table.first_row = False
@@ -166,7 +273,7 @@ def _add_table(slide, header, rows, *, left, top, widths, row_height, head_size,
     )
     if style is not None:
         style.text = TABLE_STYLE
-    for col, width in zip(table.columns, widths):
+    for col, width in zip(table.columns, widths, strict=True):
         col.width = Inches(width)
     for row in table.rows:
         row.height = Inches(row_height)
@@ -210,25 +317,66 @@ def build_slide5(slide) -> None:
         slide,
         "How well each source reproduces the real Tahoe change "
         "(1,600 line-drug pairs; 1,568 for Stack — top 2,000 variable genes)",
-        left=0.40, top=1.02, width=12.50, height=0.31, size=12.5, bold=True,
+        left=0.40,
+        top=1.02,
+        width=12.50,
+        height=0.31,
+        size=12.5,
+        bold=True,
     )
     _add_table(
-        slide, CHECK1_HEAD, CHECK1_ROWS,
-        left=0.40, top=1.42, widths=[2.3, 2.2, 1.9, 1.9, 0.9], row_height=0.34,
-        head_size=14, body_size=16,
+        slide,
+        CHECK1_HEAD,
+        CHECK1_ROWS,
+        left=0.40,
+        top=1.42,
+        widths=[2.3, 2.2, 1.9, 1.9, 0.9],
+        row_height=0.34,
+        head_size=14,
+        body_size=16,
     )
-    _textbox(slide, CHECK1_TAKEAWAY, left=0.40, top=3.52, width=12.50, height=0.60, size=12.5, color=CAPTION_FG)
     _textbox(
         slide,
-        "Is the readout powered? The real Tahoe change scored through Hallmark sets vs random gene sets",
-        left=0.40, top=4.20, width=12.50, height=0.31, size=12.5, bold=True,
+        CHECK1_TAKEAWAY,
+        left=0.40,
+        top=3.52,
+        width=12.50,
+        height=0.60,
+        size=12.5,
+        color=CAPTION_FG,
+    )
+    _textbox(
+        slide,
+        "Is the readout powered? The real Tahoe change scored through Hallmark sets "
+        "vs random gene sets",
+        left=0.40,
+        top=4.20,
+        width=12.50,
+        height=0.31,
+        size=12.5,
+        bold=True,
     )
     _add_table(
-        slide, GATE_HEAD, GATE_ROWS,
-        left=0.40, top=4.58, widths=[2.6, 1.65, 1.5, 1.75, 1.7], row_height=0.34,
-        head_size=12, body_size=14,
+        slide,
+        GATE_HEAD,
+        GATE_ROWS,
+        left=0.40,
+        top=4.58,
+        widths=[2.6, 1.65, 1.5, 1.75, 1.7],
+        row_height=0.34,
+        head_size=12,
+        body_size=14,
     )
-    _textbox(slide, GATE_TAKEAWAY, left=0.40, top=6.42, width=12.50, height=0.60, size=12.5, color=CAPTION_FG)
+    _textbox(
+        slide,
+        GATE_TAKEAWAY,
+        left=0.40,
+        top=6.42,
+        width=12.50,
+        height=0.60,
+        size=12.5,
+        color=CAPTION_FG,
+    )
 
 
 def build_slide6(slide) -> None:
@@ -239,7 +387,7 @@ def build_slide6(slide) -> None:
         slide,
         "Current results — generation null; the base Stack embedding is the exception",
     )
-    from PIL import Image  # noqa: PLC0415 -- only needed for the figure aspect ratio
+    from PIL import Image  # only needed for the figure aspect ratio
 
     with Image.open(FIGURE) as img:
         aspect = img.width / img.height
@@ -257,32 +405,70 @@ def build_slide7(slide) -> None:
     _textbox(
         slide,
         "global = overall drug potency · interaction = cell-line-specific response · "
-        "per-drug = within-drug line ranking · sel. gap@k = best-drug shortlisting, lowest across the "
-        "penalty sweep (lower = better) · p_label = personalization null (small = real signal)",
-        left=0.40, top=0.95, width=12.60, height=0.40, size=10, color=CAPTION_FG,
+        "per-drug = within-drug line ranking · sel. gap@k = best-drug shortlisting, "
+        "lowest across the penalty sweep (lower = better) · p_label = personalization "
+        "null (small = real signal)",
+        left=0.40,
+        top=0.95,
+        width=12.60,
+        height=0.40,
+        size=10,
+        color=CAPTION_FG,
     )
     _textbox(
         slide,
         "Fixed-signature readouts on the delta sources  (n = 1,313 pairs)",
-        left=0.40, top=1.40, width=12.50, height=0.28, size=11, bold=True,
+        left=0.40,
+        top=1.40,
+        width=12.50,
+        height=0.28,
+        size=11,
+        bold=True,
     )
     _add_table(
-        slide, SIG_HEAD, SIG_ROWS,
-        left=0.40, top=1.70, widths=[1.55, 1.55, 1.35, 1.55, 1.35, 1.40, 1.40, 1.35], row_height=0.20,
-        head_size=8.5, body_size=8.5,
+        slide,
+        SIG_HEAD,
+        SIG_ROWS,
+        left=0.40,
+        top=1.70,
+        widths=[1.55, 1.55, 1.35, 1.55, 1.35, 1.40, 1.40, 1.35],
+        row_height=0.20,
+        head_size=8.5,
+        body_size=8.5,
     )
     _textbox(
         slide,
         "Trained penalized models — representation-controlled  (n = 1,303 pairs; L2 = ridge, "
-        "L1 = lasso, EN = elastic-net; per-drug and p_label from the L2 fit; folds grouped by cell line, so no line is in both train and test)",
-        left=0.40, top=4.00, width=12.50, height=0.28, size=11, bold=True,
+        "L1 = lasso, EN = elastic-net; per-drug and p_label from the L2 fit; folds grouped "
+        "by cell line, so no line is in both train and test)",
+        left=0.40,
+        top=4.00,
+        width=12.50,
+        height=0.28,
+        size=11,
+        bold=True,
     )
     _add_table(
-        slide, LADDER_HEAD, LADDER_ROWS,
-        left=0.40, top=4.30, widths=[1.85, 1.80, 1.80, 1.80, 1.15, 1.15, 0.98, 0.97], row_height=0.22,
-        head_size=9, body_size=9,
+        slide,
+        LADDER_HEAD,
+        LADDER_ROWS,
+        left=0.40,
+        top=4.30,
+        widths=[1.85, 1.80, 1.80, 1.80, 1.15, 1.15, 0.98, 0.97],
+        row_height=0.22,
+        head_size=9,
+        body_size=9,
     )
-    _textbox(slide, LADDER_TAKEAWAY, left=0.40, top=6.36, width=12.50, height=0.90, size=11, color=CAPTION_FG)
+    _textbox(
+        slide,
+        LADDER_TAKEAWAY,
+        left=0.40,
+        top=6.36,
+        width=12.50,
+        height=0.90,
+        size=11,
+        color=CAPTION_FG,
+    )
 
 
 def main() -> None:

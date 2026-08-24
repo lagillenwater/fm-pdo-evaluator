@@ -64,11 +64,7 @@ def _cid_to_pathway(moa: pd.DataFrame, cid_map: Path, cids: Iterable[str]) -> di
 
     names_by_cid = {cid: cid_to_name[cid] for cid in cids if cid in cid_to_name}
     name_pathway = pathway_map(moa, sorted(set(names_by_cid.values())))
-    return {
-        cid: name_pathway[name]
-        for cid, name in names_by_cid.items()
-        if name in name_pathway
-    }
+    return {cid: name_pathway[name] for cid, name in names_by_cid.items() if name in name_pathway}
 
 
 def main() -> None:

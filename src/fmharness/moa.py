@@ -98,16 +98,9 @@ def pathway_map(moa: pd.DataFrame, drugs: Iterable[str]) -> dict[str, str]:
     the returned dict never maps to NaN or the string "nan".
     """
     lookup = moa["target_pathway"].to_dict()
-    pairs = (
-        (d, lookup.get(normalize_drug(d)))
-        for d in drugs
-    )
+    pairs = ((d, lookup.get(normalize_drug(d))) for d in drugs)
     # Filter out None and NaN pathways
-    return {
-        d: pw
-        for d, pw in pairs
-        if pw is not None and pd.notna(pw)
-    }
+    return {d: pw for d, pw in pairs if pw is not None and pd.notna(pw)}
 
 
 def moa_hit_rate_at_k(
@@ -122,9 +115,7 @@ def moa_hit_rate_at_k(
     """
     df = preds.copy()
     df["pathway"] = df["drug"].map(lambda d: pathway.get(d))
-    best_pw = df.loc[df.groupby("patient")["y_true"].idxmin()].set_index("patient")[
-        "pathway"
-    ]
+    best_pw = df.loc[df.groupby("patient")["y_true"].idxmin()].set_index("patient")["pathway"]
     ranked = df.sort_values(["patient", "y_pred"], kind="stable")
     ranked["rank"] = ranked.groupby("patient").cumcount()
     ranked["want"] = ranked["patient"].map(best_pw)
@@ -132,10 +123,7 @@ def moa_hit_rate_at_k(
     match = scored["pathway"].eq(scored["want"])  # type: ignore[attr-defined]
     return {
         k: float(
-            match.where(scored["rank"] < k, other=False)
-            .groupby(scored["patient"])
-            .any()
-            .mean()
+            match.where(scored["rank"] < k, other=False).groupby(scored["patient"]).any().mean()
         )
         for k in ks
     }

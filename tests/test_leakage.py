@@ -104,8 +104,7 @@ def test_filter_leakage_works_for_generator_too() -> None:
     assert profile.basis == "unknown"
 
 
-def test_filter_leakage_unknown_basis_when_implements_protocol_but_returns_none(
-    ) -> None:
+def test_filter_leakage_unknown_basis_when_implements_protocol_but_returns_none() -> None:
     # Model structurally satisfies LeakageQueryable (has the methods) but
     # returns None from pretraining_lines, indicating corpus was not exposed.
     design = _design()

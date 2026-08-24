@@ -191,7 +191,7 @@ def build_generated_deltas(
     if dup.any():
         print(f"  build_generated_deltas: dropped {int(dup.sum())} duplicate (line, drug) rows")
         delta, key = delta[~dup].reset_index(drop=True), key[~dup].reset_index(drop=True)
-    return delta, key
+    return cast("pd.DataFrame", delta), cast("pd.DataFrame", key)
 
 
 def build_additive_deltas(

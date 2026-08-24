@@ -59,10 +59,18 @@ def _panel() -> pd.DataFrame:
             "patient": ["A", "A", "A", "B", "B", "B", "C", "C", "C", "D", "D", "D"],
             "drug": ["d_tox", "d_sel", "d_weak"] * 4,
             "y_true": [
-                0.20, 0.10, 0.90,  # A: d_sel best
-                0.20, 0.50, 0.90,  # B: d_tox best
-                0.20, 0.60, 0.90,  # C: d_tox best
-                0.20, 0.70, 0.90,  # D: d_tox best
+                0.20,
+                0.10,
+                0.90,  # A: d_sel best
+                0.20,
+                0.50,
+                0.90,  # B: d_tox best
+                0.20,
+                0.60,
+                0.90,  # C: d_tox best
+                0.20,
+                0.70,
+                0.90,  # D: d_tox best
             ],
         }
     )
@@ -77,7 +85,7 @@ def test_shortlist_concentration_collapsed_model() -> None:
     # A model that ignores the line and always ranks d_tox first: 1 distinct pick, modal
     # share 1.0, and every pick is a broadly-active compound.
     preds = _panel()
-    preds["y_pred"] = preds["drug"].map({"d_tox": 0.0, "d_sel": 1.0, "d_weak": 2.0})
+    preds["y_pred"] = preds["drug"].map({"d_tox": 0.0, "d_sel": 1.0, "d_weak": 2.0})  # type: ignore[arg-type]
     c = shortlist_concentration(preds)
     assert c["distinct"] == 1.0
     assert c["modal_drug"] == "d_tox"

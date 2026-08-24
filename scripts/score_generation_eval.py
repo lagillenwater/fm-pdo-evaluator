@@ -188,8 +188,7 @@ def _penalized_preds(
             # line entirely, so it is the floor any line-specific claim has to clear.
             prior = float(np.mean([auc[ln] for ln in tr]))
             rows.extend(
-                (ln, drug, float(auc[ln]), float(p), prior)
-                for ln, p in zip(te, pred, strict=False)
+                (ln, drug, float(auc[ln]), float(p), prior) for ln, p in zip(te, pred, strict=False)
             )
     cols = ["patient", "drug", "y_true", "y_pred", "y_prior"]
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)

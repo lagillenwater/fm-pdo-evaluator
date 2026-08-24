@@ -146,8 +146,8 @@ def main() -> None:
     if keep_cids is not None:
         dm = load_dataset(TAHOE, "drug_metadata", split="train").to_pandas()
         dm_cid = next(c for c in dm.columns if "pubchem" in c.lower())
-        dm_drug = "drug" if "drug" in dm.columns else next(
-            c for c in dm.columns if "drug" in c.lower()
+        dm_drug = (
+            "drug" if "drug" in dm.columns else next(c for c in dm.columns if "drug" in c.lower())
         )
         target_drugs = set(dm.loc[dm[dm_cid].map(_ncid).isin(keep_cids), dm_drug].astype(str))
         print(f"target drugs: {len(target_drugs)} Tahoe names <- {len(keep_cids)} CIDs", flush=True)
@@ -212,8 +212,12 @@ def main() -> None:
                     cl = cl_c[i]
                     if lines is not None and cl not in lines:
                         continue
-                    if args.dose_um is not None and not is_ctl and not np.isclose(
-                        sample_dose.get(str(samp_c[i]), float("nan")), args.dose_um
+                    if (
+                        args.dose_um is not None
+                        and not is_ctl
+                        and not np.isclose(
+                            sample_dose.get(str(samp_c[i]), float("nan")), args.dose_um
+                        )
                     ):
                         continue
                     if cap is not None:
@@ -231,9 +235,16 @@ def main() -> None:
                         g_acc.append(g_col[i].values.to_numpy(zero_copy_only=False).copy())
                         e_acc.append(e_col[i].values.to_numpy(zero_copy_only=False).copy())
                         obs_rows.append(
-                            (drug_c[i], _ncid(cid_c[i]), cl_c[i], cl2dep.get(str(cl_c[i]), ""),
-                             drug_c[i] == DMSO, plate_c[i], samp_c[i],
-                             sample_dose.get(str(samp_c[i]), float("nan")))
+                            (
+                                drug_c[i],
+                                _ncid(cid_c[i]),
+                                cl_c[i],
+                                cl2dep.get(str(cl_c[i]), ""),
+                                drug_c[i] == DMSO,
+                                plate_c[i],
+                                samp_c[i],
+                                sample_dose.get(str(samp_c[i]), float("nan")),
+                            )
                         )
                         if len(g_acc) >= args.batch:
                             flush()

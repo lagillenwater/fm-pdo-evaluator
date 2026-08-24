@@ -83,9 +83,7 @@ def test_thresholded_modality_direction_is_higher_is_better_and_cv_delegates() -
     # lower_is_better base. recommended_cv, in contrast, is a property of the
     # cohort's size and rightly delegates.
     for responder_is in ("below", "above"):
-        wrapped = ThresholdedModality(
-            _FakeAucModality(), threshold=50.0, responder_is=responder_is
-        )
+        wrapped = ThresholdedModality(_FakeAucModality(), threshold=50.0, responder_is=responder_is)
         assert wrapped.direction() == "higher_is_better"
         assert wrapped.recommended_cv() == "5fold"
         assert wrapped.task_type() == "classification"
