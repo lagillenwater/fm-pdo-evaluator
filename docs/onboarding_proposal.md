@@ -30,9 +30,11 @@ PR gets at least one lab-member approval before merging.
 ## What it adds
 
 - **An automated PR review bot** (e.g. CodeRabbit) comments on pull
-  requests automatically when they're opened, flagging likely bugs,
-  security issues, and (depending on configuration) style concerns.
-  Comment-only by default — it does not block merges.
+  requests, flagging likely bugs, security issues, and (depending on
+  configuration) style concerns. Reviews fire automatically on eligible
+  PRs; on a small repository they may need a one-line comment to
+  trigger (see "What this costs"). Comment-only by default — it does
+  not request changes or block merges.
 - **Coverage reporting** (e.g. Codecov) tracks what fraction of a
   repository's code is exercised by its test suite, and comments on each
   PR with how much of the *changed* code is covered. Informational by
@@ -44,10 +46,9 @@ PR gets at least one lab-member approval before merging.
 
 These three are complementary, not redundant: the self-review step
 happens before a PR exists and leaves no external trace; the bot review
-happens automatically on every PR regardless of who or what wrote it,
-and leaves a permanent, visible comment; coverage reporting does
-something neither of the others can — track a number over time across
-commits.
+happens on every PR regardless of who or what wrote it, and leaves a
+permanent, visible comment; coverage reporting does something neither
+of the others can — track a number over time across commits.
 
 ## Setting this up for a new repository
 
@@ -60,9 +61,16 @@ commits.
    relying on dashboard-only settings, so the configuration is
    version-controlled and reviewable like any other code. Recommended
    starting defaults: `profile: chill` (flags bugs/security/logic
-   issues, skips style nitpicks your linter already catches),
-   `request_changes_workflow: false` (comments only, never blocks
-   merge — the human-approval rule stays the actual gate).
+   issues, skips style nitpicks your linter already catches) and
+   `request_changes_workflow: false` (reviews are posted as comments
+   rather than as "changes requested").
+
+   Note that `request_changes_workflow` governs the review mode only.
+   It does not control CodeRabbit's separate pre-merge checks, nor
+   whether a branch-protection rule treats CodeRabbit's status check as
+   required. For human approval to stay the only real gate, leave
+   CodeRabbit's status check out of any required-checks list, and set
+   its pre-merge checks to warning or off if you enable them.
 
 2. **Coverage reporting.** Add a coverage-report step to your existing
    CI (e.g. `pytest --cov=<package> --cov-report=xml` for Python), then

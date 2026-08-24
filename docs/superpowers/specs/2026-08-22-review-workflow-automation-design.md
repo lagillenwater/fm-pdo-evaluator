@@ -224,10 +224,11 @@ namespace.
 **Phase 1 (now, this repo, no blockers):**
 - Install the CodeRabbit GitHub App on the `lagillenwater` personal
   account, granting access to `fm-pm-evaluator` (or all personal repos).
-- Connect `fm-pm-evaluator` on codecov.io (GitHub OAuth). Public repo,
-  so likely tokenless — the CI step reads `${{ secrets.CODECOV_TOKEN }}`
-  regardless, so it degrades gracefully if a token turns out to be
-  required.
+- Connect `fm-pm-evaluator` on codecov.io (GitHub OAuth). Verified
+  tokenless in practice for this personal-account public repo — no
+  `CODECOV_TOKEN` secret was ever set and uploads succeeded. The CI step
+  reads `${{ secrets.CODECOV_TOKEN }}` regardless, so the same file
+  still works in a namespace that does require one.
 
 Both are actions only Lucas can take (account-level consent) — not
 something this implementation can automate.

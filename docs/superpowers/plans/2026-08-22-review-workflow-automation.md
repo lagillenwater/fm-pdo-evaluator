@@ -4,7 +4,7 @@
 
 **Goal:** Stand up a three-layer, version-controlled review workflow (agent self-review, CodeRabbit + Codecov automated PR review, unchanged human approval) in fm-pm-evaluator, and produce a discussion-ready proposal for extending it to greenelab/onboarding.
 
-**Architecture:** Five new/modified files — a CodeRabbit config, a Codecov config plus CI wiring plus README badges, a `CLAUDE.md` self-review instruction, and an onboarding-facing proposal document — validated end-to-end via one real PR against this repo, once the account-level CodeRabbit/Codecov installs are done.
+**Architecture:** Six new/modified files — `.coderabbit.yaml`, `codecov.yml`, `.github/workflows/ci.yml`, `README.md`, `CLAUDE.md`, and `docs/onboarding_proposal.md` — validated end-to-end via one real PR against this repo, once the account-level CodeRabbit/Codecov installs are done.
 
 **Tech Stack:** CodeRabbit (GitHub App + `.coderabbit.yaml`), Codecov (GitHub App + `codecov/codecov-action` pinned to the `v7.0.0` commit + `codecov.yml`), existing `uv`/ruff/pyright/pytest CI, GitHub CLI (`gh`) for PR operations.
 
@@ -303,9 +303,12 @@ The document must cover:
   added to `extras/code_review_checklist.md`, and a short additive note
   in `onboarding.md` under "Source Code, Data, and Reproducibility".
 - **What this costs** — free for public repositories, stating the real
-  caveats: CodeRabbit needs no application but starts on a 14-day Pro+
-  trial and rate-limits by repository popularity, and Codecov will
-  likely need a `CODECOV_TOKEN` under greenelab's org settings.
+  caveats. Installing the CodeRabbit GitHub App is required (see Task 5
+  Step 1); what needs no application or plan selection is the *free
+  public-repo pricing*. Note also that installs start on a 14-day Pro+
+  trial and that review rate limits scale with repository popularity,
+  and that Codecov will likely need a `CODECOV_TOKEN` under greenelab's
+  org settings.
 - **What this does NOT change** — the existing ≥1-lab-member-approval
   requirement stays the actual merge gate.
 - **Prerequisites for org-wide adoption** — GitHub Apps install per
