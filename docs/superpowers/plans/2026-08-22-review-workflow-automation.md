@@ -375,7 +375,13 @@ EOF
 - [ ] **Step 3: Confirm CI passes**
 
 Run: `gh pr checks --watch`
-Expected: all checks pass, including the new coverage-upload step.
+Expected: all checks pass.
+
+Note that a passing `test` check does not by itself prove the coverage
+upload worked. The upload step carries `continue-on-error: true`, so a
+failed upload marks that step failed without failing the job. Treat
+Step 5 (a Codecov comment actually appearing) as the real confirmation,
+or open the run in Actions and check the upload step's outcome.
 
 - [ ] **Step 4: Confirm CodeRabbit reviewed the PR**
 
