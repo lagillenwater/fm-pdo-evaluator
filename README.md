@@ -1,4 +1,4 @@
-# fm-pdo-evaluator
+# fm-pm-evaluator
 
 [![CI](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml/badge.svg)](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/lagillenwater/fm-pm-evaluator/graph/badge.svg)](https://codecov.io/gh/lagillenwater/fm-pm-evaluator)

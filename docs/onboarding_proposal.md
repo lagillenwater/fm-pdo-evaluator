@@ -20,7 +20,7 @@ Three files in greenelab/onboarding would change:
 
 ### 1. New: `extras/automated_review_tooling.md`
 
-```
+```markdown
 # Automated Review Tooling (Optional)
 
 This is an optional layer on top of the review process described in the
@@ -83,19 +83,37 @@ commits.
 
 ## What this costs
 
-Both CodeRabbit and Codecov are free for public repositories. Neither
-requires ongoing maintenance beyond the initial setup — configuration is
-version-controlled and changes rarely. The one recurring cost is
-judgment: each repo's `.coderabbit.yaml` `path_instructions` should
-reflect what's actually worth flagging in that codebase (e.g., don't
-apply library-code scrutiny to one-off analysis scripts).
+Both are free for **public** repositories, with caveats worth knowing
+before promising anyone that it is simply free:
+
+- **CodeRabbit** requires no application, form, or plan selection —
+  installing the app on a public repo is the entire process ("receive
+  free reviews forever for public repositories. No additional setup is
+  required," coderabbit.ai/faq). New installs begin on a 14-day Pro+
+  trial, so the plan name shown in early review comments is not what you
+  settle on long-term. Free review *rate limits* scale with repository
+  popularity, and public repos under 10 stars must trigger each review
+  manually by commenting `@coderabbitai review` instead of getting one
+  automatically when the PR opens — expect this on a new lab repo.
+- **Codecov** is free for public repositories, but a `CODECOV_TOKEN`
+  repository secret is likely required under greenelab's org settings
+  (see "Prerequisites for org-wide adoption" below).
+
+Ongoing maintenance is low but not zero. Configuration is
+version-controlled and changes rarely; the recurring cost is judgment —
+each repo's `.coderabbit.yaml` `path_instructions` should reflect what
+is actually worth flagging in that codebase (e.g., do not apply
+library-code scrutiny to one-off analysis scripts). Note also that an
+app install only covers the namespace it was installed on, so a PR
+opened against a repository whose owner has not installed the app gets
+no automated review at all.
 ```
 
 ### 2. Addition to `extras/code_review_checklist.md`
 
 Insert before the existing "Pride" bullet, as a short framing note:
 
-```
+```markdown
 When reviewing a PR, it helps to check it against five axes:
 **correctness** (does it do what it claims, including edge cases),
 **readability** (would a lab member unfamiliar with this code
@@ -111,7 +129,7 @@ within these axes.
 
 Insert after the existing "Reviewing Pull Requests" bullet:
 
-```
+```markdown
 **Automated tooling (optional).** Repositories may additionally run
 automated PR review (e.g. CodeRabbit) and coverage reporting (e.g.
 Codecov) — see `extras/automated_review_tooling.md` for what these add
@@ -130,14 +148,20 @@ opt-in tooling a repo maintainer can adopt, not a new onboarding rule.
 GitHub Apps (both CodeRabbit and Codecov) are installed per GitHub
 account or organization via a browser-based consent screen — this can't
 be scripted, and a personal fork's install doesn't cover the `greenelab`
-org. Rolling this out org-wide needs someone with app-install rights on
+org. The install on the personal fork does not extend to `greenelab`, so
+a PR opened directly against a `greenelab` repository gets no automated
+review until the org installs the apps itself.
+
+Rolling this out org-wide needs someone with app-install rights on
 `greenelab` (per onboarding.md, likely Casey Greene or another org
-admin) to install both apps once, ideally scoped to "all repositories"
-so it covers future repos automatically rather than needing to be
-repeated per repo. Budget for a `CODECOV_TOKEN` secret on any
-`greenelab`-owned repository that adopts this, since Codecov's
-"require token for public repos" org setting defaults to required for
-established organizations.
+admin) to install both apps. Default to **"Only select repositories"**
+and add repos as they opt in; granting "all repositories" is an explicit
+organization-level decision that should follow a look at repository
+visibility and data sensitivity, since CodeRabbit requests read and
+write access to code, issues, and pull requests across every repo in
+scope. Budget for a `CODECOV_TOKEN` secret on any `greenelab`-owned
+repository that adopts this, since Codecov's "require token for public
+repos" org setting defaults to required for established organizations.
 
 ## Known adjacent gap (not addressed by this proposal)
 

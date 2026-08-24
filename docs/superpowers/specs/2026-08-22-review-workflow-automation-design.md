@@ -9,13 +9,13 @@ Greene Lab's onboarding process (`greenelab/onboarding`) documents a fully
 human code-review workflow: named reviewers, a manual checklist, one
 lab-member approval. It has no automated tooling anywhere — no CI-based
 linting gate visible to reviewers, no bot review, no coverage tracking.
-Meanwhile `fm-pdo-evaluator` already runs CI (ruff, pyright, pytest) but
+Meanwhile `fm-pm-evaluator` already runs CI (ruff, pyright, pytest) but
 never surfaces coverage, and is currently a single-author repo with no
 second human in the loop by default.
 
 `cytomining/pycytominer` runs CodeRabbit (automated PR review) and
 Codecov (coverage tracking + PR diff comments) in production. This
-design adapts that pattern for `fm-pdo-evaluator` as a testbed, with
+design adapts that pattern for `fm-pm-evaluator` as a testbed, with
 explicit, version-controlled configuration meant to be portable into
 `greenelab/onboarding` after a lab discussion — not merged there
 directly by this work.
@@ -42,7 +42,7 @@ directly by this work.
   after a lab discussion; this work produces the proposal content, not
   the PR.
 - **Updating `extras/linter_install_tutorial.md`'s stale black/flake8
-  guidance** (fm-pdo-evaluator's own pre-commit already uses ruff
+  guidance** (fm-pm-evaluator's own pre-commit already uses ruff
   instead). Real gap, but unrelated to CodeRabbit/Codecov/skills —
   flagged in the onboarding proposal doc as a separate finding, not
   acted on here.
@@ -155,21 +155,32 @@ step immediately after:
       - name: Pytest
         run: uv run pytest --cov=src/fmharness --cov-report=term-missing --cov-report=xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        continue-on-error: true
         with:
           files: ./coverage.xml
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 ```
 
+Plus a least-privilege permissions block at the top level of the file:
+
+```yaml
+permissions:
+  contents: read
+```
+
 `token` is read unconditionally so the same file works whether the
 namespace it runs in requires a token or not (see Prerequisites below) —
-`codecov-action` no-ops the token field when one isn't needed.
+`codecov-action` no-ops the token field when one isn't needed. The
+action is pinned to the commit SHA behind `v7.0.0` rather than the
+mutable `v7` tag because the step is handed a repository secret; a
+moving tag would let upstream change what runs with that secret.
 
 ### 4. `CLAUDE.md` (new, repo root)
 
 ```markdown
-# fm-pdo-evaluator — agent instructions
+# fm-pm-evaluator — agent instructions
 
 ## Before opening a PR
 
@@ -180,7 +191,7 @@ and a human reviewer will apply; catching it here saves a review round
 trip.
 
 This file intentionally stays scoped to review workflow. Broader project
-context lives in `docs/` (see `docs/fm-pdo-evaluator-plan.md` and
+context lives in `docs/` (see `docs/adapter_contract.md` and
 `docs/models.md`).
 ```
 
@@ -193,8 +204,8 @@ is scoped to.
 Add two badges under the title:
 
 ```markdown
-[![CI](https://github.com/lagillenwater/fm-pdo-evaluator/actions/workflows/ci.yml/badge.svg)](https://github.com/lagillenwater/fm-pdo-evaluator/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/lagillenwater/fm-pdo-evaluator/graph/badge.svg)](https://codecov.io/gh/lagillenwater/fm-pdo-evaluator)
+[![CI](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml/badge.svg)](https://github.com/lagillenwater/fm-pm-evaluator/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/lagillenwater/fm-pm-evaluator/graph/badge.svg)](https://codecov.io/gh/lagillenwater/fm-pm-evaluator)
 ```
 
 ## Prerequisites / manual setup
@@ -203,7 +214,7 @@ GitHub Apps (both CodeRabbit, and Codecov in its current form) are
 installed per GitHub account or organization via a browser-based consent
 screen — this cannot be scripted through `gh`/the API; it's a GitHub
 security boundary, not a tooling limitation. A fork
-(`lagillenwater/fm-pdo-evaluator`) and its upstream
+(`lagillenwater/fm-pm-evaluator`) and its upstream
 (`greenelab/fm-pm-evaluator`) are different namespaces for this purpose,
 so each needs its own install — but it's a one-time per-namespace
 decision, not per-repo: installing with "All repositories" (or an
@@ -212,8 +223,8 @@ namespace.
 
 **Phase 1 (now, this repo, no blockers):**
 - Install the CodeRabbit GitHub App on the `lagillenwater` personal
-  account, granting access to `fm-pdo-evaluator` (or all personal repos).
-- Connect `fm-pdo-evaluator` on codecov.io (GitHub OAuth). Public repo,
+  account, granting access to `fm-pm-evaluator` (or all personal repos).
+- Connect `fm-pm-evaluator` on codecov.io (GitHub OAuth). Public repo,
   so likely tokenless — the CI step reads `${{ secrets.CODECOV_TOKEN }}`
   regardless, so it degrades gracefully if a token turns out to be
   required.
@@ -266,17 +277,33 @@ the lab discussion.
 
 ## Open questions to resolve during implementation
 
-- Exact current CodeRabbit YAML schema (field names for path filters/
+- ~~Exact current CodeRabbit YAML schema (field names for path filters/
   instructions, `poem`, `request_changes_workflow`) — pin to CodeRabbit's
   published schema URL (already in the file above) and validate against
-  it rather than hand-verify from memory.
-- Exact current Codecov config schema (`coverage.status.*.informational`,
+  it rather than hand-verify from memory.~~ **Resolved:** accepted as
+  written. CodeRabbit's review footer reported `Configuration used: Path:
+  .coderabbit.yaml` with `Review profile: CHILL`, confirming the file was
+  parsed and the profile applied.
+- ~~Exact current Codecov config schema (`coverage.status.*.informational`,
   `comment.layout`, `comment.require_changes`) — verify against Codecov's
-  current docs at implementation time for the same reason.
-- Exact current Codecov tokenless behavior for a *personal* account (the
+  current docs at implementation time for the same reason.~~ **Resolved:**
+  accepted as written. Codecov posted a PR comment and a `codecov/patch`
+  status check that reported without blocking.
+- ~~Exact current Codecov tokenless behavior for a *personal* account (the
   org-level default is confirmed; the personal-account default isn't) —
-  verify at Phase 1 implementation time.
-- Whether `fail_ci_if_error` on the upload step should stay `true`
+  verify at Phase 1 implementation time.~~ **Resolved:** tokenless upload
+  works on a personal-account public repo. No `CODECOV_TOKEN` secret was
+  ever set on the testbed repo, and uploads succeeded anyway — the CI step
+  keeps reading the secret so the same file still works in a namespace
+  that does require one.
+- ~~Whether `fail_ci_if_error` on the upload step should stay `true`
   (surface upload failures) or move to `false` (never let Codecov's own
   flakiness fail unrelated CI) — starting at `true` to match pycytominer;
-  revisit if it causes noise.
+  revisit if it causes noise.~~ **Resolved during implementation:** kept
+  at `true`, with `continue-on-error: true` on the step. The framing was
+  a false dichotomy. `CC_FAIL_ON_ERROR` is the only thing that aborts the
+  action's uploader script when the downloaded CLI fails its GPG
+  signature or SHA256 check; setting it `false` means a tampered binary
+  is reported and then run anyway in a job holding `CODECOV_TOKEN`.
+  Handling outage tolerance at the step level instead keeps that
+  integrity gate and still prevents Codecov from failing the job.
