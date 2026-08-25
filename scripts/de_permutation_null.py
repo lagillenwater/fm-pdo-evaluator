@@ -82,6 +82,14 @@ def main() -> None:
                     help="dir of <name>_delta.parquet / <name>_key.parquet pairs")
     ap.add_argument("--de-calls", required=True, type=Path, help="build_tahoe_de_calls output")
     ap.add_argument("--n-shuffles", type=int, default=200)
+    # Split for an array job. Safe as a plain filter, unlike Check 2: de_fidelity scores one
+    # source's (delta, key) against the DE calls with no cross-source term, so a task computing
+    # one source alone gets exactly the value the serial run would give it.
+    ap.add_argument("--only-source", default=None, help="score just this source (array task)")
+    ap.add_argument("--only-null", default=None, choices=[*NULLS, None],
+                    help="compute just this null kind (array task)")
+    ap.add_argument("--task-id", type=int, default=None,
+                    help="index into the (source x null) grid; sets --only-source/--only-null")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-csv", required=True, type=Path)
     args = ap.parse_args()
@@ -90,14 +98,29 @@ def main() -> None:
     names = sorted(p.name[: -len("_delta.parquet")] for p in args.sources_dir.glob("*_delta.parquet"))
     if not names:
         raise SystemExit(f"no *_delta.parquet under {args.sources_dir}")
-    print(f"sources: {names}")
+    null_kinds = list(NULLS)
+    if args.task_id is not None:
+        grid = [(s, k) for s in names for k in null_kinds]
+        if args.task_id >= len(grid):
+            print(f"task {args.task_id} is past the grid ({len(grid)} cells); nothing to do")
+            return
+        args.only_source, args.only_null = grid[args.task_id]
+        print(f"task {args.task_id} -> source={args.only_source} null={args.only_null}")
+    if args.only_source:
+        if args.only_source not in names:
+            raise SystemExit(f"{args.only_source!r} not among {names}")
+        names = [args.only_source]
+    if args.only_null:
+        null_kinds = [args.only_null]
+    print(f"sources: {names}  nulls: {null_kinds}")
 
     rows: list[dict[str, object]] = []
     for name in names:
         delta = pd.read_parquet(args.sources_dir / f"{name}_delta.parquet")
         key = pd.read_parquet(args.sources_dir / f"{name}_key.parquet")
         observed = metric_means(delta, key, de_calls)
-        for null_kind, fn in NULLS.items():
+        for null_kind in null_kinds:
+            fn = NULLS[null_kind]
             draws = {m: [] for m in METRICS}
             for b in range(args.n_shuffles):
                 rng = np.random.default_rng(args.seed + 1 + b)
