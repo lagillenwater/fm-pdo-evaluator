@@ -57,18 +57,22 @@ DISCLAIMED = re.compile(
 
 SEARCH_GLOBS = ("docs/**/*.md", "src/**/*.py", "scripts/**/*.py", "scripts/alpine/*.sbatch")
 
-# Not gated, for reasons of kind rather than convenience:
+# Only ONE exclusion, and it is a true false-positive: this file's own docstring necessarily
+# contains the words it searches for.
 #
-# docs/superpowers/** are DATED DESIGN RECORDS. They record what was intended and believed on
-# the day they were written, and retroactively editing them to satisfy a gate would destroy the
-# thing that makes them useful -- you could no longer tell what was known when. A spec claim
-# that later turns out false gets a correction note appended, not a tag. (One such correction
-# exists: the 2026-08-21 spec asserted "Ridge is well-posed for p >> n", which the 2026-08-24
-# measurement disproved for this regime.)
+# docs/superpowers/** was excluded on 2026-08-25 and reinstated the same day. The argument for
+# excluding it -- that dated design records should not be rewritten to satisfy a gate -- is
+# sound about EDITING them and does not license exempting them from scrutiny. 67 of the
+# original 107 hits lived there, so the exclusion was most of a 107->21 "reduction" that
+# involved almost no work. It also removed exactly the claims that matter most: the 2026-08-21
+# spec's "Ridge is well-posed for p >> n" drove the no-truncation policy and was later
+# disproven for this regime; a sci-Plex crosstab claim in a spec invalidated published numbers
+# and forced a GPU rerun, in a commit that touched only the spec.
 #
-# This file is skipped because its own docstring necessarily contains the trigger words it
-# searches for.
-EXCLUDE = ("docs/superpowers/", "scripts/check_evidence.py")
+# The right treatment is a STATUS NOTE, not an edit to the original claim: leave what was
+# believed, and record next to it whether it was ever checked and whether it still holds. The
+# DISCLAIMED pattern already accepts that language, so an honest note passes the gate.
+EXCLUDE = ("scripts/check_evidence.py",)
 
 
 def load_promoted(repo: Path) -> set[str]:

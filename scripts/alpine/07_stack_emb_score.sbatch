@@ -6,7 +6,9 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=01:00:00
+#SBATCH --time=08:00:00               # was 01:00:00; job 31644415 hit the limit after
+                                     # RANDOM_DRAWS=8 added ~240 CV fits to a grid that
+                                     # already took 47 min at one draw. acpu allows 24h.
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #

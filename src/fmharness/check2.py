@@ -348,6 +348,10 @@ def score_check2(
             "interaction": s["interaction"],
             "perdrug": s["perdrug"],
             "p_label": s["p_label"],
+            # The detection floor, in the same units as `interaction`. Reported next to every
+            # statistic it bounds so a null reads as "we could have seen X, we observe Y".
+            "null_p95": s["null_p95"],
+            "null_sd": s["null_sd"],
             "regret@1": s["regret@1"],
             "regret@3": s["regret@3"],
             "n": int(s["n"]),
