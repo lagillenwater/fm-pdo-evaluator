@@ -214,5 +214,36 @@ def main() -> None:
     print("  shrinkage for every high-dimensional representation, not just the oracle.")
 
 
+    print("\n" + "=" * 78)
+    print("PART 5 -- is additive an exact affine transform of oracle, within each drug?")
+    print("=" * 78)
+    print("  additive_i = mean over the OTHER lines = (S - real_i)/(n-1), which is affine in")
+    print("  real_i with NEGATIVE slope. If so, per-feature standardization maps additive to")
+    print("  exactly -1 x standardized(oracle), and any scale-invariant linear model gives")
+    print("  identical predictions. That would make `additive` a sign-flip of the oracle, not")
+    print("  an independent line-independent floor.")
+    cors = []
+    for d in shared:
+        a, o = reps["additive"][d], reps["oracle"][d]
+        common = a.index.intersection(o.index)
+        if len(common) < 5:
+            continue
+        av = a.loc[common].to_numpy(dtype=np.float64)
+        ov = o.loc[common].to_numpy(dtype=np.float64)
+        keep = (av.std(axis=0) > 1e-12) & (ov.std(axis=0) > 1e-12)
+        if not keep.any():
+            continue
+        az = (av[:, keep] - av[:, keep].mean(0)) / av[:, keep].std(0)
+        oz = (ov[:, keep] - ov[:, keep].mean(0)) / ov[:, keep].std(0)
+        cors.append(float(np.mean(np.sum(az * oz, axis=0) / az.shape[0])))
+    c = np.array(cors)
+    print(f"\n  per-drug mean correlation between standardized additive and oracle features:")
+    print(f"    over {len(c)} drugs: mean {c.mean():+.6f}, min {c.min():+.6f}, max {c.max():+.6f}")
+    if np.allclose(c, -1.0, atol=1e-4):
+        print("  VERDICT: exactly -1. additive IS the oracle, sign-flipped. They are one row.")
+    else:
+        print("  VERDICT: not exactly -1; the affine-transform explanation does NOT hold.")
+
+
 if __name__ == "__main__":
     main()
