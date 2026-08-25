@@ -44,8 +44,7 @@ if [ ! -d "$SOURCES" ]; then
       --generated-dir generated_agg \
       --query-baseline tahoe_query_baseline.h5ad \
       --pert-map context_by_drug/pert_to_cid.tsv \
-      --dump-sources "$SOURCES" \
-      --n-permutations 1
+      --dump-sources "$SOURCES" --dump-only
 fi
 
 # Step 2: the null itself.

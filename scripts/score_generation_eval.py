@@ -129,6 +129,14 @@ def main() -> None:
         help="where result tables and their parameter sidecars are written. Defaults to "
         "results/<job id or 'local'>. Output is always written; this only chooses where.",
     )
+    ap.add_argument(
+        "--dump-only",
+        action="store_true",
+        help="write the delta sources and exit, without scoring. Dumping is a distinct job from "
+        "scoring: without this, --dump-sources still runs Check 1, the Gate and the whole "
+        "Check-2 grid including every noise draw, which cost job 31656142 over 90 minutes of "
+        "redundant work before its actual task began.",
+    )
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
         "--n-random",
@@ -251,6 +259,10 @@ def main() -> None:
             _d.to_parquet(ddir / f"{_name}_delta.parquet")
             _k.to_parquet(ddir / f"{_name}_key.parquet")
             print(f"  dumped {_name}: {_d.shape[0]} rows x {_d.shape[1]} genes -> {ddir}")
+
+    if args.dump_only:
+        print("--dump-only: sources written, exiting before scoring")
+        return
 
     fid_table = score_delta_sources(sources, real_delta, real_key, n_hvg=args.n_hvg)
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
