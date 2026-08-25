@@ -55,7 +55,8 @@ Stack's own generative procedure. The new rows use the CLI's actual default, `--
 carried between steps, `n_test_cells` ranging 179–281 per step — fed by a genuinely larger query
 pool (400 real single control cells, 8/line, replacing the old pseudobulk row) so the schedule's
 padding never truncates. Per-query-cell replicates are then confidence-filtered
-(`gen_logit < 0` — calibrated empirically against this Check-1 Pearson-Delta itself; see
+(`gen_logit < 0` — swept, not calibrated: Check-1 fidelity is insensitive to this filter
+[evidence: gen_logit_threshold_sweep]; see
 Reproducibility) and averaged to one row per line before scoring, matching Stack's own generation
 confidence classifier rather than a fixed literature threshold. **Both checkpoints still land in
 the same null band as the vanilla-mode rows** (r = −0.001 cytokine-aligned, 0.006 drug-aligned) —
@@ -74,6 +75,26 @@ doubles Stack's Check-1 correlation vs. the cytokine-aligned checkpoint (0.012 �
 both stay far below the additive floor (0.225) and the 0.46 ceiling, and leakage filtering does
 not change the drug-aligned number (0.021 unfiltered and leak-excluded alike;
 doubly_exposed_frac=0.003 on the ~5 doubly-exposed A549/drug pairs).
+
+**The `gen_logit` filter is swept, not calibrated** [evidence: gen_logit_threshold_sweep].
+Earlier text here described the threshold as "calibrated empirically against this Check-1
+Pearson-Delta"; the pointer it gave led to an unchecked to-do box, and no sweep output existed
+anywhere. The sweep has now been run (Alpine job 31636241, `scripts/sweep_gen_logit.py`) across
+eight thresholds including no filtering at all:
+
+| threshold | pairs | r | r_offdiag | rank |
+|---|---|---|---|---|
+| none | 1568 | −0.00205 | −0.00592 | 0.538 |
+| 0.5 | 1568 | −0.00174 | −0.00565 | 0.539 |
+| **0 (shipped)** | **1568** | **−0.00149** | **−0.00546** | **0.538** |
+| −1 | 1528 | −0.00002 | −0.00494 | 0.547 |
+| −2 | 878 | +0.00475 | −0.00312 | 0.586 |
+
+`r` spans **0.0068** across the whole range, against an additive floor of 0.225. The threshold
+is not what makes Stack null, and no value of it would change that verdict. The strictest
+setting nudges `r` and `rank` upward while discarding 44% of pairs, which is selection on
+easier pairs rather than recovered signal. The defence for this constant is the table, not the
+calibration nobody could find.
 
 ## Check 1b — DE-based metrics (2026-08-19, faithful generation only)
 
@@ -557,7 +578,8 @@ control below.
   sci-Plex identity-missing-cell bug (54,100 → 17,578 correct controls), re-ran `08`→`09` on the
   corrected input, re-ran `03`→`04` under `--mode mdm` with a 400-real-cell query pool
   (replacing the 50-row pseudobulk baseline that forced the vanilla workaround), added a
-  confidence-filtered replicate-aggregation step (`gen_logit`-based, calibrated empirically) and
+  confidence-filtered replicate-aggregation step (`gen_logit`-based; the threshold is swept and
+  the result is insensitive to it [evidence: gen_logit_threshold_sweep]) and
   a ground-truth Wilcoxon DE-calls bundle. **Answers: (a) no — the faithful procedure lands in
   the same Pearson-Delta null band. (b) yes — DE-restricted metrics show real,
   permutation-significant per-pair signal in both checkpoints that Pearson-Delta was missing.**
@@ -584,7 +606,8 @@ dated 2026-08-19.** `03_stack_context.sbatch` now writes a 400-real-cell query p
 single cells, not a pseudobulk row) large enough for `04_stack_generate.sbatch`'s
 `--mode mdm --prompt-ratio 0.25 --context-ratio 0.4 --context-ratio-min 0.2` (Stack's own default
 schedule) without the old workaround's `IndexError`. Per-query-cell replicates are reduced with
-`fmharness.stack_aggregate.aggregate_generated_replicates` (keep `gen_logit < 0`, empirically
+`fmharness.stack_aggregate.aggregate_generated_replicates` (keep `gen_logit < 0`; swept and
+immaterial [evidence: gen_logit_threshold_sweep], not
 calibrated against Check-1 Pearson-Delta — see the threshold sweep in the implementation plan's
 Task 7 Step 6) before scoring; `fmharness.stack_aggregate.collapse_query_baseline` reduces the
 same query pool to a line-indexed baseline for `--query-baseline` (required — `04`'s query file is
