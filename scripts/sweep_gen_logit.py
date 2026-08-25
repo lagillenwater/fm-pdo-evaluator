@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fmharness.deltas import build_generated_deltas
+from fmharness.deltas import build_generated_deltas, load_pert_map
 from fmharness.evaluation import delta_fidelity
 from fmharness.stack_aggregate import aggregate_generated_replicates
 
@@ -54,6 +54,8 @@ def main() -> None:
 
     real_delta = pd.read_parquet(args.deltas_bundle / "real_delta.parquet")
     real_key = pd.read_parquet(args.deltas_bundle / "real_key.parquet")
+    # build_generated_deltas takes the MAPPING, not the path -- mirror the driver.
+    pert_map = load_pert_map(args.pert_map)
 
     rows: list[dict[str, object]] = []
     for thr in THRESHOLDS:
@@ -62,9 +64,7 @@ def main() -> None:
         agg_dir.mkdir(parents=True, exist_ok=True)
         # Returns a per-file summary frame; threshold is keyword-only.
         summary = aggregate_generated_replicates(args.generated_dir, agg_dir, threshold=thr)
-        gen_delta, gen_key = build_generated_deltas(
-            agg_dir, args.query_baseline, args.pert_map
-        )
+        gen_delta, gen_key = build_generated_deltas(agg_dir, args.query_baseline, pert_map)
         fid = delta_fidelity(gen_delta, gen_key, real_delta, real_key, n_hvg=args.n_hvg)
         rows.append({
             "threshold": label,
