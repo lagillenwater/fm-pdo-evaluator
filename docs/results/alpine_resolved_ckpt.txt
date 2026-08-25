@@ -1,0 +1,11 @@
+# Every distinct 'Resolved:' line across the 453 job logs on Alpine, with occurrence counts.
+# Captured 2026-08-25 by: ralpine run grep -h 'Resolved:' -r <REMOTE_ROOT>/logs | sort | uniq -c | sort -rn
+# This is the ONLY surviving record of which checkpoint any generation run consumed.
+#
+  53 Resolved: CKPT=/scratch/alpine/lgillenwater@xsede.org/sciplex_finetune/finetuned-epoch=5-val_loss=6.1078.ckpt GENELIST=stack-aligned/basecount_1000per_15000max.pkl OUTDIR=generated_soragni_drug_aligned
+  33 Resolved: CKPT=stack-aligned/bc_large_aligned.ckpt GENELIST=stack-aligned/basecount_1000per_15000max.pkl OUTDIR=generated
+  33 Resolved: CKPT=/scratch/alpine/lgillenwater@xsede.org/sciplex_finetune/finetuned-epoch=5-val_loss=6.1078.ckpt GENELIST=stack-aligned/basecount_1000per_15000max.pkl OUTDIR=generated_drug_aligned
+  33 Resolved: CKPT=/scratch/alpine/lgillenwater@xsede.org/sciplex_finetune/finetuned-epoch=4-val_loss=5.0847.ckpt GENELIST=stack-large/basecount_1000per_15000max.pkl OUTDIR=generated_sciplex
+  19 Resolved: CKPT=stack-aligned/bc_large_aligned.ckpt GENELIST=stack-aligned/basecount_1000per_15000max.pkl OUTDIR=generated_soragni_faithful
+   1 Resolved: CKPT_ALIGNED=stack-aligned/bc_large_aligned.ckpt CKPT_SCIPLEX=/scratch/alpine/lgillenwater@xsede.org/sciplex_finetune/finetuned-epoch=4-val_loss=5.0847.ckpt SCIPLEX_H5AD=/scratch/alpine/lgillenwater@xsede.org/sciplex/finetune_input/sciplex_finetune.h5ad
+   1 2026-08-18T10:11:29-06:00 Resolved: CKPT_ALIGNED=stack-aligned/bc_large_aligned.ckpt CKPT_SCIPLEX=/scratch/alpine/lgillenwater@xsede.org/sciplex_finetune/finetuned-epoch=4-val_loss=5.0847.ckpt SCIPLEX_H5AD=/scratch/alpine/lgillenwater@xsede.org/sciplex/finetune_input/sciplex_finetune.h5ad

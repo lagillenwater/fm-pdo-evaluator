@@ -1,0 +1,24 @@
+{
+  "name": "provenance_audit",
+  "claim": "6 data provenance root causes affecting 288 items, computed by file comparison; re-run scripts/audit_provenance.py to reproduce",
+  "script": "scripts/audit_provenance.py",
+  "git_sha": "d15ce05b17aacc1e6e43ec197a1bd234b258265f",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/provenance_audit.json",
+    "sha256": "76bf9c715fc238d1ba9507eeeeae1a5c9ff96e88a7087feebe0aac4554a4f90b",
+    "bytes": 3829
+  },
+  "inputs": [
+    {
+      "path": "docs/results/alpine_resolved_ckpt.txt",
+      "sha256": "1b9adbe25c681c97c2b0d61b449696bc05f0a6a0f5121c0c9a975006798040b2",
+      "bytes": 1721
+    },
+    {
+      "path": "docs/results/alpine_artifact_inventory.txt",
+      "sha256": "a329535b19b20c7c36bc8265c0f4dc5319711a2d1d56ad5f038b1a1c56f8f102",
+      "bytes": 16219
+    }
+  ],
+  "missing_inputs": []
+}

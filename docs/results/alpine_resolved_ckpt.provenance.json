@@ -1,0 +1,19 @@
+{
+  "name": "alpine_resolved_ckpt",
+  "claim": "Every distinct Resolved: line across 453 Alpine job logs -- the only record of which checkpoint each generation run used",
+  "script": "scripts/audit_provenance.py",
+  "git_sha": "d15ce05b17aacc1e6e43ec197a1bd234b258265f",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/alpine_resolved_ckpt.txt",
+    "sha256": "1b9adbe25c681c97c2b0d61b449696bc05f0a6a0f5121c0c9a975006798040b2",
+    "bytes": 1721
+  },
+  "inputs": [
+    {
+      "path": "scripts/alpine/04_stack_generate.sbatch",
+      "sha256": "3818d95ed73baabf760297c241956412b5e7d72daf7505b014b46202aab14cf2",
+      "bytes": 6307
+    }
+  ],
+  "missing_inputs": []
+}

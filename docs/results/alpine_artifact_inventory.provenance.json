@@ -1,0 +1,19 @@
+{
+  "name": "alpine_artifact_inventory",
+  "claim": "Files present on the Alpine checkout to depth 2, so an untracked-but-obtainable input can be distinguished from one that exists nowhere",
+  "script": "scripts/audit_provenance.py",
+  "git_sha": "d15ce05b17aacc1e6e43ec197a1bd234b258265f",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/alpine_artifact_inventory.txt",
+    "sha256": "a329535b19b20c7c36bc8265c0f4dc5319711a2d1d56ad5f038b1a1c56f8f102",
+    "bytes": 16219
+  },
+  "inputs": [
+    {
+      "path": "scripts/alpine/04_stack_generate.sbatch",
+      "sha256": "3818d95ed73baabf760297c241956412b5e7d72daf7505b014b46202aab14cf2",
+      "bytes": 6307
+    }
+  ],
+  "missing_inputs": []
+}

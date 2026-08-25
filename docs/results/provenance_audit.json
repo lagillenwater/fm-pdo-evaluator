@@ -1,0 +1,73 @@
+[
+  {
+    "check": "A",
+    "title": "docs/tahoe_generation_results.md: 9 tables have no committed file behind them",
+    "evidence": "searched every committed .csv/.tsv (219 distinct numbers) for each table's values",
+    "affects": 230,
+    "detail": []
+  },
+  {
+    "check": "A",
+    "title": "docs/soragni_pathb_results.md: 1 tables have no committed file behind them",
+    "evidence": "searched every committed .csv/.tsv (219 distinct numbers) for each table's values",
+    "affects": 6,
+    "detail": []
+  },
+  {
+    "check": "B",
+    "title": "25 inputs exist only on the cluster: present there, untracked here",
+    "evidence": "matched each path against the committed cluster inventory; recoverable by anyone with Alpine access, by nobody else",
+    "affects": 25,
+    "detail": [
+      "context_by_drug/manifest.tsv  <- scripts/alpine/04_stack_generate.sbatch",
+      "stack-large/basecount_1000per_15000max.pkl  <- scripts/alpine/04_stack_generate.sbatch",
+      "stack-large/bc_large.ckpt  <- scripts/alpine/04_stack_generate.sbatch",
+      "tahoe_context.h5ad  <- scripts/alpine/03_stack_context.sbatch",
+      "tahoe_query.h5ad  <- scripts/alpine/03_stack_context.sbatch",
+      "tahoe_query_baseline.h5ad  <- scripts/alpine/05_stack_score.sbatch"
+    ]
+  },
+  {
+    "check": "B",
+    "title": "18 inputs are named by scripts but found nowhere -- not in git, not on the cluster",
+    "evidence": "checked git ls-files, the working tree, the committed cluster inventory and the resolved-ckpt evidence",
+    "affects": 18,
+    "detail": [
+      "SrivatsanTrapnell2020_sciplex3.h5ad  <- scripts/build_sciplex_finetune.py",
+      "args.gctx  <- scripts/build_l1000_context.py",
+      "data/raw/coderdata/sarcoma_drugs.tsv  <- scripts/baselines_soragni.py",
+      "data/raw/soragni/tables/cnv.parquet  <- scripts/biomarker_anchored.py",
+      "data/raw/soragni/tables/snv.parquet  <- scripts/biomarker_anchored.py",
+      "data/reference/stack_input_sarcoma.h5ad  <- scripts/alpine/10_soragni_context.sbatch",
+      "drug_screen.parquet  <- scripts/build/build_drug_xref.py",
+      "emb_soragni_aligned.h5ad  <- scripts/alpine/12_soragni_score.sbatch",
+      "emb_soragni_base.h5ad  <- scripts/alpine/12_soragni_score.sbatch",
+      "sciplex_complete_middle_subset.h5ad  <- scripts/build_sciplex_finetune.py"
+    ]
+  },
+  {
+    "check": "C",
+    "title": "the repo pairs finetuned-epoch=4-val_loss=5.0847.ckpt with the drug-aligned run; the logs show finetuned-epoch=5-val_loss=6.1078.ckpt",
+    "evidence": "3 site(s) state it: docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:110, docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:116, docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md:351; evidence pairs generated_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt, generated_soragni_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt",
+    "affects": 3,
+    "detail": [
+      "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:110",
+      "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:116",
+      "docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md:351"
+    ]
+  },
+  {
+    "check": "D",
+    "title": "6 pipeline stages accept inputs via --export but never echo them",
+    "evidence": "grepped each stage for a 'Resolved:' echo; the committed cluster evidence contains only 11 distinct Resolved lines across 453 job logs",
+    "affects": 6,
+    "detail": [
+      "scripts/alpine/05_stack_score.sbatch",
+      "scripts/alpine/06_stack_embed.sbatch",
+      "scripts/alpine/07_stack_emb_score.sbatch",
+      "scripts/alpine/09_stack_finetune.sbatch",
+      "scripts/alpine/12_soragni_score.sbatch",
+      "scripts/alpine/13_soragni_embed.sbatch"
+    ]
+  }
+]

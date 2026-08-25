@@ -108,6 +108,22 @@ against sci-Plex's plain cell-line names and free-text drug names — non-trivia
 - `generated/` (gitignored, 33 files) -- cytokine-aligned Stack generation output.
 - `generated_sciplex/` (33 files) -- drug-aligned Stack generation output, from checkpoint
   `finetuned-epoch=4-val_loss=5.0847.ckpt` (lowest val_loss during the 10-epoch fine-tune).
+
+> **Status note, 2026-08-25.** The claim above does not match what was run. Alpine job logs
+> record the resolved checkpoint for every generation run (`04`'s "Resolved: CKPT=" line), and
+> both published drug-aligned arms used **`finetuned-epoch=5-val_loss=6.1078.ckpt`** --
+> `OUTDIR=generated_drug_aligned` (33 tasks, Tahoe) and `OUTDIR=generated_soragni_drug_aligned`
+> (53 tasks, Path B). `finetuned-epoch=4-val_loss=5.0847.ckpt` was used only for
+> `OUTDIR=generated_sciplex`. So the two arms ARE consistent with each other, and
+> `11_soragni_generate.sbatch`'s comment is right, but this spec and
+> `smoke_test_env.sbatch`'s `CKPT_SCIPLEX` default are not.
+>
+> It also was not the lowest-val_loss checkpoint. Available on Alpine: 5.0847, 5.9110, 6.1078,
+> 7.2349, 10.6114, 13.0135. The published drug-aligned numbers come from the third-best by
+> val_loss, and no record anywhere says why. Whether that was deliberate is not established.
+> Consequence: every published drug-aligned result is a negative result obtained on a
+> checkpoint that is not the best available, which weakens it as evidence about drug alignment.
+
 - `sciplex_lines.txt`, `sciplex_drugs.txt` -- sci-Plex's distinct cell_line/pert_id values,
   extracted via a small script run on Alpine (see `git log` on this branch around
   2026-08-12/13 for the exact extraction one-liner if these are gone and need re-deriving).

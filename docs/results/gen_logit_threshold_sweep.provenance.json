@@ -1,0 +1,25 @@
+{
+  "name": "gen_logit_threshold_sweep",
+  "claim": "Check-1 Pearson-Delta is insensitive to the gen_logit replicate filter: r spans 0.0068 across thresholds from none to -2, against an additive floor of 0.225",
+  "script": "scripts/sweep_gen_logit.py",
+  "git_sha": "c35f4a1c822ab60cbfea8abd4282f56f25422485",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/gen_logit_threshold_sweep.csv",
+    "sha256": "7a23e22fdf2f4536d42bc7f6c5c97076b61b73d80405fcc8737c0ecc320b3893",
+    "bytes": 360
+  },
+  "inputs": [
+    {
+      "path": "scripts/sweep_gen_logit.py",
+      "sha256": "a91cce82610d4106c621f695bfdd886daf6d154a6b8549c9417bf2c1d4b01c8f",
+      "bytes": 4436
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31636241",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/evidence-gaps-31636241.out",
+    "sha256": "65db6101d66b018233853f2f9f2b3773ddd52b07a3288845ba4619abbadbbe6b",
+    "bytes": 1667
+  }
+}

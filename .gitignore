@@ -224,7 +224,9 @@ data/*
 !data/static/
 # generated reports and analysis outputs (regenerable from scripts/)
 reports/
-results/
+/results/   # anchored to the repo root. Unanchored `results/` also matched
+            # docs/results/, which is where promoted EVIDENCE lives -- that rule is
+            # why this repo has 8 committed data files and no committed results.
 # built Apptainer images
 containers/*.sif
 # local user secrets/state
