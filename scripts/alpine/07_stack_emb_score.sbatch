@@ -27,10 +27,17 @@ export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 
+# Inputs are the AGGREGATED / COLLAPSED artifacts, not Stack's raw output. Since faithful
+# generation (--mode mdm, 2026-08-18) Stack writes one row PER QUERY CELL, so `generated/`
+# holds ~8 rows per (line, drug) and `tahoe_query.h5ad` is cell-indexed. build_generated_deltas
+# needs exactly one row per (line, drug) and a line-indexed baseline. Passing the raw dirs got
+# as far as Check 1 and then died in restrict_common_support with "no (patient, drug) pairs
+# shared across every source and design" (job 31631592, 2026-08-24). Run
+# fmharness.stack_aggregate.aggregate_generated_replicates + collapse_query_baseline first.
 python scripts/score_generation_eval.py \
     --deltas-bundle tahoe_deltas \
-    --generated-dir generated \
-    --query-baseline tahoe_query.h5ad \
+    --generated-dir generated_agg \
+    --query-baseline tahoe_query_baseline.h5ad \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --stack-emb base=emb_base.h5ad aligned=emb_aligned.h5ad \
     --k 10 \
