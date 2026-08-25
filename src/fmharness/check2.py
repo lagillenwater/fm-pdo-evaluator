@@ -26,8 +26,13 @@ from sklearn.preprocessing import StandardScaler
 from fmharness.adapters import PENALTY_NAMES, build_adapters, make_penalty
 from fmharness.controls import plant_interaction
 from fmharness.deltas import restrict_common_support
-from fmharness.evaluation import score_predictions
+from fmharness.evaluation import interaction_rho, score_predictions
 from fmharness.signatures import PROLIFERATION
+
+# WHY 8: enough draws for a usable mean and sd without a permutation test on each, which is
+# what keeps the added cost to roughly one extra pass over the grid. Raise it if a z-score
+# ever lands near a decision boundary -- the draws are cheap, the permutations are not.
+RANDOM_DRAWS = 8
 
 FIXED_READOUTS = ("hallmark", "proliferation")  # fixed-signature readouts, applied to delta sources
 
@@ -111,10 +116,19 @@ def penalized_preds(
             )
             te_x = sc.transform(fdf.loc[te].to_numpy(dtype=np.float64))
             pred = model.predict(te_x)  # type: ignore[attr-defined]
+            # The fitted intercept for this (drug, fold): what the model predicts knowing only
+            # which drug it is and which lines it trained on. Emitted so downstream scoring can
+            # remove it -- it is the leave-fold-out mean, (S - held out)/(n - k), which is
+            # ANTI-correlated with the held-out truth by construction and otherwise drags every
+            # representation's interaction down by the same offset (measured: -0.312, Alpine job
+            # 31634484). This is the same arithmetic that made `additive` a sign-flipped copy of
+            # the real delta, reappearing in the CV structure rather than in a feature matrix.
+            train_mean = float(np.mean([auc[ln] for ln in tr]))
             rows.extend(
-                (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
+                (ln, drug, float(auc[ln]), float(p), train_mean)
+                for ln, p in zip(te, pred, strict=False)
             )
-    cols = pd.Index(["patient", "drug", "y_true", "y_pred"])
+    cols = pd.Index(["patient", "drug", "y_true", "y_pred", "y_prior"])
     return pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
 
 
@@ -398,9 +412,12 @@ def score_check2(
     # representation -- not just stack_emb: an apparent win from ANY representation (expr,
     # pca, nmf, stack, ...) should be checked against raw capacity alone, so every row of
     # the grid has a matching "<name>_random" row scored through the identical pipeline.
-    for name in list(representations):
-        if name == "prior":
-            continue  # a random control for "no features" is not a control
+    # WHY several draws and not one: a single draw is a point, not a distribution, so it can
+    # neither give a spread nor support a z-score. Measured cost of using one: on the Path B
+    # drug-aligned table two of four single-draw controls scored interaction +0.556 and +0.519,
+    # ABOVE the planted positive control's +0.510, purely as draw-to-draw variation. The first
+    # draw is kept as a displayed row for continuity; all RANDOM_DRAWS form the null.
+    for name in [n for n in representations if n != "prior"]:
         representations[f"{name}_random"] = random_control_representation(
             representations[name], target_drugs, seed=seed_for_name(name)
         )
@@ -415,13 +432,55 @@ def score_check2(
     # the Y floor" comparison across it is comparing a thing to itself.
     for a, b, corr in detect_degenerate_representations(restricted_representations):
         print(f"  DEGENERATE: {a!r} and {b!r} are the same feature space (corr {corr:+.6f})")
+    # Build the empirical noise null per (representation, penalty): RANDOM_DRAWS independent
+    # same-width Gaussian draws through the identical pipeline. Only the interaction is needed,
+    # so the permutation test is skipped here -- that is what makes the extra draws affordable.
+    null_by_row: dict[tuple[str, str], list[float]] = {}
+    for name in [n for n in representations if not n.endswith("_random") and n != "prior"]:
+        for d in range(1, RANDOM_DRAWS):
+            drawn = restrict_representation_support(
+                {
+                    "d": random_control_representation(
+                        representations[name],
+                        target_drugs,
+                        seed=(seed_for_name(name) + 7919 * d) & 0xFFFFFFFF,
+                    )
+                },
+                design_target,
+            )["d"]
+            for pen in penalties:
+                pr = penalized_preds(drawn, design_target, fold_of, n_folds, uniq_lines, pen)
+                if pr.empty:
+                    continue
+                resid = pr.assign(y_pred=pr["y_pred"] - pr["y_prior"])
+                null_by_row.setdefault((name, pen), []).append(
+                    interaction_rho(resid, "y_pred")
+                )
+
     for repr_name, feat in restricted_representations.items():
         for pen in penalties:
             preds = penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)
             if preds.empty:
                 continue
             s = score_predictions(preds, n_perm=n_permutations)
-            out.append({"source": repr_name, "method": pen, **_row(s)})
+            row: dict[str, object] = {"source": repr_name, "method": pen, **_row(s)}
+            # Significance against the NOISE distribution rather than against label permutation.
+            # p_label shuffles y_true while leaving y_pred, which was built from the original
+            # y_true, so it destroys the fold-intercept artifact in the null but not in the
+            # observed value and is biased against every row. The noise draws pass through the
+            # identical pipeline and carry the same artifact, so the comparison is like-for-like.
+            draws = null_by_row.get((repr_name, pen))
+            if draws:
+                a = np.asarray(draws, dtype=float)
+                a = a[np.isfinite(a)]
+                if a.size >= 2 and float(a.std(ddof=1)) > 0:
+                    row["z_random"] = round(float((s["interaction"] - a.mean()) / a.std(ddof=1)), 2)
+                    row["p_random"] = round(
+                        float((1 + np.sum(a >= s["interaction"])) / (1 + a.size)), 4
+                    )
+                    row["random_mean"] = round(float(a.mean()), 3)
+                    row["n_random_draws"] = int(a.size)
+            out.append(row)
 
     # positive control: plant a KNOWN organoid x drug interaction into the untreated baseline
     # expression space (fmharness.controls.plant_interaction) and confirm the SAME penalized

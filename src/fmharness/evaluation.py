@@ -314,14 +314,22 @@ def score_predictions(
     2026-08-24 could print 0.000, claiming more resolution than the test has."""
     from fmharness.controls import permute_within_drug  # local import: avoid an import cycle
 
-    it = interaction_rho(preds, "y_pred")
+    # Score the RESIDUAL when a prior is supplied. y_pred carries the leave-fold-out per-drug
+    # intercept, which is anti-correlated with the held-out truth by construction and offsets
+    # every representation equally (-0.312 measured on the real design). Removing it is what
+    # probe/estimator.py's base/residual contract has always prescribed; Check 2 did not do it
+    # until 2026-08-25. Without a prior column this is a no-op, so existing callers are unchanged.
+    scored = preds
+    if "y_prior" in preds.columns:
+        scored = preds.assign(y_pred=preds["y_pred"] - preds["y_prior"])
+    it = interaction_rho(scored, "y_pred")
     null = np.array(
         [
             interaction_rho(
-                preds.assign(
+                scored.assign(
                     y_true=permute_within_drug(
-                        cast("pd.Series", preds["drug"]),
-                        cast("pd.Series", preds["y_true"]),
+                        cast("pd.Series", scored["drug"]),
+                        cast("pd.Series", scored["y_true"]),
                         np.random.default_rng(seed + 1 + b),
                     )
                 ),
