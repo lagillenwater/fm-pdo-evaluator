@@ -19,6 +19,27 @@ built once, not leave-one-line-out) -- specifically to validate the new controls
 committing to the much longer Check 1/2 Tahoe/GDSC2 LOO reruns, which now also CV-tune
 `n_components`/`k` per held-out line (multiplicatively more expensive).
 
+> **Caveat (2026-08-24): the `stack` rows use the prompting configuration the preprint
+> reports as insufficient for patient-specific effects.** Stack preprint **v2** (2026-06-08,
+> bioRxiv only -- PMC12803207 mirrors v1) adds Section 2.6, "Stack exhibits donor-specific
+> cytokine response prioritization ability". That section tests individual-specific
+> perturbation response -- structurally the same question Path B asks of patients -- and finds
+> it requires a **synthetic prompt with blending** (Methods 4.10): add the log-normalized
+> healthy-donor perturbed-minus-control difference onto the query donor's control profile,
+> clip at zero, project back to count space, generate with **1-step rather than the default
+> 5-step** schedule, then average the prediction with the reference perturbed profile. Its
+> verdict is explicit: "Stack with synthetic prompts outperforms alternative baselines **and
+> Stack with original prompts** in capturing donor-specific effects."
+>
+> `11_soragni_generate.sbatch` uses ordinary drug-context prompts on the default `--mode mdm`
+> 5-step schedule -- the "original prompts" arm. So the null on the `stack` rows below is what
+> v2 predicts for this setup, and does not yet bound what Stack could do here. Note the
+> transfer is not free: 2.6's construction needs a *reference perturbed profile* for the same
+> perturbation in a matched cell type, which Path B lacks -- there is no real treated-organoid
+> RNA-seq (see the oracle/ceiling row under Controls). Any Path B analogue would have to
+> import that reference from elsewhere (Tahoe per-drug deltas, or L1000), which is an extra
+> assumption on top of the method. Settle it on Check 2 first, where the reference exists.
+
 ---
 
 ## Controls (2026-08-22)
@@ -61,6 +82,29 @@ already does and Path B doesn't yet. Worth a follow-up, not a headline claim yet
 
 ## Next
 
-Controls validated -- proceeding to the expensive Check 1/2 Tahoe/GDSC2 LOO reruns (now with
-CV-tuned `n_components`/`k` per held-out line for `additive`/`knn`/`pca`/`nmf`, and the same
-new controls: `oracle`, `planted`, per-representation `random`).
+Controls validated. The original plan from here was to proceed to the expensive Check 1/2
+Tahoe/GDSC2 LOO reruns (CV-tuned `n_components`/`k` per held-out line for
+`additive`/`knn`/`pca`/`nmf`, plus `oracle`, `planted`, per-representation `random`).
+**That is on hold as of 2026-08-24**, because the Check 2 controls run (Slurm 31564601,
+2026-08-22) returned two results that make the LOO spend hard to justify in its current form:
+
+1. **The `oracle` -- the real measured Tahoe delta, the best-case ceiling -- also fails.**
+   Interaction −0.095 to −0.179, `p_label` ~1.0, and it does not beat a same-width
+   random-feature control on `global` either. Scaling up a run to measure a quantity the
+   ceiling cannot move is unlikely to change any conclusion.
+2. **The readout may be underpowered at the dimensionality every real row uses.** The planted
+   positive control recovers cleanly, but it is planted and scored in a 5-dimensional PCA
+   subspace, while the real rows are fed 2,000 HVGs at n ≈ 50 lines; `check2.py` records
+   that a signal planted in raw gene space "cannot recover ANY signal at any effect size" at
+   this n. A null at p=2000 is therefore not yet interpretable as absence of signal.
+
+Two cheaper questions come first, both of which could change what the LOO rerun should even
+measure:
+
+- **Score `base (embed)` against its own same-width random control.** It is the one
+  representation in the whole eval with significant cell-line-specific signal, it was absent
+  from the 2026-08-22 run, and its `global` of 0.644 sits inside the ~0.62 band every random
+  control produced. Cheap, and it decides whether the headline finding survives.
+- **Re-run generation under v2's synthetic-prompt construction** (see the Design caveat above),
+  on Check 2 first, where the required reference perturbed profile exists. The current `stack`
+  nulls are measured in the arm the preprint reports as insufficient for this task.

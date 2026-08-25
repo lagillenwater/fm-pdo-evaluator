@@ -158,6 +158,37 @@ random on Tahoe (so a death-signature readout is underpowered here).
 Trained penalized regression. global = overall potency, interaction = cell-line-specific
 response, per-drug = within-drug line ranking, p_label = label-permutation p on interaction.
 
+> **Two caveats, both added 2026-08-24, that bound how far every number below can be read.**
+>
+> **1. The generated deltas come from the prompting configuration the preprint itself reports
+> as insufficient for this task.** Stack v2's Section 2.6 tests donor-specific (individual-
+> specific) perturbation response — structurally the same axis as `interaction` here — and
+> finds that it requires a synthetic prompt with blending, stating that "Stack with synthetic
+> prompts outperforms alternative baselines **and Stack with original prompts** in capturing
+> donor-specific effects". Our generation (`04_stack_generate.sbatch`, and Path B's
+> `11_soragni_generate.sbatch`) uses ordinary drug-context prompts on the default `--mode mdm`
+> 5-step schedule — the "original prompts" arm. So the near-zero `interaction` for every
+> **generated delta** row is what v2 predicts for this configuration, and is not yet evidence
+> about Stack's ceiling on personalization. Re-running under the synthetic-prompt construction
+> (v2 Methods 4.10, including its 1-step rather than 5-step generation) is the outstanding test.
+> This caveat does **not** touch the `expr`/`pca`/`nmf`/`additive`/`knn` rows or the two
+> embedding rows, none of which involve generation.
+>
+> **2. No row here has faced a same-width random-feature control.** The 2026-08-22 controls run
+> (Slurm 31564601) scored `expr`, `stack` and `oracle` against matched i.i.d. Gaussian features
+> through this identical pipeline, and **0 of 9 real rows beat their own noise control on
+> `global`**, on both checkpoints — including `oracle`, the real measured Tahoe delta. That
+> exposes `global` here as largely a drug-mean artifact: a CV-tuned model on pure noise shrinks
+> to the per-drug training mean, which already ranks drug potency about as well as anything.
+> Critically, **`base (embed)` was not in that run**, and it is the one representation whose
+> headline finding depends on the outcome — its `global` of 0.644 sits inside the ~0.62 band
+> every random control produced. Until it is scored against its own random control, treat the
+> base-embedding result as provisional. The same run's planted positive control recovers
+> cleanly (interaction 0.66–0.68, p_label 0.000), so the pipeline does have power — but note it
+> is planted and scored in a 5-dimensional PCA subspace, whereas every real row above is fed at
+> 2,000 HVGs; `check2.py` records that a signal planted in raw gene space "cannot recover ANY
+> signal at any effect size" at this n. Power at k=5 is not power at p=2000.
+
 **Representations tested.** Check 2 runs two separate analyses: (a) fixed-signature Hallmark
 readouts, no model fit, applied only to the 6 delta sources; (b) the penalized-regression grid
 below, applied to all 10 representations (source of the ladder table). Every representation in
@@ -434,29 +465,75 @@ genuine prediction gap, not label noise.
 
 ## Relation to the Stack preprint
 
-Broadly, these results are **what the preprint's scope predicts.**
+**Which version.** The preprint has two, and they differ in ways that matter here. **v1**
+(2026-01-09) is what PMC12803207 mirrors and labels "[Version 1]". **v2** (2026-06-08)
+exists only on bioRxiv (`10.64898/2026.01.09.698608v2`); PMC, Semantic Scholar and the
+HuggingFace `arcinstitute/Stack-Large` card all still point at v1, and v2 does not surface
+in web search, so it has to be read from the bioRxiv PDF directly (that host also rate-limits
+automated fetches — download and `pdftotext -layout`). v2 grows Perturb Sapiens from 201 to
+892 perturbations, adds the **DiseasePert-3M** dataset (3.3M T/NK cells, 40 donors, 32 patients
+across 14 diseases plus 8 healthy controls, 11 cytokines), and adds **Section 2.6, "Stack
+exhibits donor-specific cytokine response prioritization ability"**, which has no v1
+counterpart. Everything below is checked against v2.
 
-- **Generation null on Tahoe drugs — expected (out of domain).** The paper (PMC12803207) aligns
-  the in-context generation head only on **cytokine/PBMC** perturbations (CELLxGENE + Parse), and
-  benchmarks generation on **Parse cytokines + OpenProblems** — never on small-molecule drugs and
-  never on Tahoe generation (Tahoe is used *only* as an **embedding** benchmark). A cancer-line
-  drug-generation task is therefore a domain the generative head was neither trained nor tested
-  on; a null there does not contradict the paper. The *magnitude* (r ≈ 0, below the additive /
-  no-change floor) matches the general FM-as-generator critique (Ahlmann-Eltze) rather than being
-  a Stack-specific failure.
+Broadly, these results are **consistent with the preprint's scope** on generation and
+**provisionally consistent with its central claim** on embeddings. That is weaker than
+replication, and the first bullet is now a scoped non-replication rather than untouched
+territory.
+
+- **Generation null on Tahoe drugs — partly out of domain, partly a non-replication.** The
+  paper post-trains the in-context generation head only on **cytokine/PBMC** perturbations
+  (CELLxGENE + the Parse PBMC 10M dataset: 12 donors, 90 cytokine perturbations), a corpus
+  "enriched for primary cells profiled from human tissues and blood, with a particular
+  emphasis on immune cells" — **no drugs, no cancer lines**. That holds in both versions. But
+  it does *not* follow that drugs are untested: the OpenProblems **drug perturbation** dataset
+  is one of its generation benchmarks in both versions, on drug conditions the paper states
+  were "unseen during model pre-training or post-training", and v2's abstract foregrounds
+  "892 drug, cytokine, and genetic perturbations". So the generative head was never *trained*
+  on drugs but was explicitly *tested* on them, and the paper claims generalization there.
+  What remains genuinely out of domain is **cell context** (its drug generation is primary
+  immune cells, largely T-cell lineage; ours is 50 cancer lines) and **Tahoe specifically** —
+  Tahoe stays an embedding / perturbation-classification benchmark in v2 (Fig. 2E linear
+  probing), never a generation benchmark, and generation is never benchmarked on cancer cell
+  lines anywhere in either version. Read our r ≈ 0 as a failure to reproduce a claimed
+  drug-generation generalization *across cell context*, scored on the paper's own headline
+  metric (Pearson Delta) — not as a result in territory the paper never entered. The
+  *magnitude* (below the additive / no-change floor) still matches the general FM-as-generator
+  critique (Ahlmann-Eltze) rather than being a Stack-specific failure.
 - **Embedding carries drug-response signal — the preprint's actual claim.** Stack's validated
   strength *is* the embedding, and Tahoe is one of its embedding benchmarks. That the Tahoe
-  cell-line embedding predicts GDSC2 response is a downstream confirmation of that claim.
+  cell-line embedding predicts GDSC2 response is a downstream confirmation of that claim —
+  **provisionally**, see the random-feature caveat under Check 2: `base (embed)` has not yet
+  been scored against a same-width random control, and it is the one representation whose
+  survival that control would decide.
 - **base > aligned for drugs — expected.** Alignment is cytokine-domain fine-tuning with drugs
   held out; using it out-of-domain should not help and can distort the representation. It does
   exactly that here.
 
-Two things go **beyond** what the preprint reports, in our favor: (i) the advantage is resolved
-specifically to the cell-line × drug **interaction** term (leave-line-out GDSC2), a finer
-decomposition than any paper benchmark; and (ii) the separation is unusually clean — only the
-embedding clears significance while PCA/expression sit at null, a sharper margin than the
-incremental FM-vs-PCA gaps typical of the paper's embedding tables. Both are consistent in
-*direction* with the preprint; neither is directly stated by it.
+**v2's Section 2.6 is the same question our Check 2 asks**, and it cuts against reading our
+interaction null as a statement about Stack's ceiling. 2.6 tests donor-specific (individual-
+specific) perturbation response — structurally the interaction axis — and reports that it
+required a bespoke **synthetic prompt with blending** (Methods 4.10: add the log-normalized
+healthy-donor perturbed-minus-control difference onto the patient control query, clip at zero,
+project back to count space, generate with **1-step rather than the default 5-step** schedule,
+then average the prediction with the healthy-donor perturbed profile). Decisively: "Stack with
+synthetic prompts outperforms alternative baselines **and Stack with original prompts** in
+capturing donor-specific effects." Plain prompting does not do this task, by the authors' own
+evaluation — and plain prompting is exactly our configuration (see the caveat under Check 2).
+Two of 2.6's own concessions also line up with our results: "absolute scores remain low", and
+"minimal differences observed across methods under standard Cell-Eval applied to all DEGs" —
+which is our Check 1 dense-metric null, stated by the authors. Note also that 2.6 isolates the
+donor-specific component by subtracting the healthy-donor perturbation DEGs from the predicted
+DEGs, the same shared-effect removal `interaction_rho` performs by row-centering: independent
+convergence on our decomposition.
+
+Two things go **beyond** what the preprint reports: (i) the advantage is resolved specifically
+to the cell-line × drug **interaction** term (leave-line-out GDSC2), a finer decomposition than
+any paper benchmark; and (ii) the separation is unusually clean — only the embedding clears
+significance while PCA/expression sit at null, a sharper margin than the incremental FM-vs-PCA
+gaps typical of the paper's embedding tables. Both are consistent in *direction* with the
+preprint; neither is directly stated by it. Both are also contingent on the random-feature
+control below.
 
 ## Completed since the previous checkpoint
 
