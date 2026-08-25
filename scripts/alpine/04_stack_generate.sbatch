@@ -34,8 +34,13 @@ cd "$REPO"
 
 # ---- environment: the arc-stack GPU env (torch cu121 + stack-generation), NOT .venv --
 module purge
-module load anaconda
-conda activate stack        # <-- CHANGE to your Stack env
+# Activate the `stack` env by PATH instead of the module system. `module load anaconda`
+# fails inside batch jobs (Lmod: module unknown) for reasons NOT established -- see
+# ralpine's submit comment; do not assert a cause here. This pattern is the one that is
+# PROVEN to work: 10_soragni_context and 12_soragni_score ran with it on 2026-08-22.
+# `conda activate` is deliberately not used: this install ships no etc/profile.d/conda.sh.
+export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
+export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix
 export HF_HOME="/scratch/alpine/$USER/hf"
 

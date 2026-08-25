@@ -50,8 +50,10 @@ set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
-# Bypass `module load anaconda` -- confirmed gone from amem's module tree 2026-08-21 (see
-# 10_soragni_context.sbatch's comment for how this was confirmed).
+# Activate the `stack` env by PATH instead of the module system. `module load anaconda`
+# fails inside batch jobs (Lmod: module unknown); the cause is NOT established, so do
+# not assert one here. Earlier text claiming it was "gone from amem's module tree" was
+# never verified -- corrected 2026-08-24. This pattern is what is PROVEN to work.
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=stack-emb-score
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
+#SBATCH --partition=acpu      # was amilan; CURC retired that partition (2026-08-24)
+#SBATCH --qos=cpu-normal      # acpu accepts only cpu-normal / cpu-long, not normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -18,8 +18,13 @@ set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
 
-module load anaconda
-conda activate stack
+# Activate the `stack` env by PATH instead of the module system. `module load anaconda`
+# fails inside batch jobs (Lmod: module unknown) for reasons NOT established -- see
+# ralpine's submit comment; do not assert a cause here. This pattern is the one that is
+# PROVEN to work: 10_soragni_context and 12_soragni_score ran with it on 2026-08-22.
+# `conda activate` is deliberately not used: this install ships no etc/profile.d/conda.sh.
+export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
+export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 
 python scripts/score_generation_eval.py \
