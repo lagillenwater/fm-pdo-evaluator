@@ -227,6 +227,54 @@ def random_control_representation(
     return out
 
 
+def detect_degenerate_representations(
+    representations: dict[str, dict[str, pd.DataFrame]], *, threshold: float = 0.99
+) -> list[tuple[str, str, float]]:
+    """Find pairs of representations that are linear images of each other.
+
+    Two representations related by an affine map are the SAME feature space to any model that
+    standardises its inputs: ridge on X and on -X returns beta and -beta, so predictions,
+    coefficient norms and every downstream metric agree exactly. Reporting both as separate
+    rows reports one measurement twice, and treating one as a baseline for the other compares
+    a thing to itself.
+
+    Returns ``(name_a, name_b, mean_correlation)`` for every pair whose per-drug mean
+    correlation between standardised features exceeds ``threshold`` in absolute value.
+
+    WHY this exists: artifact scripts/diagnose_oracle_additive.py (Alpine job 31633196,
+    2026-08-24) measured `additive` and `oracle` at correlation exactly -1.000000 across all
+    32 drugs. `additive_i` is the mean over the OTHER lines, (S - real_i)/(n-1), which is
+    affine in real_i -- so the leave-one-out construction added to avoid leakage is precisely
+    what made it carry the held-out line's own information. Nothing caught that for weeks
+    because nothing was looking; this looks.
+    """
+    names = sorted(representations)
+    out: list[tuple[str, str, float]] = []
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            ra, rb = representations[a], representations[b]
+            cors: list[float] = []
+            for drug in set(ra) & set(rb):
+                fa, fb = ra[drug], rb[drug]
+                idx = fa.index.intersection(fb.index)
+                cols = fa.columns.intersection(fb.columns)
+                if len(idx) < 3 or len(cols) == 0:
+                    continue
+                x = fa.loc[idx, cols].to_numpy(dtype=np.float64)
+                y = fb.loc[idx, cols].to_numpy(dtype=np.float64)
+                keep = (x.std(axis=0) > 1e-12) & (y.std(axis=0) > 1e-12)
+                if not keep.any():
+                    continue
+                xz = (x[:, keep] - x[:, keep].mean(0)) / x[:, keep].std(0)
+                yz = (y[:, keep] - y[:, keep].mean(0)) / y[:, keep].std(0)
+                cors.append(float(np.mean(np.sum(xz * yz, axis=0) / xz.shape[0])))
+            if cors:
+                m = float(np.mean(cors))
+                if abs(m) > threshold:
+                    out.append((a, b, round(m, 6)))
+    return out
+
+
 def score_check2(
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
     real_key: pd.DataFrame,
@@ -323,7 +371,22 @@ def score_check2(
     # (b) representation-controlled penalized regression: baseline expression + every delta source.
     base_hvg = base.reindex(columns=hvg).fillna(0.0)
     representations: dict[str, dict[str, pd.DataFrame] | Callable[[str], pd.DataFrame]] = {
-        "expr": lambda _drug: base_hvg
+        "expr": lambda _drug: base_hvg,
+        # The TRUE line-independent floor: a single constant feature, so the penalized model
+        # can fit nothing but a per-drug intercept. Its prediction is the training-fold mean
+        # AUC -- exactly "what you get knowing only which drug this is". Every other row has
+        # to beat THIS to have shown that the cell line matters at all.
+        #
+        # WHY it exists as of 2026-08-24: `additive` was assumed to be that floor (models.md
+        # still describes it as ignoring the line entirely). It is not. additive_i is the mean
+        # over the OTHER lines, (S - real_i)/(n-1), which is affine in real_i with negative
+        # slope, so after per-feature standardisation it is exactly -1 x the standardised real
+        # delta. Measured: per-drug correlation -1.000000 across all 32 drugs, and identical
+        # ridge coefficient norms and predictions (2.7e-15) versus the `oracle` row.
+        # Artifact: scripts/diagnose_oracle_additive.py, Alpine job 31633196.
+        "prior": lambda _drug: pd.DataFrame(
+            0.0, index=base_hvg.index, columns=pd.Index(["const"])
+        ),
     }
     for name, (d, kk) in sources.items():
         representations[name] = repr_by_drug(d, kk, hvg)
@@ -336,6 +399,8 @@ def score_check2(
     # pca, nmf, stack, ...) should be checked against raw capacity alone, so every row of
     # the grid has a matching "<name>_random" row scored through the identical pipeline.
     for name in list(representations):
+        if name == "prior":
+            continue  # a random control for "no features" is not a control
         representations[f"{name}_random"] = random_control_representation(
             representations[name], target_drugs, seed=seed_for_name(name)
         )
@@ -345,6 +410,11 @@ def score_check2(
     # are scored on different per-drug (patient, drug) support, not just different
     # representations.
     restricted_representations = restrict_representation_support(representations, design_target)
+    # A detector, not a decoration: print any pair of representations that are linear images
+    # of each other, because such a pair is one measurement reported twice and any "X beats
+    # the Y floor" comparison across it is comparing a thing to itself.
+    for a, b, corr in detect_degenerate_representations(restricted_representations):
+        print(f"  DEGENERATE: {a!r} and {b!r} are the same feature space (corr {corr:+.6f})")
     for repr_name, feat in restricted_representations.items():
         for pen in penalties:
             preds = penalized_preds(feat, design_target, fold_of, n_folds, uniq_lines, pen)

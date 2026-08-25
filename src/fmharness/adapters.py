@@ -36,18 +36,55 @@ PENALTY_NAMES: tuple[str, ...] = ("l2", "l1", "en")  # every penalty make_penalt
 # own 3-way representation-controlled grid, which imports both from here.
 
 
+# WHY: artifact scripts/diagnose_oracle_additive.py (Alpine job 31633070, 2026-08-24).
+# The previous path, logspace(-2, 3, 12), was measured to be BINDING: RidgeCV landed on its
+# 1e3 ceiling in 77.3% of per-drug-fold fits at p~2000 / ~40 training lines. Given room to
+# 1e8, 78% of fits chose an alpha above 1e3. So the docstring's claim that alpha is tuned per
+# representation was false for roughly three fits in four -- the path's upper limit chose the
+# shrinkage, not the data. fmharness.probe.base.ALPHAS already reached 1e8 with a written
+# argument for why it must; this brings the two into agreement rather than leaving one repo
+# with two ridge paths five orders of magnitude apart.
+RIDGE_ALPHAS = np.logspace(-2, 8, 24)
+
+
 def make_penalty(name: str) -> object:
     """A fresh ALPHA-CV-TUNED penalized model: l2=RidgeCV (efficient GCV), l1=LassoCV, en=
     ElasticNetCV (both inner 3-fold on the training lines). Tuning the penalty per
     representation/cohort makes a comparison model-fair -- a fixed alpha over-/under-
-    regularizes some inputs and flips the ranking (Kurilov 2020)."""
+    regularizes some inputs and flips the ranking (Kurilov 2020).
+
+    The alpha path must span the range the data actually wants; see RIDGE_ALPHAS. A path
+    whose ceiling is reached is not tuning at all, so callers that care should check with
+    ``alpha_is_interior`` rather than assume it."""
     if name == "l2":
-        return RidgeCV(alphas=np.logspace(-2, 3, 12))
+        return RidgeCV(alphas=RIDGE_ALPHAS)
     if name == "l1":
         return LassoCV(n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
     if name == "en":
         return ElasticNetCV(l1_ratio=0.5, n_alphas=30, cv=3, max_iter=20000, random_state=0)  # type: ignore[arg-type]
     raise ValueError(f"unknown penalty {name!r}")
+
+
+def alpha_is_interior(model: object, *, rtol: float = 1e-6) -> bool:
+    """Did the inner CV actually choose the penalty, or did the search path's edge choose it?
+
+    Returns False when the selected ``alpha_`` sits at either end of the searched grid, which
+    means the optimum is outside the path and the reported value is an artifact of where the
+    grid stopped. Returns True for models that expose no ``alpha_`` (nothing to check).
+
+    WHY this exists: artifact scripts/diagnose_oracle_additive.py measured the old
+    logspace(-2, 3, 12) path pinned at its ceiling in 77.3% of fits, which silently falsified
+    the "alpha tuned per representation" fairness claim for most of the Check-2 grid.
+    """
+    alpha = getattr(model, "alpha_", None)
+    alphas = getattr(model, "alphas", None)
+    if alpha is None or alphas is None:
+        return True
+    a = np.asarray(alphas, dtype=np.float64)
+    return not (
+        np.isclose(float(alpha), float(a.min()), rtol=rtol)
+        or np.isclose(float(alpha), float(a.max()), rtol=rtol)
+    )
 
 
 class ViabilityAdapter(Protocol):

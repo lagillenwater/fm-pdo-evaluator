@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import anndata as ad
+import fmharness.check2 as c2
 import numpy as np
 import pandas as pd
 import pytest
@@ -376,3 +377,25 @@ def test_random_control_representation_differs_across_same_shaped_representation
     out_nmf = random_control_representation(rep, ["d1"], seed=seed_for_name("nmf"))
 
     assert not np.allclose(out_pca["d1"].to_numpy(), out_nmf["d1"].to_numpy())
+
+
+def test_detect_degenerate_representations_catches_a_sign_flipped_copy() -> None:
+    """The check that would have caught `additive` being `oracle` sign-flipped.
+
+    Two representations related by an affine map are one feature space to any model that
+    standardises its inputs, so reporting both is reporting one measurement twice. Measured
+    2026-08-24: additive vs oracle correlated exactly -1.000000 across all 32 drugs.
+    """
+    rng = np.random.default_rng(0)
+    lines = [f"L{i}" for i in range(10)]
+    real = {d: pd.DataFrame(rng.normal(size=(10, 6)), index=lines) for d in ("A", "B")}
+    # The exact relationship loo_baseline_source("additive") produces: mean over the OTHERS,
+    # which is affine in the held-out line's own value with negative slope.
+    flipped = {d: (f.sum() - f) / (len(f) - 1) for d, f in real.items()}
+    unrelated = {d: pd.DataFrame(rng.normal(size=(10, 6)), index=lines) for d in ("A", "B")}
+
+    found = c2.detect_degenerate_representations({"real": real, "loo_mean": flipped})
+    assert found, "an affine copy must be reported as degenerate"
+    assert abs(found[0][2]) > 0.99
+
+    assert not c2.detect_degenerate_representations({"real": real, "other": unrelated})

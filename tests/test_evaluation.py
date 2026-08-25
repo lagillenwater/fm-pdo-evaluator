@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import fmharness.evaluation as ev
 from fmharness.cv import group_k_fold
 from fmharness.evaluation import (
     de_fidelity,
@@ -302,3 +303,69 @@ def test_grouped_cv_predict_with_leave_subtype_out_cv() -> None:
         factory, x_df, design, cv=leave_subtype_out(subtypes, seed=0), seed=0
     )
     assert len(preds) == len(design)
+
+
+# --- Regression tests for the 2026-08-24 metric defects -------------------------------
+# Each of these fails against the pre-fix code. They exist because the defects were found
+# by running the pipeline, not by reading it, and nothing would have caught a recurrence.
+
+
+def _ragged_panel(seed: int, n_pat: int = 40, n_drug: int = 26, drop: int = 40) -> pd.DataFrame:
+    """A (patient, drug) panel with real patient and drug main effects, NO interaction,
+    and some pairs missing -- the shape of every real design in this repo."""
+    rng = np.random.default_rng(seed)
+    drug_eff = rng.normal(0, 1.0, n_drug)
+    pat_eff = rng.normal(0, 1.0, n_pat)
+    rows = [
+        {"patient": f"P{i}", "drug": f"D{j}", "y_true": drug_eff[j] + pat_eff[i] + rng.normal(0, 0.3)}
+        for i in range(n_pat)
+        for j in range(n_drug)
+    ]
+    df = pd.DataFrame(rows)
+    return df.drop(rng.choice(len(df), size=drop, replace=False)).reset_index(drop=True)
+
+
+def test_interaction_rho_is_zero_for_a_predictor_with_no_patient_information() -> None:
+    """A per-drug constant knows nothing about which line it is scoring, so its
+    organoid x drug interaction must be 0 -- including on an incomplete panel.
+
+    Pre-fix this returned ~+0.65, because the patient mean was removed BEFORE the drug
+    mean: on a ragged panel each patient averages over a different drug set, which turns a
+    drug-constant predictor into one that varies across patients. Measured on the real
+    published predictions, the drug-mean prior scored -0.2345 rather than 0.
+    """
+    for seed in (0, 1, 2):
+        df = _ragged_panel(seed)
+        df["y_pred"] = df.groupby("drug")["y_true"].transform("mean")
+        assert abs(ev.interaction_rho(df, "y_pred")) < 0.02, f"seed {seed}"
+
+
+def test_interaction_rho_still_detects_a_real_planted_interaction() -> None:
+    """The fix must not cost sensitivity: a genuine interaction still has to register."""
+    rng = np.random.default_rng(7)
+    df = _ragged_panel(3)
+    signal = rng.normal(0, 1.0, len(df))
+    df["y_true"] = df["y_true"] + 2.0 * signal
+    df["y_pred"] = signal
+    assert ev.interaction_rho(df, "y_pred") > 0.3
+
+
+def test_p_label_can_never_be_zero() -> None:
+    """p is (1 + #null >= observed) / (1 + n_perm), so the smallest value it can report is
+    1/(n_perm+1). A p printed as 0.000 claims more resolution than the test has."""
+    df = _ragged_panel(4)
+    df["y_pred"] = df["y_true"]  # perfect prediction: the most extreme case available
+    s = ev.score_predictions(df[["patient", "drug", "y_true", "y_pred"]], n_perm=50)
+    assert s["p_label"] > 0.0
+    # Floor is 1/(n_perm+1); allow for the 4-decimal rounding score_predictions applies.
+    assert s["p_label"] == pytest.approx(1.0 / 51.0, abs=1e-4)
+
+
+def test_score_predictions_reports_its_own_null() -> None:
+    """No statistic without its null. The permutation distribution is already computed;
+    reporting its spread is what makes the observed value interpretable."""
+    df = _ragged_panel(5)
+    df["y_pred"] = df["y_true"]
+    s = ev.score_predictions(df[["patient", "drug", "y_true", "y_pred"]], n_perm=50)
+    assert "null_p95" in s and "null_sd" in s
+    assert np.isfinite(s["null_p95"]) and np.isfinite(s["null_sd"])

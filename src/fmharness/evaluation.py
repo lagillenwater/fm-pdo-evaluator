@@ -190,26 +190,57 @@ def within_drug_rho(preds: pd.DataFrame, pred_col: str = "y_resid", min_n: int =
     return _within_drug_corr(preds, "y_true", pred_col, min_n)
 
 
+def _two_way_demean(values: np.ndarray, patient: np.ndarray, drug: np.ndarray) -> np.ndarray:
+    """Remove additive patient AND drug main effects (the two-way within transformation).
+
+    On a BALANCED panel one pass of each is exact. On an incomplete panel it is not:
+    subtracting patient means shifts the drug means and vice versa, so this alternates
+    until the residual stops moving. What remains carries neither main effect, which is
+    the definition of the interaction term.
+
+    WHY iterate rather than one pass each: artifact
+    ``tests/test_evaluation.py::test_interaction_rho_is_zero_for_a_predictor_with_no_patient_information``
+    still fails with a single pass at the raggedness of the real Tahoe/GDSC2 design
+    (44 lines x 30 drugs, 17 pairs missing, 1.3% incomplete).
+    """
+    v = np.asarray(values, dtype=np.float64).copy()
+    for _ in range(100):
+        prev = v.copy()
+        v -= pd.Series(v).groupby(drug).transform("mean").to_numpy()
+        v -= pd.Series(v).groupby(patient).transform("mean").to_numpy()
+        if float(np.max(np.abs(v - prev))) < 1e-12:
+            break
+    return v
+
+
 def interaction_rho(preds: pd.DataFrame, pred_col: str = "y_resid", min_n: int = 3) -> float:
     """Drug-specific (organoid x drug interaction) rank correlation.
 
-    Removes each organoid's mean (across its drugs) from both observed and
-    predicted before the within-drug correlation, so the general-sensitivity
-    effect drops out. What remains is whether the model predicts that an
-    organoid responds to *this* drug better or worse than its overall
-    sensitivity and the drug's overall potency imply. This is the headline:
-    it measures drug-specific signal, the part a shared slope cannot produce.
+    Removes BOTH the organoid main effect and the drug main effect from observed and
+    predicted before the within-drug correlation. What remains is whether the model
+    predicts that an organoid responds to *this* drug better or worse than its overall
+    sensitivity and the drug's overall potency imply. This is the headline: it measures
+    drug-specific signal, the part a shared slope cannot produce.
+
+    Both effects are removed jointly (``_two_way_demean``). Removing only the organoid
+    mean is WRONG on an incomplete panel, and was the behaviour here until 2026-08-24:
+    each organoid was centred by the mean over the drugs IT happens to have, so a
+    predictor constant within a drug -- one that cannot know which organoid it is scoring
+    -- picked up organoid-to-organoid variation purely from differing coverage. Measured
+    consequence on the real published predictions: the per-drug prior, which contains no
+    organoid information at all, scored -0.2345 rather than 0, identically for all 24 rows
+    of the Check-2 grid, so every reported interaction sat on that offset.
     """
     p = preds.copy()
-    p["_t"] = p["y_true"] - p.groupby("patient")["y_true"].transform("mean")
-    p["_p"] = p[pred_col] - p.groupby("patient")[pred_col].transform("mean")
-    # A predictor that is constant within an organoid -- e.g. a shared slope,
-    # whose only output is one per-organoid offset -- carries no interaction
-    # information. After removing the organoid mean, _p is then floating-point
-    # dust (~1e-17); ranking it would manufacture a spurious correlation that
-    # merely shadows the general-sensitivity signal. Return 0 outright.
+    pat = p["patient"].to_numpy()
+    drg = p["drug"].to_numpy()
+    p["_t"] = _two_way_demean(p["y_true"].to_numpy(dtype=float), pat, drg)
+    p["_p"] = _two_way_demean(p[pred_col].to_numpy(dtype=float), pat, drg)
+    # A predictor carrying no interaction -- a per-drug constant, or one per-organoid
+    # offset -- demeans to floating-point dust (~1e-17). Ranking that would manufacture a
+    # correlation out of rounding error. Return 0 outright.
     scale = float(np.std(preds[pred_col].to_numpy(dtype=float)))
-    if float(np.std(p["_p"].to_numpy(dtype=float))) <= 1e-9 * scale:
+    if float(np.std(p["_p"].to_numpy(dtype=float))) <= 1e-9 * max(scale, 1e-30):
         return 0.0
     return _within_drug_corr(p, "_t", "_p", min_n)
 
@@ -270,7 +301,17 @@ def score_predictions(
     One place for the composition the eval scripts share: global Spearman, the headline
     interaction rho (organoid x drug), its within-drug label-permutation p-value, the per-drug
     Spearman (keeps the line main effect), and normalized regret@{1,3}. Returns a flat dict of
-    floats (``n`` is the pair count)."""
+    floats (``n`` is the pair count).
+
+    Also returns the permutation null's own spread. ``null_p95`` is this row's minimum
+    significant interaction -- its detection floor -- measured on the real data at the real
+    n, p and fold structure, in the same units as ``interaction``. The null array was already
+    being built and then discarded; reporting it is what lets a null result say "we could have
+    detected X and we observe Y" rather than merely "we found nothing".
+
+    ``p_label`` uses the (1 + count) / (1 + n_perm) estimator, so the smallest value it can
+    report is 1 / (n_perm + 1). The uncorrected ``mean(null >= observed)`` used before
+    2026-08-24 could print 0.000, claiming more resolution than the test has."""
     from fmharness.controls import permute_within_drug  # local import: avoid an import cycle
 
     it = interaction_rho(preds, "y_pred")
@@ -294,7 +335,9 @@ def score_predictions(
         "global": round(global_spearman(preds), 3),
         "interaction": round(it, 3),
         "perdrug": round(per_drug_spearman(preds), 3),
-        "p_label": round(float(np.mean(null >= it)), 3),
+        "p_label": round(float((1 + np.sum(null >= it)) / (1 + n_perm)), 4),
+        "null_p95": round(float(np.quantile(null, 0.95)), 3),
+        "null_sd": round(float(np.std(null, ddof=1)), 3),
         "regret@1": round(regret.get(1, float("nan")), 3),
         "regret@3": round(regret.get(3, float("nan")), 3),
         "n": float(len(preds)),

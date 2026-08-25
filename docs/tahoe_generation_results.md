@@ -97,9 +97,13 @@ N = that pair's true significant-gene count).
 | stack (gen, cytokine-aligned, mdm) | 0.357 | 0.030 | **0.049** | **0.026** | 1600 |
 | **stack (gen, drug-aligned, mdm)** | **0.466** | **0.075** | 0.076 | 0.047 | 1518 |
 
-**Unlike Pearson-Delta, both Stack checkpoints beat every baseline here** — cytokine-aligned
-already leads on overlap_accuracy/jaccard; drug-aligned leads on all four, by close to 2x the best
-baseline on `pr_auc`. Point estimates alone, though, do not distinguish real (patient, drug)-
+**Unlike Pearson-Delta, the drug-aligned checkpoint beats every baseline here**, on all four
+metrics, by close to 2x the best baseline on `pr_auc`. The cytokine-aligned checkpoint splits:
+it leads on the set-identification metrics (overlap_accuracy 0.049 and jaccard 0.026, both above
+nmf's 0.029/0.019) but LOSES on the ranking metrics (de_spearman_lfc 0.357 against pca/nmf's
+0.414; pr_auc 0.030 against nmf's 0.041). An earlier version of this sentence said both
+checkpoints beat every baseline; that is contradicted by the table directly above it, and was
+corrected 2026-08-24. Point estimates alone, though, do not distinguish real (patient, drug)-
 specific signal from a generically-plausible predictor that would score above these baselines on
 *any* pairing — the same failure mode Pearson-Delta's `r_offdiag`/`rank` columns exist to catch.
 No `r_offdiag` analogue existed for the DE metrics, so before trusting this table a permutation
