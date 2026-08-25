@@ -491,8 +491,12 @@ def score_check2(
     #
     # Plant AND score in the SAME small PCA subspace of base_hvg -- planting in the raw
     # gene space and then fitting RidgeCV directly on thousands of raw genes with ~n/folds
-    # training lines per fold cannot recover ANY signal at any effect size (verified
-    # empirically: r2 stayed negative even at 30x effect on unreduced features -- p >> n
+    # training lines per fold cannot recover ANY signal at any effect size (asserted here
+    # since 2026-08-22 as "verified empirically: r2 stayed negative even at 30x effect on
+    # unreduced features", but NO script, test or log producing that has ever existed in this
+    # repo -- treat it as unverified. What IS measured (Alpine job 31633070): RidgeCV lands on
+    # its alpha ceiling in 77.3% of per-drug-fold fits at this p and n, so the fits are heavily
+    # shrunk, which is consistent with the claim without establishing it -- p >> n
     # with p in the thousands and n in the tens is simply not fittable, regardless of
     # regularization). n_components is capped well below the smallest per-fold training-line
     # count so the fit is actually well-posed.

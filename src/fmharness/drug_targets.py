@@ -26,7 +26,8 @@ Caveats (read before trusting a result built on this):
     "addiction to an overexpressed target" story the same way. Included for completeness,
     flagged here so a null result on those specific drugs isn't over-interpreted as a
     harness bug.
-  * PubChem CID identity for every entry was verified against this repo's own
+  * PubChem CID identity was checked against a file that is NOT tracked here (data/ ships only
+    data/static/), so this is unverified from the repo alone:
     ``data/raw/coderdata/sarcoma_drugs.tsv.gz`` synonym list where present (22/26); the
     remaining 4 (sirolimus, ceralasertib, topotecan -- degrasyn was in the synonym list)
     were confirmed via a live PubChem CID lookup, not recalled from memory alone.

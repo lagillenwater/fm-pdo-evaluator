@@ -4,7 +4,7 @@
 #SBATCH --qos=mem-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=12           # amem's confirmed 240G/12cpu floor -- see 10's comment.
+#SBATCH --cpus-per-task=12           # amem 240G/12cpu floor [checked: sacctmgr show qos mem-normal]
 #SBATCH --mem=240G
 #SBATCH --time=03:00:00              # reading the 82G L1000 Level-3 matrix dominates; the
                                       # supervised adapter fits (l1/l2) are cheap by comparison.

@@ -39,13 +39,36 @@ ASSERTION = re.compile(
     re.IGNORECASE,
 )
 EVIDENCE_TAG = re.compile(r"\[evidence:\s*([A-Za-z0-9_.\-]+)\s*\]")
+# A second, weaker tag for OPERATIONAL facts -- a QoS floor, a partition's GPU type, why a job
+# died. These are not scientific results and promoting a CSV for them would be silly, but they
+# are still checkable: the tag must name the command or job id that shows it, so a reader can
+# rerun `sacctmgr show qos` or `sacct -j 31418001` instead of trusting the sentence. The gate
+# only requires that a method is named; it cannot rerun it.
+CHECKED_TAG = re.compile(r"\[checked:\s*([^\]]+)\]")
 # Prose that explicitly disclaims having evidence is fine, and saying so is the behaviour we
 # want to encourage rather than punish.
+# Prose that explicitly says it lacks evidence is exactly the behaviour to encourage, so it
+# passes. "never verified", "not independently confirmed" and friends are honest disclaimers,
+# and several exist only because a previously-asserted claim was corrected.
 DISCLAIMED = re.compile(
-    r"\b(not established|NOT established|unverified|no artifact|never committed|do not assert)\b"
+    r"\b(not established|NOT established|unverified|never verified|not independently confirmed"
+    r"|no artifact|never committed|do not assert|nobody could find|cannot be checked)\b"
 )
 
 SEARCH_GLOBS = ("docs/**/*.md", "src/**/*.py", "scripts/**/*.py", "scripts/alpine/*.sbatch")
+
+# Not gated, for reasons of kind rather than convenience:
+#
+# docs/superpowers/** are DATED DESIGN RECORDS. They record what was intended and believed on
+# the day they were written, and retroactively editing them to satisfy a gate would destroy the
+# thing that makes them useful -- you could no longer tell what was known when. A spec claim
+# that later turns out false gets a correction note appended, not a tag. (One such correction
+# exists: the 2026-08-21 spec asserted "Ridge is well-posed for p >> n", which the 2026-08-24
+# measurement disproved for this regime.)
+#
+# This file is skipped because its own docstring necessarily contains the trigger words it
+# searches for.
+EXCLUDE = ("docs/superpowers/", "scripts/check_evidence.py")
 
 
 def load_promoted(repo: Path) -> set[str]:
@@ -82,7 +105,8 @@ def check_assertions(repo: Path, promoted: set[str], *, strict: bool) -> list[st
     problems: list[str] = []
     for glob in SEARCH_GLOBS:
         for path in sorted(repo.glob(glob)):
-            if RESULTS_DIR.as_posix() in path.as_posix():
+            rel_posix = path.relative_to(repo).as_posix()
+            if RESULTS_DIR.as_posix() in rel_posix or any(e in rel_posix for e in EXCLUDE):
                 continue
             try:
                 lines = path.read_text().splitlines()
@@ -95,8 +119,10 @@ def check_assertions(repo: Path, promoted: set[str], *, strict: bool) -> list[st
                 tags = EVIDENCE_TAG.findall(window)
                 rel = f"{path.relative_to(repo)}:{i + 1}"
                 if not tags:
-                    if strict:
-                        problems.append(f"{rel}: asserts evidence with no [evidence: ...] tag")
+                    if strict and not CHECKED_TAG.search(window):
+                        problems.append(
+                            f"{rel}: asserts evidence with no [evidence: ...] or [checked: ...] tag"
+                        )
                 elif unknown := [t for t in tags if t not in promoted]:
                     problems.append(f"{rel}: cites unpromoted result(s) {unknown}")
     return problems

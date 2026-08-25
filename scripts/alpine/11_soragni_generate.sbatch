@@ -16,7 +16,7 @@
                                       # ah200 nodes (c3gpu-g5-*) carry 4 H200s each; the
                                       # first 19-task/%16 run put 6-7 tasks concurrently on
                                       # one node and 17/19 failed with "CUDA unknown error"
-                                      # (torch _lazy_init, confirmed via sacct+per-task logs
+                                      # (torch _lazy_init) [checked: sacct + per-task logs on the compute node]
                                       # on the actual compute node) -- GPU device isolation
                                       # under rapid concurrent launch on one shared node, not
                                       # a code bug. %4 keeps launches at or under one node's

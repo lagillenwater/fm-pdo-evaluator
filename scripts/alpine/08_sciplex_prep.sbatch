@@ -2,7 +2,7 @@
 #SBATCH --job-name=sciplex-prep
 # amem, not acpu (Alpine's amilan partition was retired) -- acpu's MaxMemPerCPU=3840MB caps
 # an 8-cpu job at ~30GB, below what the full-gene sci-Plex source needs. mem-normal's own
-# QOS floor (MinTRES mem=240G, confirmed via sacctmgr) sets --mem here, not a usage estimate;
+# QOS floor (MinTRES mem=240G) [checked: sacctmgr show qos mem-normal] sets --mem here, not a usage estimate;
 # 12 cpus keeps the per-cpu average (20000MB) under amem's MaxMemPerCPU=21333MB ceiling at
 # that --mem.
 #SBATCH --partition=amem

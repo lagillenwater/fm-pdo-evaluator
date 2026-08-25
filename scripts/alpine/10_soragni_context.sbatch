@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=12           # amem's MaxMemPerCPU=21333MB caps cpus at this --mem;
                                       # matches 08_sciplex_prep.sbatch's own solved ratio
                                       # (240G/12=20000MB/core, under the 21333MB ceiling).
-#SBATCH --mem=240G                   # QOSMinMemory: mem-normal's floor is confirmed 240G
+#SBATCH --mem=240G                   # QOSMinMemory floor [checked: sacctmgr show qos mem-normal]
                                       # (03_stack_context.sbatch, 08_sciplex_prep.sbatch, via
                                       # sacctmgr) -- amem enforces this regardless of actual
                                       # job need.

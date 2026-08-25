@@ -30,7 +30,7 @@
 # (curc.readthedocs.io/en/latest/clusters/alpine/alpine-hardware.html) that gh200 is
 # request-only access (a support-request form grants the QoS at the account level; the partition
 # listing it as an allowed QoS is not sufficient on its own) -- not a syntax issue, don't retry
-# gh200 without first filing that request. `ah200` (H200 GPUs, x86_64, confirmed via `scontrol
+# gh200 without first filing that request. `ah200` (H200 GPUs, x86_64 [checked: scontrol show partition ah200], confirmed via `scontrol
 # show node`) is a DIFFERENT partition that uses this project's already-proven `gpu-normal` QoS
 # (same as aa100) -- no special access needed. Its nodes carry a MIX of full and MIG-sliced H200
 # GPU types (`gpu:h200` vs `gpu:h200_2g.35gb` / `gpu:h200_3g.71gb`), so an ah200 submission needs
@@ -38,7 +38,7 @@
 # above already specify it).
 #
 # 2026-08-18, later: aa100 was carrying a long queue backlog while ah200 ran near-immediately
-# (confirmed job 31418001), so ah200 is now this repo's default for every GPU job, not just this
+# (confirmed job 31418001) [checked: sacct -j 31418001], so ah200 is now this repo's default
 # smoke test -- see 04_stack_generate.sbatch, 06_stack_embed.sbatch, 09_stack_finetune.sbatch.
 # To fall back to aa100 (e.g. if ah200 itself backs up later), override on the command line --
 # sbatch CLI flags take precedence over in-script #SBATCH lines:
