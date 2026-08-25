@@ -30,6 +30,14 @@ export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1   # else stdout block-buffers to the log file and a multi-hour
                            # job shows 0 bytes until it exits, making "working" and
+
+# Record what this run consumed. Most inputs here are literals in the invocation below rather
+# than --export variables, so the commit is what pins them: a log line naming the sha lets a
+# reader open the exact script that ran. Without it a job log says which stage ran and nothing
+# about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
+# logs and most published numbers cannot be traced to their inputs.
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") "
+
                            # "wedged" indistinguishable (job 31655278, 2026-08-25).
 
 # Inputs are the AGGREGATED / COLLAPSED artifacts, not Stack's raw output. Since faithful

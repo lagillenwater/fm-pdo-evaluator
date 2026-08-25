@@ -2,14 +2,14 @@
   {
     "check": "A",
     "title": "docs/tahoe_generation_results.md: 9 tables have no committed file behind them",
-    "evidence": "searched every committed .csv/.tsv (219 distinct numbers) for each table's values",
-    "affects": 230,
+    "evidence": "searched every committed .csv/.tsv (244 distinct numbers) for each table's values",
+    "affects": 228,
     "detail": []
   },
   {
     "check": "A",
     "title": "docs/sarcoma_organoids_2024_pathb_results.md: 1 tables have no committed file behind them",
-    "evidence": "searched every committed .csv/.tsv (219 distinct numbers) for each table's values",
+    "evidence": "searched every committed .csv/.tsv (244 distinct numbers) for each table's values",
     "affects": 6,
     "detail": []
   },
@@ -54,20 +54,6 @@
       "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:110",
       "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:116",
       "docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md:351"
-    ]
-  },
-  {
-    "check": "D",
-    "title": "6 pipeline stages accept inputs via --export but never echo them",
-    "evidence": "grepped each stage for a 'Resolved:' echo; the committed cluster evidence contains only 11 distinct Resolved lines across 453 job logs",
-    "affects": 6,
-    "detail": [
-      "scripts/alpine/05_stack_score.sbatch",
-      "scripts/alpine/06_stack_embed.sbatch",
-      "scripts/alpine/07_stack_emb_score.sbatch",
-      "scripts/alpine/09_stack_finetune.sbatch",
-      "scripts/alpine/12_sarcoma_organoids_2024_score.sbatch",
-      "scripts/alpine/13_sarcoma_organoids_2024_embed.sbatch"
     ]
   }
 ]

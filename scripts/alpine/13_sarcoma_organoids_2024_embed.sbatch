@@ -40,6 +40,14 @@ export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONUNBUFFERED=1   # stack-generation is a python console script, so its stdout
                            # block-buffers to the log too; without this a multi-hour GPU
+
+# Record what this run consumed. Most inputs here are literals in the invocation below rather
+# than --export variables, so the commit is what pins them: a log line naming the sha lets a
+# reader open the exact script that ran. Without it a job log says which stage ran and nothing
+# about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
+# logs and most published numbers cannot be traced to their inputs.
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") TASK=${SLURM_ARRAY_TASK_ID:-0}"
+
                            # job shows 0 bytes until it exits.
 
 QUERY="data/reference/stack_input_sarcoma.h5ad"   # 17 patients x genes -- the SAME tumor-RNA

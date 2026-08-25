@@ -1,23 +1,23 @@
 {
   "name": "provenance_audit",
-  "claim": "6 data provenance root causes affecting 288 items, computed by file comparison; re-run scripts/audit_provenance.py to reproduce",
+  "claim": "5 data provenance root causes affecting 280 items after adding commit-pinning Resolved echoes to 6 stages; was 6/288",
   "script": "scripts/audit_provenance.py",
-  "git_sha": "d15ce05b17aacc1e6e43ec197a1bd234b258265f",
+  "git_sha": "f419edae5f6cb2fc9bb8c736321fdb34577324d6",
   "result": {
     "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/provenance_audit.json",
-    "sha256": "76bf9c715fc238d1ba9507eeeeae1a5c9ff96e88a7087feebe0aac4554a4f90b",
-    "bytes": 3829
+    "sha256": "dcdf8f33c6da65a7d8522a5337390011434c757f6653d0b5559dd817e05fca2a",
+    "bytes": 3391
   },
   "inputs": [
     {
       "path": "docs/results/alpine_resolved_ckpt.txt",
-      "sha256": "1b9adbe25c681c97c2b0d61b449696bc05f0a6a0f5121c0c9a975006798040b2",
-      "bytes": 1721
+      "sha256": "7c77abdc964cadaffc88378ce3ec641b10ef629d8f973003e132b459f8cc3e6c",
+      "bytes": 1751
     },
     {
       "path": "docs/results/alpine_artifact_inventory.txt",
-      "sha256": "a329535b19b20c7c36bc8265c0f4dc5319711a2d1d56ad5f038b1a1c56f8f102",
-      "bytes": 16219
+      "sha256": "6fe0c06ec7c552f080f90444a442abb6012a19e6d5e8fb2839e9446763243e58",
+      "bytes": 17929
     }
   ],
   "missing_inputs": []

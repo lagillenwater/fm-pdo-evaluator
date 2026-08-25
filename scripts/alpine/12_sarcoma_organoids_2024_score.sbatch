@@ -59,6 +59,14 @@ export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
+
+# Record what this run consumed. Most inputs here are literals in the invocation below rather
+# than --export variables, so the commit is what pins them: a log line naming the sha lets a
+# reader open the exact script that ran. Without it a job log says which stage ran and nothing
+# about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
+# logs and most published numbers cannot be traced to their inputs.
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") GCTX=$GCTX GENDIR=$GENDIR AGGDIR=$AGGDIR LABEL=$LABEL THRESHOLD=$THRESHOLD STACK_EMB=$STACK_EMB"
+
 GCTX="${GCTX:-GSE92742_Broad_LINCS_Level3_INF_mlr12k_n1319138x12328.gctx}"
 GENDIR="${GENDIR:-generated_sarcoma_organoids_2024_faithful}"
 AGGDIR="${AGGDIR:-generated_sarcoma_organoids_2024_faithful_agg}"
