@@ -45,6 +45,7 @@ both checks identically to the baselines.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import anndata as ad
@@ -67,6 +68,35 @@ def _rel(repo: Path, p: str) -> Path:
     """Resolve ``p`` against the repo root unless it is already absolute."""
     q = Path(p)
     return q if q.is_absolute() else repo / q
+
+
+def emit(table: "pd.DataFrame", name: str, out_dir: Path, params: dict[str, object]) -> None:
+    """Write a result table and the parameters that produced it. Never optional.
+
+    Every number this driver has ever published went to stdout and into a job log that was
+    never committed, which is why 236 published values cannot be regenerated
+    (scripts/audit_provenance.py, check A). Printing is for watching; this is for keeping.
+
+    The sidecar records the git sha and every resolved argument, so a table can be traced to
+    the code and parameters behind it without anyone having kept the log.
+    """
+    import json
+    import subprocess
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{name}.csv"
+    table.to_csv(dest, index=False)
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except Exception:
+        sha = "unknown"
+    (out_dir / f"{name}.params.json").write_text(
+        json.dumps({"result": dest.name, "git_sha": sha, "rows": int(len(table)), **params}, indent=2, default=str)
+        + "\n"
+    )
+    print(f"  wrote {dest} ({len(table)} rows) + {name}.params.json")
 
 
 def main() -> None:
@@ -92,6 +122,12 @@ def main() -> None:
         help="dir to write <name>_delta.parquet / <name>_key.parquet for every delta source. "
         "Nothing else emits these, so scripts/de_permutation_null.py -- which rebuilds Check "
         "1b's null -- has had no way to obtain its input.",
+    )
+    ap.add_argument(
+        "--out-dir",
+        default=None,
+        help="where result tables and their parameter sidecars are written. Defaults to "
+        "results/<job id or 'local'>. Output is always written; this only chooses where.",
     )
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
@@ -219,6 +255,7 @@ def main() -> None:
     fid_table = score_delta_sources(sources, real_delta, real_key, n_hvg=args.n_hvg)
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
     print(fid_table.to_string(index=False))
+    emit(fid_table, "check1_delta_fidelity", out_dir, run_params)
 
     # Labels for the gate and check 2 (hallmark was loaded above for the learned-source panel).
     _, design = build_sample_design(
@@ -239,6 +276,7 @@ def main() -> None:
         n_perm=args.n_permutations,
         n_random=args.n_random,
     )
+    emit(gate, "gate_hallmark_vs_random", out_dir, run_params)
     print("\n=== gate: Hallmark readout on the REAL Tahoe delta (vs random gene sets) ===")
     print(gate.to_string(index=False) if not gate.empty else "(no (line, drug) overlap with AUC)")
 
@@ -275,6 +313,7 @@ def main() -> None:
     )
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")
     print(out_df.to_string(index=False) if not out_df.empty else "(no scored pairs)")
+    emit(out_df, "check2_grid", out_dir, run_params)
 
 
 if __name__ == "__main__":

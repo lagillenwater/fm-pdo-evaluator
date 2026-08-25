@@ -30,6 +30,7 @@ diverge in production 2026-08-12 -- see --deltas-bundle's own --help text):
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import anndata as ad
@@ -138,6 +139,31 @@ def run_check1(
     return score_delta_sources(sources, fd, fk, n_hvg=n_hvg)
 
 
+def emit(table, name, out_dir, params) -> None:
+    """Write a result table and the parameters that produced it. Never optional.
+
+    See scripts/score_generation_eval.py's emit for why: printing is for watching, this is for
+    keeping. A number that exists only in an uncommitted job log cannot be regenerated.
+    """
+    import json
+    import subprocess
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{name}.csv"
+    table.to_csv(dest, index=False)
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    except Exception:
+        sha = "unknown"
+    (out_dir / f"{name}.params.json").write_text(
+        json.dumps({"result": dest.name, "git_sha": sha, "rows": int(len(table)), **params},
+                   indent=2, default=str) + "\n"
+    )
+    print(f"  wrote {dest} ({len(table)} rows) + {name}.params.json")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--context", default=None, help="Tahoe context AnnData (build_tahoe_context)")
@@ -171,7 +197,18 @@ def main() -> None:
     )
     ap.add_argument("--corpus-lines", default=None, help="comma-separated declared pretrain lines")
     ap.add_argument("--corpus-drugs", default=None, help="comma-separated declared pretrain drugs")
+    ap.add_argument(
+        "--out-dir",
+        default=None,
+        help="where result tables and parameter sidecars go. Defaults to "
+        "results/<job id or 'local'>. Output is always written.",
+    )
     args = ap.parse_args()
+    out_dir = Path(args.out_dir) if getattr(args, 'out_dir', None) else Path('results') / (
+        os.environ.get('SLURM_JOB_ID') or 'local'
+    )
+    run_params = {k: v for k, v in vars(args).items()}
+    print(f'writing results to {out_dir}')
 
     if corpus_declared_partially(args.corpus_lines, args.corpus_drugs):
         ap.error(
@@ -207,6 +244,7 @@ def main() -> None:
         task_signal_in_pretrain="adjacent" if args.corpus_lines else "none",
     )
     print(table.to_string(index=False))
+    emit(table, "check1_registry", out_dir, run_params)
 
 
 if __name__ == "__main__":
