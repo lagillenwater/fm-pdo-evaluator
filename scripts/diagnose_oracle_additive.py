@@ -82,6 +82,7 @@ def fit_and_report(
     }
     rows: list[tuple[str, str, float, float]] = []
     chosen: list[float] = []
+    collapse: list[tuple[float, float]] = []
     for drug, auc in auc_by_drug.items():
         fdf = rep.get(drug)
         if fdf is None or fdf.empty:
@@ -98,18 +99,27 @@ def fit_and_report(
             if len(tr) < 5 or not te:
                 continue
             sc = StandardScaler().fit(fdf.loc[tr].to_numpy(dtype=np.float64))
+            y_tr = [auc[ln] for ln in tr]
             model = RidgeCV(alphas=alphas).fit(
-                sc.transform(fdf.loc[tr].to_numpy(dtype=np.float64)),
-                [auc[ln] for ln in tr],
+                sc.transform(fdf.loc[tr].to_numpy(dtype=np.float64)), y_tr
             )
             chosen.append(float(model.alpha_))
             pred = model.predict(sc.transform(fdf.loc[te].to_numpy(dtype=np.float64)))
-            rows.extend(
-                (ln, drug, float(auc[ln]), float(p)) for ln, p in zip(te, pred, strict=False)
-            )
+            # The decisive check: is the prediction just the training-fold mean? If the
+            # coefficient term contributes nothing, the "representation" is not being used at
+            # all and the row is the drug mean wearing a different label.
+            train_mean = float(np.mean(y_tr))
+            coef_norm = float(np.linalg.norm(np.asarray(model.coef_, dtype=np.float64)))
+            for ln, p in zip(te, pred, strict=False):
+                rows.append((ln, drug, float(auc[ln]), float(p)))
+                collapse.append((float(p) - train_mean, coef_norm))
     cols = pd.Index(["patient", "drug", "y_true", "y_pred"])
     out = pd.DataFrame(rows, columns=cols)
+    dev = np.array([c[0] for c in collapse])
+    cn = np.array([c[1] for c in collapse])
     print(f"  [{label}] {len(out)} predictions, {len(chosen)} per-drug-fold fits")
+    print(f"      |pred - training-fold mean|: max {np.abs(dev).max():.4g}, mean {np.abs(dev).mean():.4g}")
+    print(f"      ridge coefficient L2 norm:   max {cn.max():.4g}, median {np.median(cn):.4g}")
     return out, chosen
 
 
