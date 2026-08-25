@@ -86,6 +86,13 @@ def main() -> None:
         "(fmharness.deltas._K_GRID) instead of a fixed value",
     )
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs for the generation metric")
+    ap.add_argument(
+        "--dump-sources",
+        default=None,
+        help="dir to write <name>_delta.parquet / <name>_key.parquet for every delta source. "
+        "Nothing else emits these, so scripts/de_permutation_null.py -- which rebuilds Check "
+        "1b's null -- has had no way to obtain its input.",
+    )
     ap.add_argument("--n-permutations", type=int, default=1000)
     ap.add_argument(
         "--n-random",
@@ -198,6 +205,17 @@ def main() -> None:
         )
 
     # Check 1 -- generation quality vs the real Tahoe delta.
+    if args.dump_sources:
+        # Written here, after `stack` joins, so the dump is the exact set that gets scored
+        # rather than a reconstruction of it. Same-name overwrite is deliberate: these are
+        # derived from committed code plus pinned inputs, so a stale copy is worse than none.
+        ddir = Path(args.dump_sources)
+        ddir.mkdir(parents=True, exist_ok=True)
+        for _name, (_d, _k) in sources.items():
+            _d.to_parquet(ddir / f"{_name}_delta.parquet")
+            _k.to_parquet(ddir / f"{_name}_key.parquet")
+            print(f"  dumped {_name}: {_d.shape[0]} rows x {_d.shape[1]} genes -> {ddir}")
+
     fid_table = score_delta_sources(sources, real_delta, real_key, n_hvg=args.n_hvg)
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
     print(fid_table.to_string(index=False))
