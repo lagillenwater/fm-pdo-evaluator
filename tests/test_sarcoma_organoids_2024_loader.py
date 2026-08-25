@@ -1,6 +1,6 @@
-"""Tests for fmharness.data.loaders.soragni.
+"""Tests for fmharness.data.loaders.sarcoma_organoids_2024.
 
-Hermetic: builds a synthetic data/raw/soragni/tables/ tree (normalized counts,
+Hermetic: builds a synthetic data/raw/sarcoma_organoids_2024/tables/ tree (normalized counts,
 drug screen, manifest) plus a small data/static/drug_xref.parquet. Covers the
 sample-ID parsing edge cases (letter suffixes, timepoints), the matched-cohort
 intersection, drug-assay attachment to Organoid samples, and manifest refusal.
@@ -16,10 +16,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from fmharness.data.loaders.soragni import (
+from fmharness.data.loaders.sarcoma_organoids_2024 import (
     IngestError,
     canonicalize_patient_id,
-    load_soragni,
+    load_sarcoma_organoids_2024,
 )
 
 
@@ -28,7 +28,7 @@ def _sha(p: Path) -> str:
 
 
 def _build_fixture(repo: Path) -> None:
-    raw = repo / "data" / "raw" / "soragni" / "tables"
+    raw = repo / "data" / "raw" / "sarcoma_organoids_2024" / "tables"
     raw.mkdir(parents=True)
     static = repo / "data" / "static"
     static.mkdir(parents=True)
@@ -153,7 +153,7 @@ def _build_fixture(repo: Path) -> None:
         "drug_screen.parquet": raw / "drug_screen.parquet",
     }
     manifest = {
-        "dataset": "soragni_pdo_sarcoma_2024",
+        "dataset": "sarcoma_organoids_2024",
         "release": {"project": "syn55180195", "mode": "tables"},
         "files": {
             rel: {"sha256": _sha(p), "bytes": p.stat().st_size, "source_uri": "test://fixture"}
@@ -167,27 +167,27 @@ def _build_fixture(repo: Path) -> None:
         [
             {
                 "input_name": "Imatinib",
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": 5291,
                 "inchikey": "KTUFNOKKBVMGRW-UHFFFAOYSA-N",
                 "drugbank_id": "DB00619",
-                "resolution_method": "soragni_via_gdsc2_synonym",
+                "resolution_method": "sarcoma_organoids_2024_via_gdsc2_synonym",
                 "notes": None,
             },
             {
                 "input_name": "Topotecan",
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": 60700,
                 "inchikey": "UCFGDBYHRUNTLO-QHCPKHFHSA-N",
                 "drugbank_id": "DB01030",
-                "resolution_method": "soragni_via_gdsc2_synonym",
+                "resolution_method": "sarcoma_organoids_2024_via_gdsc2_synonym",
                 "notes": None,
             },
             {
                 "input_name": "UnresolvedCompound",
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": None,
                 "inchikey": None,
@@ -231,7 +231,7 @@ def test_canonicalize_patient_id_variants() -> None:
     assert canonicalize_patient_id("sarc0053_a") == "SARC0053_A"
 
 
-def test_canonicalize_patient_id_rejects_non_soragni() -> None:
+def test_canonicalize_patient_id_rejects_non_sarcoma_organoids_2024() -> None:
     with pytest.raises(ValueError, match="unrecognized"):
         canonicalize_patient_id("ACH-001113")
     with pytest.raises(ValueError, match="unrecognized"):
@@ -240,7 +240,7 @@ def test_canonicalize_patient_id_rejects_non_soragni() -> None:
 
 def test_loader_end_to_end(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path, ingestion_date=date(2026, 5, 25))
+    bundle = load_sarcoma_organoids_2024(tmp_path, ingestion_date=date(2026, 5, 25))
 
     # Cohort: SARC0001 + SARC0002 + SARC0004_2 (SARC0003 has RNA but no drug screen)
     assert bundle.tranche.patient_count == 3
@@ -268,7 +268,7 @@ def test_loader_end_to_end(tmp_path: Path) -> None:
 def test_stragglers_ignored(tmp_path: Path) -> None:
     """The 'col' and 'col1' columns in the real Soragni table must NOT appear as samples."""
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path)
+    bundle = load_sarcoma_organoids_2024(tmp_path)
     assert not any(s.sample_id in ("col", "col1") for s in bundle.samples)
     assert "col" not in bundle.expression.obs.index
     assert "col1" not in bundle.expression.obs.index
@@ -276,7 +276,7 @@ def test_stragglers_ignored(tmp_path: Path) -> None:
 
 def test_drug_assays_attached_to_organoid(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path)
+    bundle = load_sarcoma_organoids_2024(tmp_path)
 
     # 6 drug-screen rows in fixture; 5 in the matched cohort (sarc0099 excluded)
     assert len(bundle.drug_assays) == 5
@@ -291,7 +291,7 @@ def test_drug_assays_attached_to_organoid(tmp_path: Path) -> None:
 
 def test_xref_attachment(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path)
+    bundle = load_sarcoma_organoids_2024(tmp_path)
 
     imatinib = [a for a in bundle.drug_assays if a.drug_name == "Imatinib"]
     assert imatinib  # at least one
@@ -305,7 +305,7 @@ def test_xref_attachment(tmp_path: Path) -> None:
 
 def test_baseline_expression_per_sample(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path)
+    bundle = load_sarcoma_organoids_2024(tmp_path)
 
     # One BaselineExpression per sample (6 total)
     assert len(bundle.baseline_expression) == 6
@@ -318,7 +318,7 @@ def test_baseline_expression_per_sample(tmp_path: Path) -> None:
 
 def test_patient_subtype_from_drug_screen(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    bundle = load_soragni(tmp_path)
+    bundle = load_sarcoma_organoids_2024(tmp_path)
 
     by_id = {p.patient_id: p for p in bundle.patients}
     assert by_id["SARC0001"].subtype == "osteosarcoma"
@@ -329,36 +329,36 @@ def test_patient_subtype_from_drug_screen(tmp_path: Path) -> None:
 
 def test_content_hash_deterministic(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    h1 = load_soragni(tmp_path).tranche.content_hash
-    h2 = load_soragni(tmp_path).tranche.content_hash
+    h1 = load_sarcoma_organoids_2024(tmp_path).tranche.content_hash
+    h2 = load_sarcoma_organoids_2024(tmp_path).tranche.content_hash
     assert h1 == h2
 
 
 def test_manifest_mismatch_refused(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    raw = tmp_path / "data" / "raw" / "soragni" / "tables"
+    raw = tmp_path / "data" / "raw" / "sarcoma_organoids_2024" / "tables"
     manifest = json.loads((raw / "manifest.json").read_text())
     manifest["files"]["drug_screen.parquet"]["sha256"] = "0" * 64
     (raw / "manifest.json").write_text(json.dumps(manifest))
 
     with pytest.raises(IngestError, match="sha256 mismatch"):
-        load_soragni(tmp_path)
+        load_sarcoma_organoids_2024(tmp_path)
 
 
 def test_manifest_missing_refused(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    (tmp_path / "data" / "raw" / "soragni" / "tables" / "manifest.json").unlink()
+    (tmp_path / "data" / "raw" / "sarcoma_organoids_2024" / "tables" / "manifest.json").unlink()
     with pytest.raises(IngestError, match="raw manifest missing"):
-        load_soragni(tmp_path)
+        load_sarcoma_organoids_2024(tmp_path)
 
 
 def test_skip_verify_allows_corrupt_manifest(tmp_path: Path) -> None:
     _build_fixture(tmp_path)
-    raw = tmp_path / "data" / "raw" / "soragni" / "tables"
+    raw = tmp_path / "data" / "raw" / "sarcoma_organoids_2024" / "tables"
     manifest = json.loads((raw / "manifest.json").read_text())
     manifest["files"]["drug_screen.parquet"]["sha256"] = "0" * 64
     (raw / "manifest.json").write_text(json.dumps(manifest))
 
     # Loads despite the corrupt manifest sha (escape hatch for tests / fast paths).
-    bundle = load_soragni(tmp_path, verify_manifest=False)
+    bundle = load_sarcoma_organoids_2024(tmp_path, verify_manifest=False)
     assert bundle.tranche.patient_count == 3

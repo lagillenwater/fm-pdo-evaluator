@@ -766,7 +766,7 @@ Message: `feat: add LeakageQueryable protocol and filter_leakage`
 ### Task 5: `Modality` registry
 
 Right now, "which phenotype are we predicting" is hardcoded per script --
-`per_patient_eval.py`, `benchmark_soragni.py`, `label_ceiling.py`, and
+`per_patient_eval.py`, `benchmark_sarcoma_organoids_2024.py`, `label_ceiling.py`, and
 `score_generation_eval.py` each build their own `(patient, drug, y)` frame with their own sign
 convention. This task formalizes it.
 
@@ -786,7 +786,7 @@ convention. This task formalizes it.
 Create `tests/test_modality.py`. This test does not touch real data on disk -- it constructs a
 fake `Modality` and only exercises `ThresholdedModality`'s wrapping logic, since the concrete
 `Gdsc2Auc`/`SoragniViability` instances need real local data files
-(`data/raw/gdsc2_sarcoma/`, `data/raw/soragni/`) that are gitignored and not guaranteed present
+(`data/raw/gdsc2_sarcoma/`, `data/raw/sarcoma_organoids_2024/`) that are gitignored and not guaranteed present
 in every environment -- those are covered by a separate, explicitly-marked integration test in
 Step 6.
 
@@ -1004,7 +1004,7 @@ class SoragniViability:
         return "regression"
 
     def name(self) -> str:
-        return f"soragni_viability_{self.rna_source}"
+        return f"sarcoma_organoids_2024_viability_{self.rna_source}"
 
 
 class ThresholdedModality:
@@ -1077,10 +1077,10 @@ def test_gdsc2_auc_loads_real_data() -> None:
 
 
 @pytest.mark.skipif(
-    not (_REPO / "data/raw/soragni").exists(),
+    not (_REPO / "data/raw/sarcoma_organoids_2024").exists(),
     reason="requires local Soragni raw data",
 )
-def test_soragni_viability_loads_real_data() -> None:
+def test_sarcoma_organoids_2024_viability_loads_real_data() -> None:
     design = SoragniViability().load(_REPO)
     assert {"patient", "drug", "y"} <= set(design.columns)
     assert design["patient"].nunique() == 17
@@ -1111,7 +1111,7 @@ Message: `feat: add Modality registry with GDSC2/CTRP/PRISM/Soragni instances`
 Two CV systems exist and were never reconciled: `src/fmharness/splits/` operates on pydantic
 `Patient` objects (`patient_id`, `subtype`) and yields `SplitFold` (train/test patient-id
 tuples); every actual working script (`grouped_cv_predict`, `score_generation_eval.py`,
-`benchmark_soragni.py`) operates on flat `design[patient, drug, y]` DataFrames. Per the
+`benchmark_sarcoma_organoids_2024.py`) operates on flat `design[patient, drug, y]` DataFrames. Per the
 confirmed design decision, bridge rather than migrate: build a thin adapter that runs
 `LeaveSubtypeOut`'s real fold-partitioning logic and exposes it in the
 `design -> Iterator[(train_idx, test_idx)]` shape the working pandas pipeline expects.

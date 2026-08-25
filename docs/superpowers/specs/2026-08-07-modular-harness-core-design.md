@@ -153,7 +153,7 @@ the model-plus-adapter pipeline.
 ### `Modality` registry (new)
 
 The piece missing from yesterday's four registries. Today, "which phenotype are we predicting"
-is hardcoded per script — `per_patient_eval.py`, `benchmark_soragni.py`, `label_ceiling.py`,
+is hardcoded per script — `per_patient_eval.py`, `benchmark_sarcoma_organoids_2024.py`, `label_ceiling.py`,
 and `score_generation_eval.py` each build their own `(patient, drug, y)` frame with their own
 sign convention. This is what the manuscript's "evaluation adapter" language names.
 

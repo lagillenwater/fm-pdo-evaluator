@@ -1,8 +1,15 @@
-"""Loader for the Soragni 2024 PDTO sarcoma tranche.
+"""Loader for the 2024 sarcoma patient-derived tumour organoid (PDTO) tranche.
+
+Al Shihabi, Nguyen, Tebon et al., "The landscape of drug sensitivity and resistance in
+sarcoma", Cell Stem Cell 2024. PMID 39305899, DOI 10.1016/j.stem.2024.08.010. Deposited at
+Synapse syn55180195 (tables) and syn64333318 (normalised gene counts).
+
+The identifiers here say `sarcoma_organoids_2024` rather than an author surname: a dataset
+token should name the data, and the citation belongs in prose where it can carry a PMID.
 
 End-to-end pipeline:
 
-1. Verify the raw artifact manifest (``data/raw/soragni/tables/manifest.json``)
+1. Verify the raw artifact manifest (``data/raw/sarcoma_organoids_2024/tables/manifest.json``)
    against on-disk shas; refuse to proceed on mismatch.
 2. Parse normalized-gene-counts sample columns (e.g. ``SARC0095_Tumor``,
    ``SARC0139_1_Organoids``) into ``(patient_id, specimen)`` pairs, ignoring
@@ -50,8 +57,8 @@ from fmharness.schema import (
     Tranche,
 )
 
-TRANCHE_ID = "soragni_pdo_sarcoma_2024"
-SOURCE = "soragni_pdo_sarcoma"
+TRANCHE_ID = "sarcoma_organoids_2024"
+SOURCE = "sarcoma_organoids_2024_pdo_sarcoma"
 VERSION = "syn55180195_tables"
 TISSUE_OF_ORIGIN = "sarcoma"
 
@@ -89,7 +96,7 @@ class IngestError(RuntimeError):
 
 @dataclass(frozen=True)
 class SoragniBundle:
-    """In-memory result of ``load_soragni()``.
+    """In-memory result of ``load_sarcoma_organoids_2024()``.
 
     ``expression`` is an AnnData with cells along ``obs`` (one per
     ``(patient, specimen)`` pair; both Tumor and Organoid retained) and
@@ -124,14 +131,14 @@ def canonicalize_patient_id(s: str) -> str:
     return m.group("patient").upper()
 
 
-def load_soragni(
+def load_sarcoma_organoids_2024(
     repo_root: Path,
     *,
     ingestion_date: date | None = None,
     verify_manifest: bool = True,
 ) -> SoragniBundle:
     """Load the Soragni PDTO sarcoma tranche end-to-end (see module docstring)."""
-    raw_dir = repo_root / "data" / "raw" / "soragni" / "tables"
+    raw_dir = repo_root / "data" / "raw" / "sarcoma_organoids_2024" / "tables"
     if verify_manifest:
         _verify_raw_manifest(raw_dir)
 
@@ -203,9 +210,9 @@ def load_soragni(
 
     # ---- Step 5: drug xref ----
     xref = load_drug_xref(repo_root / "data" / "static")
-    soragni_xref = cast(pd.DataFrame, xref[xref["source"] == "soragni"])
-    soragni_xref_unique = soragni_xref.drop_duplicates(subset=["input_name"], keep="first")
-    name_to_xref = soragni_xref_unique.set_index(soragni_xref_unique["input_name"].str.lower())
+    sarcoma_organoids_2024_xref = cast(pd.DataFrame, xref[xref["source"] == "sarcoma_organoids_2024"])
+    sarcoma_organoids_2024_xref_unique = sarcoma_organoids_2024_xref.drop_duplicates(subset=["input_name"], keep="first")
+    name_to_xref = sarcoma_organoids_2024_xref_unique.set_index(sarcoma_organoids_2024_xref_unique["input_name"].str.lower())
 
     # ---- Step 6: schema objects ----
     # Per-patient diagnosis (Soragni's free-text Diagnosis column from drug_screen).
@@ -327,7 +334,7 @@ def _verify_raw_manifest(raw_dir: Path) -> None:
     if not manifest_path.exists():
         raise IngestError(
             f"raw manifest missing: {manifest_path} -- run "
-            "scripts/download/download_soragni.py first"
+            "scripts/download/download_sarcoma_organoids_2024.py first"
         )
     manifest = json.loads(manifest_path.read_text())
     for rel, rec in manifest.get("files", {}).items():

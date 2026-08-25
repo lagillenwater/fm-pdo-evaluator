@@ -1,11 +1,11 @@
 """Convert Stack's embedding output (.npy) to a CSV indexed by organoid id.
 
 Stack writes one embedding row per input pseudo-cell, in input order. We pair it
-with the organoid ids from the AnnData we sent, producing the stack_soragni.csv
-that scripts/benchmark_soragni.py reads via --stack-embeddings.
+with the organoid ids from the AnnData we sent, producing the stack_sarcoma_organoids_2024.csv
+that scripts/benchmark_sarcoma_organoids_2024.py reads via --stack-embeddings.
 
-  python scripts/stack_npy_to_csv.py stack_soragni.npy \\
-      data/reference/stack_input_soragni.h5ad stack_soragni.csv
+  python scripts/stack_npy_to_csv.py stack_sarcoma_organoids_2024.npy \\
+      data/reference/stack_input_sarcoma_organoids_2024.h5ad stack_sarcoma_organoids_2024.csv
 """
 
 from __future__ import annotations

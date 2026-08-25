@@ -173,7 +173,7 @@ def main() -> None:
     )
     print(f"\n{'drug set':16s}{'n_drugs':>8}{'global_sp':>10}{'within':>9}{'interact':>10}{'p':>8}")
     rows: list[dict[str, object]] = []
-    for label, sub in (("all soragni", preds), ("16 shared", shared_sub)):
+    for label, sub in (("all sarcoma_organoids_2024", preds), ("16 shared", shared_sub)):
         gs, wd, it, pv, nd = _score(sub, args.n_permutations)
         print(f"{label:16s}{nd:>8d}{gs:>+10.3f}{wd:>+9.3f}{it:>+10.3f}{pv:>8.3f}")
         gp = float(
@@ -195,7 +195,7 @@ def main() -> None:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         # Append so this bilinear row joins the linear/kernel rows from
-        # transfer_gdsc_soragni.py in one head-invariance table.
+        # transfer_gdsc_sarcoma_organoids_2024.py in one head-invariance table.
         pd.DataFrame(rows).to_csv(out, mode="a", header=not out.exists(), index=False)
         print(f"\nwrote {len(rows)} rows -> {out}")
 

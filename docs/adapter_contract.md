@@ -91,7 +91,7 @@ Every adapter must:
 1. Build / pick the Apptainer image (`containers/<name>.def`). Pin the digest in `containers/digests.json`.
 2. Create `src/fmharness/models/wrappers/<name>.py` implementing `ModelAdapter`.
 3. Register the adapter in `src/fmharness/models/registry.py` so the CLI's `--model <name>` flag resolves.
-4. Add `configs/<name>_{soragni,yang}_{id,lpo,lso}.yaml` (6 files) following the existing pattern.
+4. Add `configs/<name>_{sarcoma_organoids_2024,yang}_{id,lpo,lso}.yaml` (6 files) following the existing pattern.
 5. Add a smoke test under `tests/wrappers/test_<name>.py` using the `MockAdapter` round-trip pattern.
 
 ## 6. The metadata-only control adapter

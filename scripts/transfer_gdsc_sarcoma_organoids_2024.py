@@ -13,13 +13,13 @@ interaction transfers only from in-domain training; the full pan-cancer panel
 same either way.
 
 The representation is swappable: log1p expression now, Stack embeddings via
---stack-gdsc/--stack-soragni (CSV indexed by cell-line / organoid id). Two heads
+--stack-gdsc/--stack-sarcoma_organoids_2024 (CSV indexed by cell-line / organoid id). Two heads
 are scored: a shared slope (general sensitivity only) and a per-drug slope (which
 can carry drug-specific / interaction signal). Predictions are frozen, so the
 within-drug permutation null just reshuffles the Soragni labels -- no refit.
 
-  uv run python scripts/transfer_gdsc_soragni.py
-  uv run python scripts/transfer_gdsc_soragni.py --stack-gdsc g.csv --stack-soragni s.csv
+  uv run python scripts/transfer_gdsc_sarcoma_organoids_2024.py
+  uv run python scripts/transfer_gdsc_sarcoma_organoids_2024.py --stack-gdsc g.csv --stack-sarcoma_organoids_2024 s.csv
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def main() -> None:
     # permutation null only when trained in-domain). --pan-cancer opts back in.
     ap.add_argument("--pan-cancer", action="store_true", help="train on all GDSC2 lineages")
     ap.add_argument("--stack-gdsc", default=None)
-    ap.add_argument("--stack-soragni", default=None)
+    ap.add_argument("--stack-sarcoma_organoids_2024", default=None)
     # Swap the predictive head to test whether the finding is head-invariant:
     # "linear" is the RidgeCV slope, "kernel" the RBF kernel ridge.
     ap.add_argument("--head", choices=list(HEADS), default="linear")
@@ -128,7 +128,7 @@ def main() -> None:
     shared = sorted(set(ds["drug"].astype(str)) & set(dg["drug"].astype(str)))
     ds = ds[ds["drug"].astype(str).isin(shared)].copy()
     dg = dg[dg["drug"].astype(str).isin(shared)].copy()
-    print(f"shared drugs {len(shared)} | gdsc rows {len(dg)} | soragni rows {len(ds)}")
+    print(f"shared drugs {len(shared)} | gdsc rows {len(dg)} | sarcoma_organoids_2024 rows {len(ds)}")
 
     # Per-drug head only (a shared slope carries no interaction). Expression is
     # log1p(CPM) -- non-negative, so reducible by PCA or NMF; Stack embeddings can
@@ -136,9 +136,9 @@ def main() -> None:
     genes = sorted(set(xs.columns) & set(xg.columns))
     ex_g, ex_s = np.log1p(xg[genes]), np.log1p(xs[genes])
     runs = [("expr/pca", ex_g, ex_s, "pca"), ("expr/nmf", ex_g, ex_s, "nmf")]
-    if args.stack_gdsc and args.stack_soragni:
+    if args.stack_gdsc and args.stack_sarcoma_organoids_2024:
         eg = pd.read_csv(args.stack_gdsc, index_col=0)
-        es = pd.read_csv(args.stack_soragni, index_col=0)
+        es = pd.read_csv(args.stack_sarcoma_organoids_2024, index_col=0)
         eg.index, es.index = eg.index.astype(str), es.index.astype(str)
         runs.append(("stack/pca", eg, es, "pca"))
 

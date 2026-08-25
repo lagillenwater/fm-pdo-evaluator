@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=soragni-context
+#SBATCH --job-name=sarcoma_organoids_2024-context
 #SBATCH --partition=amem
 #SBATCH --qos=mem-normal
 #SBATCH --nodes=1
@@ -18,7 +18,7 @@
 # Path B faithful-generation prep: split the already-built l1000_context.h5ad into one
 # per-drug shard (mirrors 03_stack_context.sbatch's Tahoe splitting), and build the
 # synthetic query pool 11 needs for --mode mdm (Soragni's real query is bulk, one row
-# per patient -- see build_soragni_query_pool.py for why a real-cell pool isn't possible
+# per patient -- see build_sarcoma_organoids_2024_query_pool.py for why a real-cell pool isn't possible
 # here the way 03 built one for Tahoe).
 # CONFIRM BEFORE RUNNING:
 #   * l1000_context.h5ad already exists (scripts/build_l1000_context.py) -- this job does
@@ -38,7 +38,7 @@ export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
 CONTEXT="${CONTEXT:-l1000_context.h5ad}"
-OUTDIR="context_by_drug_soragni"
+OUTDIR="context_by_drug_sarcoma_organoids_2024"
 
 # ---- split l1000_context.h5ad per drug (treated cells for that drug + ALL DMSO controls) --
 python - <<PY
@@ -68,9 +68,9 @@ print(f"{len(perts)} per-drug shards -> {outdir}/")
 PY
 
 # ---- synthetic per-patient replicate pool for --mode mdm's scheduled draw -------------
-python scripts/build_soragni_query_pool.py \
+python scripts/build_sarcoma_organoids_2024_query_pool.py \
     --baseline data/reference/stack_input_sarcoma.h5ad \
-    --out soragni_query_pool.h5ad \
+    --out sarcoma_organoids_2024_query_pool.h5ad \
     --n-replicates 24 \
     --library-size 5000 \
     --seed 0

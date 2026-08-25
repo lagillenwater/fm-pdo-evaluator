@@ -43,12 +43,12 @@ def _write_fixture(tmp_path: Path, *, bad_sha: bool = False) -> Path:
             },
             {
                 "input_name": "imatinib",  # lowercased variant for case-insensitive test
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": 5291,
                 "inchikey": "KTUFNOKKBVMGRW-UHFFFAOYSA-N",
                 "drugbank_id": "DB00619",
-                "resolution_method": "soragni_via_gdsc2_synonym",
+                "resolution_method": "sarcoma_organoids_2024_via_gdsc2_synonym",
                 "notes": None,
             },
             # Drug only in GDSC2
@@ -65,7 +65,7 @@ def _write_fixture(tmp_path: Path, *, bad_sha: bool = False) -> Path:
             # Unresolved drug (no CID)
             {
                 "input_name": "MysteryResearchCompound",
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": None,
                 "inchikey": None,
@@ -130,15 +130,15 @@ def test_load_fails_when_no_sha_recorded(tmp_path: Path) -> None:
 def test_resolve_cid_known(tmp_path: Path) -> None:
     xref = load_drug_xref(_write_fixture(tmp_path))
     assert resolve_cid(xref, "Imatinib", "gdsc2") == 5291
-    assert resolve_cid(xref, "Imatinib", "soragni") == 5291  # case-insensitive
+    assert resolve_cid(xref, "Imatinib", "sarcoma_organoids_2024") == 5291  # case-insensitive
 
 
 def test_resolve_cid_unknown_or_unresolved(tmp_path: Path) -> None:
     xref = load_drug_xref(_write_fixture(tmp_path))
     # Name present but in the other source
-    assert resolve_cid(xref, "Drug-XYZ-Only-In-GDSC2", "soragni") is None
+    assert resolve_cid(xref, "Drug-XYZ-Only-In-GDSC2", "sarcoma_organoids_2024") is None
     # Name present with unresolved CID
-    assert resolve_cid(xref, "MysteryResearchCompound", "soragni") is None
+    assert resolve_cid(xref, "MysteryResearchCompound", "sarcoma_organoids_2024") is None
     # Name not present at all
     assert resolve_cid(xref, "DoesNotExist", "gdsc2") is None
 
@@ -160,6 +160,6 @@ def test_overlap_report(tmp_path: Path) -> None:
     row = ov.iloc[0]
     assert row["pubchem_cid"] == 5291
     assert "Imatinib" in row["gdsc2_names"]
-    assert "imatinib" in row["soragni_names"]
+    assert "imatinib" in row["sarcoma_organoids_2024_names"]
     assert row["inchikey"] == "KTUFNOKKBVMGRW-UHFFFAOYSA-N"
     assert row["drugbank_id"] == "DB00619"

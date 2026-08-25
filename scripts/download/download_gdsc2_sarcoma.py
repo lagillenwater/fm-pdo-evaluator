@@ -19,7 +19,7 @@ Two open data sources, paired on COSMIC ID:
    the corresponding entry in DEPMAP_FILES below.
 
 Outputs land in data/raw/gdsc2_sarcoma/ with sha256 of each file recorded in
-manifest.json. The manifest schema is shared with download_soragni.py via
+manifest.json. The manifest schema is shared with download_sarcoma_organoids_2024.py via
 scripts/download/_utils.py.
 
 Usage:

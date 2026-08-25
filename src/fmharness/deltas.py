@@ -153,7 +153,7 @@ def drug_pert_maps(
     return drug2pert, pert2drug
 
 
-def soragni_pert_map(repo: Path) -> dict[str, str]:
+def sarcoma_organoids_2024_pert_map(repo: Path) -> dict[str, str]:
     """pert_id -> Soragni PubChem CID (string) (downloads L1000 pert_info to /tmp)."""
     cache = Path("/tmp/l1000_pert_info.txt.gz")
     if not cache.exists():
@@ -163,9 +163,9 @@ def soragni_pert_map(repo: Path) -> dict[str, str]:
     _, ds = build_sample_design(
         load_tranche("sarcoma", repo), "tumor", "viability", drug_key="pubchem_cid"
     )
-    soragni_cids = [str(d) for d in ds["drug"]]
+    sarcoma_organoids_2024_cids = [str(d) for d in ds["drug"]]
     dr_cid = dr["pubchem_id"].map(lambda c: str(int(c)) if pd.notna(c) else None)
-    sor = cast("pd.DataFrame", dr[dr_cid.isin(soragni_cids)])
+    sor = cast("pd.DataFrame", dr[dr_cid.isin(sarcoma_organoids_2024_cids)])
     _, pert2drug = drug_pert_maps(sor, pert)
     return pert2drug
 

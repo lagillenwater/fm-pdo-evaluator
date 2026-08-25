@@ -16,7 +16,7 @@ cohorts enter Stack on an identical scale. We do NOT log1p by default -- Stack
 applies log1p internally; ``--log1p`` is kept only as an ablation.
 
 Genes are restricted to the shared Stack panel
-(data/static/stack_soragni_gene_map.csv, from build_stack_panel.py) intersected
+(data/static/stack_sarcoma_organoids_2024_gene_map.csv, from build_stack_panel.py) intersected
 with the cohort's measured genes, and labelled by Stack symbol in
 var['feature_name'] -- the column Stack matches on.
 
@@ -69,13 +69,13 @@ def main() -> None:
     args = ap.parse_args()
 
     repo = Path(__file__).resolve().parent.parent
-    gmap = pd.read_csv(repo / "data/static/stack_soragni_gene_map.csv")
+    gmap = pd.read_csv(repo / "data/static/stack_sarcoma_organoids_2024_gene_map.csv")
     # A non-None cancer_type_filter signals the gdscv2 loader to restrict to sarcoma.
     ctf = ["sarcoma"] if args.sarcoma_only else None
     bundle = cpm_bundle(load_tranche(args.dataset, repo, cancer_type_filter=ctf))
     # metric is irrelevant here (we keep only the expression frame); pass the
     # cohort's real metric so build_sample_design does not warn on an empty design.
-    metric = "viability" if args.dataset in ("sarcoma", "soragni") else "auc"
+    metric = "viability" if args.dataset in ("sarcoma", "sarcoma_organoids_2024") else "auc"
     x_df, _ = build_sample_design(bundle, args.rna_source, metric)
 
     # keep panel genes this cohort actually measures, in panel order

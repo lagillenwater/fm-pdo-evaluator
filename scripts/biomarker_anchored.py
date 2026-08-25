@@ -74,8 +74,8 @@ def _sym2entrez(repo: Path) -> dict[str, int]:
 
 def _wes_alterations(repo: Path) -> tuple[dict[str, dict[str, set[str]]], set[str]]:
     """Return ({kind -> {gene -> set(patient)}}, set of WES-profiled patients)."""
-    snv = pd.read_parquet(repo / "data/raw/soragni/tables/snv.parquet")
-    cnv = pd.read_parquet(repo / "data/raw/soragni/tables/cnv.parquet")
+    snv = pd.read_parquet(repo / "data/raw/sarcoma_organoids_2024/tables/snv.parquet")
+    cnv = pd.read_parquet(repo / "data/raw/sarcoma_organoids_2024/tables/cnv.parquet")
     snv = snv[snv["BestEffect_Variant_Classification"].astype(str) != "intron"]
     alt: dict[str, dict[str, set[str]]] = {"mut": {}, "amp": {}, "del": {}}
     for gene, sid in zip(

@@ -1,6 +1,6 @@
 """Bridge the native Soragni / GDSC2 loaders onto the downstream bundle contract.
 
-The native loaders (``load_soragni`` / ``load_gdsc2_sarcoma``) parse raw artifacts
+The native loaders (``load_sarcoma_organoids_2024`` / ``load_gdsc2_sarcoma``) parse raw artifacts
 into validated schema objects, but they key expression on the namespace each
 source ships (Ensembl gene_id for Soragni, HGNC symbol for GDSC2) and they don't
 carry the ``improve_sample_id`` / ``model_type`` sample metadata that
@@ -32,7 +32,7 @@ from fmharness.data.loaders.coderdata import (
     load_coderdata_tranche,
 )
 from fmharness.data.loaders.gdsc2_sarcoma import GDSC2SarcomaBundle, load_gdsc2_sarcoma
-from fmharness.data.loaders.soragni import SoragniBundle, load_soragni
+from fmharness.data.loaders.sarcoma_organoids_2024 import SoragniBundle, load_sarcoma_organoids_2024
 from fmharness.schema import Sample
 
 # Soragni specimen marker -> the model_type vocabulary build_sample_design filters on.
@@ -111,7 +111,7 @@ def adapt_gdsc2(bundle: GDSC2SarcomaBundle) -> CoderDataBundle:
     )
 
 
-def adapt_soragni(bundle: SoragniBundle, repo_root: Path) -> CoderDataBundle:
+def adapt_sarcoma_organoids_2024(bundle: SoragniBundle, repo_root: Path) -> CoderDataBundle:
     """Soragni native bundle -> CoderDataBundle (Ensembl gene_id mapped to Entrez)."""
     genes = pd.read_csv(repo_root / "data/raw/coderdata/genes.csv.gz")
     ens = cast(pd.DataFrame, genes[genes["other_id_source"] == "ensembl_gene"]).dropna(
@@ -137,7 +137,7 @@ def adapt_soragni(bundle: SoragniBundle, repo_root: Path) -> CoderDataBundle:
 
 
 # Dataset-name aliases accepted for the two re-implemented cohorts.
-_SORAGNI_NAMES = {"sarcoma", "soragni"}
+_SORAGNI_NAMES = {"sarcoma", "sarcoma_organoids_2024"}
 _GDSC2_NAMES = {"gdscv2", "gdsc2_sarcoma"}
 
 
@@ -160,7 +160,7 @@ def load_tranche(
     falls through to CoderData unchanged.
     """
     if name in _SORAGNI_NAMES:
-        return adapt_soragni(load_soragni(repo_root, ingestion_date=ingestion_date), repo_root)
+        return adapt_sarcoma_organoids_2024(load_sarcoma_organoids_2024(repo_root, ingestion_date=ingestion_date), repo_root)
     if name in _GDSC2_NAMES:
         native = load_gdsc2_sarcoma(
             repo_root, sarcoma_only=cancer_type_filter is not None, ingestion_date=ingestion_date

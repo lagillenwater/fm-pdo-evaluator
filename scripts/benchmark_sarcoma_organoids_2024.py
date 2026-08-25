@@ -23,8 +23,8 @@ within-drug permutation null. global rho is reported for context (it is mostly
 the drug mean and the drug_mean predictor already scores high on it).
 
 Run:
-  uv run python scripts/benchmark_soragni.py
-  uv run python scripts/benchmark_soragni.py --stack-embeddings stack_soragni.csv
+  uv run python scripts/benchmark_sarcoma_organoids_2024.py
+  uv run python scripts/benchmark_sarcoma_organoids_2024.py --stack-embeddings stack_sarcoma_organoids_2024.csv
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def main() -> None:
     repo = Path(__file__).resolve().parent.parent
     bundle = load_tranche(args.dataset, repo)
     # Soragni's response metric is Viability_Score; GDSC2's is AUC.
-    metric = "viability" if args.dataset in ("sarcoma", "soragni") else "auc"
+    metric = "viability" if args.dataset in ("sarcoma", "sarcoma_organoids_2024") else "auc"
     x_df, design = build_sample_design(bundle, args.rna_source, metric)
     print(
         f"{args.dataset} ({args.rna_source}): {x_df.shape[0]} organoids x {x_df.shape[1]} genes; "
@@ -136,8 +136,8 @@ def main() -> None:
 
     out = repo / "results"
     out.mkdir(exist_ok=True)
-    pd.DataFrame(rows).to_csv(out / "benchmark_soragni.csv", index=False)
-    print("\nWrote results/benchmark_soragni.csv")
+    pd.DataFrame(rows).to_csv(out / "benchmark_sarcoma_organoids_2024.csv", index=False)
+    print("\nWrote results/benchmark_sarcoma_organoids_2024.csv")
 
 
 if __name__ == "__main__":

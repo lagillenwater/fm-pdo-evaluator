@@ -1,4 +1,4 @@
-"""Tests for scripts/baselines_soragni.py's shared-drug-set row construction.
+"""Tests for scripts/baselines_sarcoma_organoids_2024.py's shared-drug-set row construction.
 
 Mirrors tests/test_deltas.py's restrict_common_support tests: a drug that is in the
 "ref" set (the L1000-matched drugs, or Soragni's own drugs when no L1000 context is
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from baselines_soragni import build_reference_rows
+from baselines_sarcoma_organoids_2024 import build_reference_rows
 
 
 def _ds() -> pd.DataFrame:

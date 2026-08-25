@@ -18,7 +18,7 @@ means the signature tracks real drug response.
 --baseline must be the same tumor-RNA query file the generation step used
 (``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
 model input" switch) -- see score_viability_adapters.py's docstring for why
-``stack_input_soragni.h5ad`` is a stale, pre-switch default.
+``stack_input_sarcoma_organoids_2024.h5ad`` is a stale, pre-switch default.
 
   uv run python scripts/bridge_generated_to_auc.py --generated-dir generated/ \\
       --baseline data/reference/stack_input_sarcoma.h5ad --signatures hallmark
@@ -30,7 +30,7 @@ import argparse
 from pathlib import Path
 
 from fmharness.data.loaders import load_tranche
-from fmharness.deltas import build_generated_deltas, soragni_pert_map
+from fmharness.deltas import build_generated_deltas, sarcoma_organoids_2024_pert_map
 from fmharness.evaluation import build_sample_design
 from fmharness.signatures import load_hallmark, score_signatures
 
@@ -57,7 +57,7 @@ def main() -> None:
         else None
     )
     _, design = build_sample_design(load_tranche("sarcoma", repo), "tumor", "viability")
-    p2s = soragni_pert_map(repo)
+    p2s = sarcoma_organoids_2024_pert_map(repo)
     print(f"  {len(p2s)} L1000 pert_id -> Soragni drug mappings")
 
     base_path = Path(args.baseline) if Path(args.baseline).is_absolute() else repo / args.baseline

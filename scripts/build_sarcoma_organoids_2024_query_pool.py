@@ -9,9 +9,9 @@ fmharness.stack_aggregate.build_synthetic_replicate_pool (Poisson-resampled at a
 single-cell library size, renormalized back to CPM) -- NOT real cells, a documented,
 seeded approximation.
 
-  PYTHONPATH=src python scripts/build_soragni_query_pool.py \\
+  PYTHONPATH=src python scripts/build_sarcoma_organoids_2024_query_pool.py \\
       --baseline data/reference/stack_input_sarcoma.h5ad \\
-      --out soragni_query_pool.h5ad
+      --out sarcoma_organoids_2024_query_pool.h5ad
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from fmharness.stack_aggregate import build_synthetic_replicate_pool
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--baseline", default="data/reference/stack_input_sarcoma.h5ad")
-    ap.add_argument("--out", default="soragni_query_pool.h5ad")
+    ap.add_argument("--out", default="sarcoma_organoids_2024_query_pool.h5ad")
     ap.add_argument(
         "--n-replicates",
         type=int,

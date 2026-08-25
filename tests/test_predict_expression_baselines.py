@@ -1,7 +1,7 @@
 """Tests for scripts/predict_expression_baselines.py's method-support restriction.
 
 Mirrors tests/test_deltas.py's restrict_common_support tests and
-tests/test_baselines_soragni.py's sibling fix: control/mean broadcast every mapped
+tests/test_baselines_sarcoma_organoids_2024.py's sibling fix: control/mean broadcast every mapped
 drug to every organoid, but pca/nmf additionally require >= min_lines profiled L1000
 cell lines per drug (the conditional() helper in predict_expression_baselines.py) and
 silently drop low-coverage drugs -- so control/mean's key is a strict superset of

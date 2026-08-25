@@ -29,10 +29,12 @@ from fmharness.deltas import restrict_common_support
 from fmharness.evaluation import interaction_rho, score_predictions
 from fmharness.signatures import PROLIFERATION
 
-# WHY 8: enough draws for a usable mean and sd without a permutation test on each, which is
-# what keeps the added cost to roughly one extra pass over the grid. Raise it if a z-score
-# ever lands near a decision boundary -- the draws are cheap, the permutations are not.
-RANDOM_DRAWS = 8
+# WHY 20: p_random is a rank statistic, so its smallest possible value is 1/(draws+1). At the
+# original 8 that floor was 0.125 -- it could never resolve significance at 0.05, and job
+# 31649107 duly printed p_random=0.125 for the strongest row in the grid while p_label said
+# 0.0010. Twenty draws put the floor at 0.048. z_random has no such floor and stays the
+# primary read; p_random is the distribution-free cross-check.
+RANDOM_DRAWS = 20
 
 FIXED_READOUTS = ("hallmark", "proliferation")  # fixed-signature readouts, applied to delta sources
 
@@ -441,7 +443,7 @@ def score_check2(
     # so the permutation test is skipped here -- that is what makes the extra draws affordable.
     null_by_row: dict[tuple[str, str], list[float]] = {}
     for name in [n for n in representations if not n.endswith("_random") and n != "prior"]:
-        for d in range(1, RANDOM_DRAWS):
+        for d in range(RANDOM_DRAWS):
             drawn = restrict_representation_support(
                 {
                     "d": random_control_representation(

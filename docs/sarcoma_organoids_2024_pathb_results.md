@@ -11,8 +11,8 @@ patient-independent floor), `pca`/`nmf` (learned baselines, CV-tuned `n_componen
 the SAME (patient, drug) support (`restrict_common_support`) through the same readouts:
 Hallmark (broken out per signature, not averaged), and CV-tuned penalized regression
 (l1/l2). Two Stack checkpoints: cytokine-aligned (default) and drug-aligned (sci-Plex
-fine-tuned). Two files: `soragni_pathb_results.csv` (cytokine-aligned) and
-`soragni_pathb_results_drug_aligned.csv` (drug-aligned).
+fine-tuned). Two files: `sarcoma_organoids_2024_pathb_results.csv` (cytokine-aligned) and
+`sarcoma_organoids_2024_pathb_results_drug_aligned.csv` (drug-aligned).
 
 This pass ran the CHEAP 5-fold penalized-grid CV only (the `additive`/`pca`/`nmf` sources
 built once, not leave-one-line-out) -- specifically to validate the new controls before
@@ -31,7 +31,7 @@ committing to the much longer Check 1/2 Tahoe/GDSC2 LOO reruns, which now also C
 > verdict is explicit: "Stack with synthetic prompts outperforms alternative baselines **and
 > Stack with original prompts** in capturing donor-specific effects."
 >
-> `11_soragni_generate.sbatch` uses ordinary drug-context prompts on the default `--mode mdm`
+> `11_sarcoma_organoids_2024_generate.sbatch` uses ordinary drug-context prompts on the default `--mode mdm`
 > 5-step schedule -- the "original prompts" arm. So the null on the `stack` rows below is what
 > v2 predicts for this setup, and does not yet bound what Stack could do here. Note the
 > transfer is not free: 2.6's construction needs a *reference perturbed profile* for the same

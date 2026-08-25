@@ -112,10 +112,10 @@ against sci-Plex's plain cell-line names and free-text drug names — non-trivia
 > **Status note, 2026-08-25.** The claim above does not match what was run. Alpine job logs
 > record the resolved checkpoint for every generation run (`04`'s "Resolved: CKPT=" line), and
 > both published drug-aligned arms used **`finetuned-epoch=5-val_loss=6.1078.ckpt`** --
-> `OUTDIR=generated_drug_aligned` (33 tasks, Tahoe) and `OUTDIR=generated_soragni_drug_aligned`
+> `OUTDIR=generated_drug_aligned` (33 tasks, Tahoe) and `OUTDIR=generated_sarcoma_organoids_2024_drug_aligned`
 > (53 tasks, Path B). `finetuned-epoch=4-val_loss=5.0847.ckpt` was used only for
 > `OUTDIR=generated_sciplex`. So the two arms ARE consistent with each other, and
-> `11_soragni_generate.sbatch`'s comment is right, but this spec and
+> `11_sarcoma_organoids_2024_generate.sbatch`'s comment is right, but this spec and
 > `smoke_test_env.sbatch`'s `CKPT_SCIPLEX` default are not.
 >
 > It also was not the lowest-val_loss checkpoint. Available on Alpine: 5.0847, 5.9110, 6.1078,

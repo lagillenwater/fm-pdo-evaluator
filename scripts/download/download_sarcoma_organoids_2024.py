@@ -10,10 +10,10 @@ Auth:   Personal access token in env SYNAPSE_AUTH_TOKEN, or
 Modes:
     --list             Walk the project entity tree and print every file (name, syn ID,
                        bytes). No download.
-    --verify-only      Re-check sha256 of recorded files in data/raw/soragni/tables/manifest.json;
+    --verify-only      Re-check sha256 of recorded files in data/raw/sarcoma_organoids_2024/tables/manifest.json;
                        no download.
     (default)          Fetch the Soragni metadata + drug-screen + WES + normalized-counts Synapse
-                       Tables (7 entities, ~7 MB) into data/raw/soragni/tables/ as parquet.
+                       Tables (7 entities, ~7 MB) into data/raw/sarcoma_organoids_2024/tables/ as parquet.
 
 FASTQ-pull modes are intentionally not exposed -- the MVP uses the pre-computed normalized
 gene counts at syn64333318 instead of local quantification. See docs/fm-pdo-evaluator-plan.md
@@ -42,7 +42,7 @@ from _utils import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TABLES_DIR = REPO_ROOT / "data" / "raw" / "soragni" / "tables"
+TABLES_DIR = REPO_ROOT / "data" / "raw" / "sarcoma_organoids_2024" / "tables"
 
 SORAGNI_PROJECT_SYN_ID = "syn55180195"
 
@@ -65,7 +65,7 @@ def syn_uri(syn_id: str) -> str:
 
 def default_manifest() -> dict:
     return {
-        "dataset": "soragni_pdo_sarcoma_2024",
+        "dataset": "sarcoma_organoids_2024",
         "release": {"project": SORAGNI_PROJECT_SYN_ID, "mode": "tables"},
         "files": {},
     }

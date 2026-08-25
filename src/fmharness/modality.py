@@ -173,7 +173,7 @@ class SoragniViability:
         return "regression"
 
     def name(self) -> str:
-        return f"soragni_viability_{self.rna_source}"
+        return f"sarcoma_organoids_2024_viability_{self.rna_source}"
 
 
 class ThresholdedModality:

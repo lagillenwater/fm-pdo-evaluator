@@ -50,7 +50,7 @@ def _ncid(x: object) -> str:
         return ""
 
 
-def soragni_pert_ids(repo: Path, pert_info: pd.DataFrame) -> dict[str, str]:
+def sarcoma_organoids_2024_pert_ids(repo: Path, pert_info: pd.DataFrame) -> dict[str, str]:
     """Map Soragni drug name -> L1000 pert_id via PubChem CID or InChIKey prefix."""
     dr = pd.read_csv(repo / "data/raw/coderdata/sarcoma_drugs.tsv.gz", sep="\t")
     _, ds = build_sample_design(load_tranche("sarcoma", repo), "tumor", "viability")
@@ -93,7 +93,7 @@ def main() -> None:
     inst = pd.read_csv(d / "GSE92742_Broad_LINCS_inst_info.txt.gz", sep="\t", low_memory=False)
     gene = pd.read_csv(d / "GSE92742_Broad_LINCS_gene_info.txt.gz", sep="\t")
 
-    pids = soragni_pert_ids(repo, pert)
+    pids = sarcoma_organoids_2024_pert_ids(repo, pert)
     print(f"matched {len(pids)} Soragni drugs to L1000 pert_ids")
 
     in_lines = (
@@ -124,7 +124,7 @@ def main() -> None:
     sym = gene.set_index("pr_gene_id")["pr_gene_symbol"].astype(str)
     gx.index = [sym.get(int(i), "") for i in gx.index]
 
-    panel = set(pd.read_csv(repo / "data/static/stack_soragni_gene_map.csv")["stack_symbol"])
+    panel = set(pd.read_csv(repo / "data/static/stack_sarcoma_organoids_2024_gene_map.csv")["stack_symbol"])
     gx = gx[gx.index.isin(panel)]
     gx = gx[~gx.index.duplicated()]
     print(f"genes: {gx.shape[0]} of the Stack panel covered by L1000")

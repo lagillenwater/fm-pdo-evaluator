@@ -14,7 +14,7 @@ recommendation against the organoid's own screen:
 Two contexts:
 
   cohort (default): models may use the other patients' screens (leave-one-patient-out).
-    drugmean_soragni / expr_pca / stack / biomarker, baseline = drugmean_soragni.
+    drugmean_sarcoma_organoids_2024 / expr_pca / stack / biomarker, baseline = drugmean_sarcoma_organoids_2024.
 
   --screen-free: NO Soragni screens in training at all -- every model is trained on
     GDSC2 only and applied to Soragni's transcriptome (the actual clinical setting:
@@ -45,11 +45,11 @@ itself:
     proving the apparatus has power and the real null is biological, not a dead pipeline.
 
   uv run python scripts/per_patient_eval.py
-  uv run python scripts/per_patient_eval.py --screen-free --stack-gdsc g.csv --stack-soragni s.csv
+  uv run python scripts/per_patient_eval.py --screen-free --stack-gdsc g.csv --stack-sarcoma_organoids_2024 s.csv
   uv run python scripts/per_patient_eval.py --control negative
   uv run python scripts/per_patient_eval.py --screen-free --control positive
   uv run python scripts/per_patient_eval.py --screen-free --control positive --plant-space stack \
-      --stack-gdsc g.csv --stack-soragni s.csv
+      --stack-gdsc g.csv --stack-sarcoma_organoids_2024 s.csv
 """
 
 from __future__ import annotations
@@ -96,8 +96,8 @@ GENOMIC = [
 
 def _wes_alterations(repo: Path) -> dict[str, dict[str, set[str]]]:
     """{kind -> {gene -> set(patient)}} from WES SNV/CNV."""
-    snv = pd.read_parquet(repo / "data/raw/soragni/tables/snv.parquet")
-    cnv = pd.read_parquet(repo / "data/raw/soragni/tables/cnv.parquet")
+    snv = pd.read_parquet(repo / "data/raw/sarcoma_organoids_2024/tables/snv.parquet")
+    cnv = pd.read_parquet(repo / "data/raw/sarcoma_organoids_2024/tables/cnv.parquet")
     snv = snv[snv["BestEffect_Variant_Classification"].astype(str) != "intron"]
     alt: dict[str, dict[str, set[str]]] = {"mut": {}, "amp": {}, "del": {}}
     snv_genes = snv["BestEffect_Hugo_Symbol"].astype(str)
@@ -288,7 +288,7 @@ def _screenfree_scores(
     big: float,
     repo: Path,
     stack_gdsc: str | None,
-    stack_soragni: str | None,
+    stack_sarcoma_organoids_2024: str | None,
     verbose: bool,
     head: str = "linear",
 ) -> tuple[dict, list[str]]:
@@ -312,9 +312,9 @@ def _screenfree_scores(
         )
 
     order = ["oracle", "gdsc_mean", "expr_transfer"]
-    if stack_gdsc and stack_soragni:
+    if stack_gdsc and stack_sarcoma_organoids_2024:
         sg = pd.read_csv(stack_gdsc, index_col=0)
-        ss = pd.read_csv(stack_soragni, index_col=0)
+        ss = pd.read_csv(stack_sarcoma_organoids_2024, index_col=0)
         sg.index, ss.index = sg.index.astype(str), ss.index.astype(str)
         zsg, zss = _pca(sg, ss)
         scores["stack_transfer"], rho_s = _per_drug_transfer(
@@ -373,19 +373,19 @@ def _build_scores(
             big,
             repo,
             args.stack_gdsc,
-            args.stack_soragni,
+            args.stack_sarcoma_organoids_2024,
             verbose,
             args.head,
         )
 
     scores: dict[str, dict] = {}
-    scores["drugmean_soragni"] = {}
+    scores["drugmean_sarcoma_organoids_2024"] = {}
     for p in patients:
         m = design[design["patient"] != p].groupby("drug")["y"].mean().to_dict()
-        scores["drugmean_soragni"][p] = {d: m.get(d, np.inf) for d in panel[p]}
+        scores["drugmean_sarcoma_organoids_2024"][p] = {d: m.get(d, np.inf) for d in panel[p]}
     scores["drugmean_gdsc"] = {
         p: {
-            d: cid2auc.get(str(drug2cid.get(d)), big + scores["drugmean_soragni"][p][d])
+            d: cid2auc.get(str(drug2cid.get(d)), big + scores["drugmean_sarcoma_organoids_2024"][p][d])
             for d in panel[p]
         }
         for p in patients
@@ -406,18 +406,18 @@ def _build_scores(
         return full, nobase
 
     scores["expr_pca"], scores["expr_nobase"] = _frozen(x_log)
-    if args.stack_soragni:
-        es = pd.read_csv(args.stack_soragni, index_col=0)
+    if args.stack_sarcoma_organoids_2024:
+        es = pd.read_csv(args.stack_sarcoma_organoids_2024, index_col=0)
         es.index = es.index.astype(str)
         scores["stack"], scores["stack_nobase"] = _frozen(es)
     scores["biomarker"] = {}
     for p in patients:
-        s = dict(scores["drugmean_soragni"][p])
+        s = dict(scores["drugmean_sarcoma_organoids_2024"][p])
         for bm in GENOMIC:
             if bm["drug"] in s and p in alt[bm["kind"]].get(bm["gene"], set()):
                 s[bm["drug"]] += -1e6 if bm["direction"] == "sensitize" else 1e6
         scores["biomarker"][p] = s
-    order = ["oracle", "drugmean_soragni", "drugmean_gdsc", "expr_pca", "expr_nobase"]
+    order = ["oracle", "drugmean_sarcoma_organoids_2024", "drugmean_gdsc", "expr_pca", "expr_nobase"]
     if "stack" in scores:
         order += ["stack", "stack_nobase"]
     order += ["biomarker", "random"]
@@ -553,7 +553,7 @@ def _plant_shared_interaction(
     representation is passed -- shared expression genes or a Stack embedding -- so the
     matching GDSC2-trained transfer model can recover it on Soragni. Directions are
     keyed by PubChem CID; the low-rank PC space is fit on GDSC2 and applied to both.
-    Returns (y_soragni, y_gdsc) aligned to design, dg."""
+    Returns (y_sarcoma_organoids_2024, y_gdsc) aligned to design, dg."""
     dims = sorted(set(zs_src.columns) & set(zg_src.columns))
     mg = zg_src[dims].to_numpy()
     ms = zs_src[dims].to_numpy()
@@ -599,7 +599,7 @@ def main() -> None:
         "--screen-free", action="store_true", help="train on GDSC2 only, no Soragni screens"
     )
     ap.add_argument("--stack-gdsc", default=None)
-    ap.add_argument("--stack-soragni", default=None)
+    ap.add_argument("--stack-sarcoma_organoids_2024", default=None)
     # Predictive head for the transcriptome policies (expr_pca/stack and the
     # screen-free transfers): "linear" ridge or "kernel" RBF, for head-invariance.
     ap.add_argument("--head", choices=list(HEADS), default="linear")
@@ -627,9 +627,9 @@ def main() -> None:
     if (
         args.control == "positive"
         and args.plant_space == "stack"
-        and not (args.stack_gdsc and args.stack_soragni)
+        and not (args.stack_gdsc and args.stack_sarcoma_organoids_2024)
     ):
-        ap.error("--plant-space stack requires --stack-gdsc and --stack-soragni")
+        ap.error("--plant-space stack requires --stack-gdsc and --stack-sarcoma_organoids_2024")
 
     repo = Path(__file__).resolve().parent.parent
     sb = cpm_bundle(load_tranche("sarcoma", repo))
@@ -646,9 +646,9 @@ def main() -> None:
     # Stack embeddings (if provided): used both as a scored policy and, for the
     # positive control, as the space to plant the signal in (--plant-space stack).
     stk: dict = {}
-    if args.stack_gdsc and args.stack_soragni:
+    if args.stack_gdsc and args.stack_sarcoma_organoids_2024:
         sgf = pd.read_csv(args.stack_gdsc, index_col=0)
-        ssf = pd.read_csv(args.stack_soragni, index_col=0)
+        ssf = pd.read_csv(args.stack_sarcoma_organoids_2024, index_col=0)
         sgf.index, ssf.index = sgf.index.astype(str), ssf.index.astype(str)
         stk = {"g": sgf, "s": ssf}
 
@@ -665,7 +665,7 @@ def main() -> None:
         print(f"  tau<{tau:.0f}: {np.mean(v < tau):.0%} of cells; {elig}/{npat} patients treatable")
 
     n_ctrl = args.n_control or {"none": 1, "negative": 20, "positive": 5}[args.control]
-    baseline = "gdsc_mean" if args.screen_free else "drugmean_soragni"
+    baseline = "gdsc_mean" if args.screen_free else "drugmean_sarcoma_organoids_2024"
     if args.control != "none":
         print(
             f"\n[control: {args.control}] {n_ctrl} draw(s)"

@@ -15,7 +15,7 @@ null -- so the rows sit directly under the Stack-generation result.
                  pre-treatment expression as the organoid representation (per-drug
                  head, so it can carry interaction). Never sees Soragni AUC.
 
-  uv run python scripts/baselines_soragni.py \\
+  uv run python scripts/baselines_sarcoma_organoids_2024.py \\
       --l1000-context l1000_context.h5ad --signatures hallmark
 """
 

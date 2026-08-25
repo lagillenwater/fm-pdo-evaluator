@@ -44,7 +44,7 @@ See [docs/models.md](docs/models.md) for each model and [docs/adapter_contract.m
 ### Data transformations
 
 - **Expression → per-million.** GDSC2 (DepMap raw RSEM counts → pydeseq2 median-of-ratios in the loader, raw counts retained) and Soragni (deposited per-million matrix, Synapse `syn64333318`) are both put on one length-free counts-per-million scale by `cpm_bundle` ([src/fmharness/evaluation.py](src/fmharness/evaluation.py)). This matters because Stack is a count model; the earlier CoderData layer mixed TPM and CPM across cohorts, which confounds it.
-- **Stack input.** Each sample's per-million expression over a fixed ~12.8k-gene high-variance panel (`data/static/stack_hvg_genes.txt`, mapped via `stack_soragni_gene_map.csv`) is sent to Stack as a pseudo-cell; Stack applies `log1p` + a negative-binomial decoder internally.
+- **Stack input.** Each sample's per-million expression over a fixed ~12.8k-gene high-variance panel (`data/static/stack_hvg_genes.txt`, mapped via `stack_sarcoma_organoids_2024_gene_map.csv`) is sent to Stack as a pseudo-cell; Stack applies `log1p` + a negative-binomial decoder internally.
 - **Deltas.** A treated−control difference is taken in log-CPM (`logcpm`), so it is a log fold-change rather than a depth-dominated count difference. Real L1000 deltas are treated minus DMSO group means; the additive baseline is each drug's mean over those; Stack's delta is generated-treated minus the patient tumor baseline. All builders live in [src/fmharness/l1000.py](src/fmharness/l1000.py).
 
 ### Models
@@ -66,8 +66,8 @@ Every model implements one `ModelAdapter` ([src/fmharness/models/adapter.py](src
 The Soragni cohort and viability — the raw inputs/target, no model:
 
 ![Soragni cohort composition](docs/figures/cohort_composition.png)
-![Soragni viability distribution](docs/figures/soragni_viability.png)
-![Soragni organoid x drug viability](docs/figures/soragni_response_heatmap.png)
+![Soragni viability distribution](docs/figures/sarcoma_organoids_2024_viability.png)
+![Soragni organoid x drug viability](docs/figures/sarcoma_organoids_2024_response_heatmap.png)
 
 L1000 covers **18 of the 26** Soragni drugs — only these can be scored on the generation axis:
 

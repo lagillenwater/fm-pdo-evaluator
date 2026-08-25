@@ -43,14 +43,14 @@ def test_score_target_gene_predictors_skips_patients_missing_a_baseline() -> Non
     assert s["n"] == 1
 
 
-def test_drug_target_genes_covers_every_soragni_drug_cid() -> None:
+def test_drug_target_genes_covers_every_sarcoma_organoids_2024_drug_cid() -> None:
     # the 26 CIDs actually screened in Soragni (confirmed via build_sample_design against
     # the sarcoma tranche, 2026-08-22) -- this map must not silently drop one.
-    soragni_cids = {
+    sarcoma_organoids_2024_cids = {
         "10113978", "11222830", "11442891", "11556711", "11626560", "11640390",
         "11707110", "123631", "135398510", "148124", "208908", "216239",
         "23725625", "25102847", "25126798", "3062316", "5284616", "5311497",
         "5330286", "54761306", "60700", "60750", "6442177", "6918837",
         "9823820", "9865515",
     }
-    assert soragni_cids <= set(DRUG_TARGET_GENES)
+    assert sarcoma_organoids_2024_cids <= set(DRUG_TARGET_GENES)

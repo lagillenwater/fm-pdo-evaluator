@@ -65,7 +65,7 @@ def resolve_cid(xref: pd.DataFrame, name: str, source: str) -> int | None:
     """Return the canonical PubChem CID for ``(name, source)``, or None if unresolved.
 
     Lookup is case-insensitive on ``name``. ``source`` is matched exactly
-    (typically ``"gdsc2"`` or ``"soragni"``).
+    (typically ``"gdsc2"`` or ``"sarcoma_organoids_2024"``).
     """
     key = name.lower()
     hit = xref[(xref["source"] == source) & (xref["input_name"].str.lower() == key)]
@@ -87,7 +87,7 @@ def canonical_cids(xref: pd.DataFrame, names: Iterable[str], source: str) -> lis
 def overlap_report(xref: pd.DataFrame) -> pd.DataFrame:
     """Return one row per PubChem CID present in BOTH sources.
 
-    Columns: ``pubchem_cid``, ``gdsc2_names`` (comma-joined), ``soragni_names``
+    Columns: ``pubchem_cid``, ``gdsc2_names`` (comma-joined), ``sarcoma_organoids_2024_names``
     (comma-joined), ``inchikey``, ``drugbank_id``. Useful for the panel-overlap
     discussion in ``docs/datasets.md``.
     """
@@ -100,7 +100,7 @@ def overlap_report(xref: pd.DataFrame) -> pd.DataFrame:
         .apply(lambda s: ", ".join(sorted(set(s))))
         .unstack("source")
         .reset_index()
-        .rename(columns={"gdsc2": "gdsc2_names", "soragni": "soragni_names"})
+        .rename(columns={"gdsc2": "gdsc2_names", "sarcoma_organoids_2024": "sarcoma_organoids_2024_names"})
     )
     # Attach the shared inchikey + drugbank (first non-null per CID)
     extras = (

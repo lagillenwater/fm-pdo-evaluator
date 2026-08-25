@@ -61,7 +61,7 @@ rather than writing a parallel mechanism per site.
    (methods, design)` before the scoring loop; fix the printed `n` to reflect the *restricted*
    key length (currently the misleading pre-merge broadcast size).
 
-5. **`scripts/baselines_soragni.py`**. Fix: compute `shared` (the GDSC2-screened intersection)
+5. **`scripts/baselines_sarcoma_organoids_2024.py`**. Fix: compute `shared` (the GDSC2-screened intersection)
    *before* building `rows`, and filter drug-mean/l1000 rows to `shared` too, not just pca/nmf --
    so every row in the printed table shares one drug support instead of pca/nmf alone being
    narrowed.
@@ -90,7 +90,7 @@ What *is* still a fixed, uncontrolled hardcode today, needing the same CV-tuning
 7. **PCA/NMF's `n_components`** (`fmharness.deltas.build_learned_deltas`, default `k=20`,
    shared by Check 1's `loo_baseline_source` and Check 2's delta sources) and **kNN's `k`**
    (`build_knn_deltas`, default `k=10`), plus the scattered `args.n_components` / hardcoded-10
-   defaults in `predict_expression_baselines.py`, `baselines_soragni.py`, `biomarker_anchored.py`.
+   defaults in `predict_expression_baselines.py`, `baselines_sarcoma_organoids_2024.py`, `biomarker_anchored.py`.
    Fix: inner-CV-select `n_components`/`k` per representation/fold from a small shared candidate
    grid (e.g. `{2, 5, 10, 15, 20}`, capped below the training-fold's own sample size so a
    candidate is never invalid), scored by CV-averaged predictive error on the training fold only
@@ -126,7 +126,7 @@ What *is* still a fixed, uncontrolled hardcode today, needing the same CV-tuning
 - `scripts/score_generation_eval.py`, `scripts/check1_registry_driver.py`,
   `scripts/check2_registry_driver.py` -- wire in `restrict_common_support` where not already
   inherited from `score_check2`'s own fix.
-- `scripts/predict_expression_baselines.py`, `scripts/baselines_soragni.py`,
+- `scripts/predict_expression_baselines.py`, `scripts/baselines_sarcoma_organoids_2024.py`,
   `scripts/biomarker_anchored.py` -- per-script fixes above.
 - `scripts/score_viability_adapters.py` -- matched-width random control for `--stack-emb`;
   docstring note (point 9).
@@ -142,7 +142,7 @@ What *is* still a fixed, uncontrolled hardcode today, needing the same CV-tuning
 4. Alpine: pull, rerun the affected Check 1 / Check 2 / Soragni-baseline jobs, compare before/
    after -- the two already-published discrepancies (`docs/tahoe_generation_results.md`) should
    either close or the doc's caveat should be replaced with corrected numbers.
-5. Update `docs/tahoe_generation_results.md` and `docs/soragni_pathb_results.csv`/figure once
+5. Update `docs/tahoe_generation_results.md` and `docs/sarcoma_organoids_2024_pathb_results.csv`/figure once
    corrected numbers land, same verify-before-reporting discipline as today's Path B correction.
 
 ## Out of scope (explicitly deferred)

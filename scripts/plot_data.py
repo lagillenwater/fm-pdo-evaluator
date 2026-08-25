@@ -44,17 +44,17 @@ def plot_cohort_composition(sb, out_dir: Path) -> None:
     savefig(fig, out_dir / "cohort_composition.png")
 
 
-def plot_soragni_viability(ds, out_dir: Path) -> None:
+def plot_sarcoma_organoids_2024_viability(ds, out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 4.6))
     ax.hist(ds["y"].to_numpy(float), bins=40, color="#228833")
     ax.set_title("Soragni viability (prediction target)")
     ax.set_xlabel("Viability_Score (% of vehicle)")
     ax.set_ylabel("organoid x drug pairs")
     fig.tight_layout()
-    savefig(fig, out_dir / "soragni_viability.png")
+    savefig(fig, out_dir / "sarcoma_organoids_2024_viability.png")
 
 
-def plot_soragni_heatmap(ds, out_dir: Path) -> None:
+def plot_sarcoma_organoids_2024_heatmap(ds, out_dir: Path) -> None:
     mat = ds.pivot_table(index="patient", columns="drug", values="y", aggfunc="mean")
     fig, ax = plt.subplots(figsize=(min(0.45 * mat.shape[1] + 3, 18), 0.5 * mat.shape[0] + 2))
     im = ax.imshow(mat.to_numpy(dtype=float), aspect="auto", cmap="viridis")
@@ -65,14 +65,14 @@ def plot_soragni_heatmap(ds, out_dir: Path) -> None:
     ax.set_title("Soragni organoid x drug viability")
     fig.colorbar(im, ax=ax, label="Viability_Score (% of vehicle)")
     fig.tight_layout()
-    savefig(fig, out_dir / "soragni_response_heatmap.png")
+    savefig(fig, out_dir / "sarcoma_organoids_2024_response_heatmap.png")
 
 
 def report_l1000_coverage(ds_cid, sb, repo: Path) -> None:
     """Print which Soragni drugs have a real L1000 perturbation (a text list, no plot)."""
-    from fmharness.deltas import soragni_pert_map
+    from fmharness.deltas import sarcoma_organoids_2024_pert_map
 
-    covered_cids = set(soragni_pert_map(repo).values())  # Soragni PubChem CIDs present in L1000
+    covered_cids = set(sarcoma_organoids_2024_pert_map(repo).values())  # Soragni PubChem CIDs present in L1000
     cid2name = {str(a.pubchem_cid): a.drug_name for a in sb.drug_assays if a.pubchem_cid}
     cids = sorted(set(ds_cid["drug"].astype(str)))
     yes = sorted(cid2name.get(c, c) for c in cids if c in covered_cids)
@@ -111,8 +111,8 @@ def main() -> None:
     _, ds_cid = build_sample_design(sb, "tumor", "viability", drug_key="pubchem_cid")
 
     plot_cohort_composition(sb, out_dir)
-    plot_soragni_viability(ds, out_dir)
-    plot_soragni_heatmap(ds, out_dir)
+    plot_sarcoma_organoids_2024_viability(ds, out_dir)
+    plot_sarcoma_organoids_2024_heatmap(ds, out_dir)
     try:
         report_l1000_coverage(ds_cid, sb, repo)
     except Exception as e:

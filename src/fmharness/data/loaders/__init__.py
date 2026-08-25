@@ -9,7 +9,7 @@ consumes.
 
 from fmharness.data.loaders.adapt import (
     adapt_gdsc2,
-    adapt_soragni,
+    adapt_sarcoma_organoids_2024,
     load_tranche,
 )
 from fmharness.data.loaders.coderdata import (
@@ -21,10 +21,10 @@ from fmharness.data.loaders.gdsc2_sarcoma import (
     GDSC2SarcomaBundle,
     load_gdsc2_sarcoma,
 )
-from fmharness.data.loaders.soragni import (
+from fmharness.data.loaders.sarcoma_organoids_2024 import (
     SoragniBundle,
     canonicalize_patient_id,
-    load_soragni,
+    load_sarcoma_organoids_2024,
 )
 
 __all__ = [
@@ -33,10 +33,10 @@ __all__ = [
     "IngestError",
     "SoragniBundle",
     "adapt_gdsc2",
-    "adapt_soragni",
+    "adapt_sarcoma_organoids_2024",
     "canonicalize_patient_id",
     "load_coderdata_tranche",
     "load_gdsc2_sarcoma",
-    "load_soragni",
+    "load_sarcoma_organoids_2024",
     "load_tranche",
 ]

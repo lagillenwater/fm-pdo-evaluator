@@ -38,7 +38,7 @@ from pathlib import Path
 
 EVIDENCE = Path("docs/results/alpine_resolved_ckpt.txt")
 INVENTORY = Path("docs/results/alpine_artifact_inventory.txt")
-RESULTS_DOCS = ("docs/tahoe_generation_results.md", "docs/soragni_pathb_results.md")
+RESULTS_DOCS = ("docs/tahoe_generation_results.md", "docs/sarcoma_organoids_2024_pathb_results.md")
 
 # Stages whose scripts should echo what they resolved. A stage that consumes a data artifact
 # chosen at submit time (via --export) and does not echo it leaves no recoverable record.
@@ -48,9 +48,9 @@ STAGES_CONSUMING_EXPORTS = (
     "scripts/alpine/06_stack_embed.sbatch",
     "scripts/alpine/07_stack_emb_score.sbatch",
     "scripts/alpine/09_stack_finetune.sbatch",
-    "scripts/alpine/11_soragni_generate.sbatch",
-    "scripts/alpine/12_soragni_score.sbatch",
-    "scripts/alpine/13_soragni_embed.sbatch",
+    "scripts/alpine/11_sarcoma_organoids_2024_generate.sbatch",
+    "scripts/alpine/12_sarcoma_organoids_2024_score.sbatch",
+    "scripts/alpine/13_sarcoma_organoids_2024_embed.sbatch",
 )
 
 CKPT_RE = re.compile(r"finetuned-epoch=\d+-val_loss=[\d.]+\.ckpt")

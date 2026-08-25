@@ -19,7 +19,7 @@ predictions are judged the same way, on the same patient x drug pairs.
 --baseline must be the same tumor-RNA query file the generation step used
 (``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
 model input" switch) -- see score_viability_adapters.py's docstring for why
-``stack_input_soragni.h5ad`` is a stale, pre-switch default.
+``stack_input_sarcoma_organoids_2024.h5ad`` is a stale, pre-switch default.
 
   uv run python scripts/predict_expression_baselines.py \\
       --l1000-context l1000_context_rich.h5ad \\

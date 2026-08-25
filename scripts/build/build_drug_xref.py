@@ -14,7 +14,7 @@ Resolution chain:
      compound vs salt forms).
   3. Soragni Drug_Name == any GDSC2 DRUG_NAME or SYNONYM: reuse the
      GDSC2 row's CID without re-querying PubChem. Recorded as
-     resolution_method = "soragni_via_gdsc2_synonym".
+     resolution_method = "sarcoma_organoids_2024_via_gdsc2_synonym".
   4. CID -> InChIKey: PUG REST /compound/cid/{cid}/property/InChIKey/JSON.
   5. InChIKey -> DrugBank: UniChem cross-reference API
      https://www.ebi.ac.uk/unichem/rest/inchikey/{key} -> filter src_id=2.
@@ -47,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GDSC2_COMPOUNDS = (
     REPO_ROOT / "data" / "raw" / "gdsc2_sarcoma" / "gdsc2" / "screened_compounds_rel_8.5.csv"
 )
-SORAGNI_DRUG_SCREEN = REPO_ROOT / "data" / "raw" / "soragni" / "tables" / "drug_screen.parquet"
+SORAGNI_DRUG_SCREEN = REPO_ROOT / "data" / "raw" / "sarcoma_organoids_2024" / "tables" / "drug_screen.parquet"
 OUTPUT_DIR = REPO_ROOT / "data" / "static"
 OUTPUT_PARQUET = OUTPUT_DIR / "drug_xref.parquet"
 
@@ -138,7 +138,7 @@ def load_gdsc2_drugs() -> pd.DataFrame:
     )
 
 
-def load_soragni_drugs() -> list[str]:
+def load_sarcoma_organoids_2024_drugs() -> list[str]:
     df = pd.read_parquet(SORAGNI_DRUG_SCREEN)
     return sorted(df["Drug_Name"].dropna().astype(str).unique().tolist())
 
@@ -162,7 +162,7 @@ def main() -> None:
     if not SORAGNI_DRUG_SCREEN.exists():
         sys.exit(
             f"[fail] missing {SORAGNI_DRUG_SCREEN.relative_to(REPO_ROOT)} "
-            "-- run scripts/download/download_soragni.py first"
+            "-- run scripts/download/download_sarcoma_organoids_2024.py first"
         )
 
     if OUTPUT_PARQUET.exists() and not args.refresh:
@@ -173,8 +173,8 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     gdsc2 = load_gdsc2_drugs()
-    soragni_names = load_soragni_drugs()
-    print(f"[load] {len(gdsc2)} GDSC2 compounds, {len(soragni_names)} unique Soragni drugs")
+    sarcoma_organoids_2024_names = load_sarcoma_organoids_2024_drugs()
+    print(f"[load] {len(gdsc2)} GDSC2 compounds, {len(sarcoma_organoids_2024_names)} unique Soragni drugs")
 
     rows: list[dict] = []
     cid_cache: dict[str, int | None] = {}  # name (lower) -> CID
@@ -216,16 +216,16 @@ def main() -> None:
         )
 
     # Pass 2: Soragni drugs (re-use GDSC2 resolution where possible)
-    for name in soragni_names:
+    for name in sarcoma_organoids_2024_names:
         key = name.lower()
         cached = cid_cache.get(key)
         if cached:
             cid = cached
-            method = "soragni_via_gdsc2_synonym"
+            method = "sarcoma_organoids_2024_via_gdsc2_synonym"
         else:
-            print(f"[soragni] resolving by name: {name}")
+            print(f"[sarcoma_organoids_2024] resolving by name: {name}")
             cid = pubchem_name_to_cid(name)
-            method = "soragni_name_lookup" if cid else "unresolved"
+            method = "sarcoma_organoids_2024_name_lookup" if cid else "unresolved"
             cid_cache[key] = cid
 
         inchikey = inchikey_cache.get(cid) if cid else None
@@ -239,7 +239,7 @@ def main() -> None:
         rows.append(
             {
                 "input_name": name,
-                "source": "soragni",
+                "source": "sarcoma_organoids_2024",
                 "source_drug_id": None,
                 "pubchem_cid": cid,
                 "inchikey": inchikey,
@@ -255,14 +255,14 @@ def main() -> None:
     out.to_parquet(OUTPUT_PARQUET, index=False)
 
     n_gdsc2 = (out["source"] == "gdsc2").sum()
-    n_soragni = (out["source"] == "soragni").sum()
+    n_sarcoma_organoids_2024 = (out["source"] == "sarcoma_organoids_2024").sum()
     n_cid = out["pubchem_cid"].notna().sum()
     n_ikey = out["inchikey"].notna().sum()
     n_db = out["drugbank_id"].notna().sum()
     overlap = out.dropna(subset=["pubchem_cid"]).groupby("pubchem_cid")["source"].nunique()
     n_overlap = (overlap > 1).sum()
     print()
-    print(f"[summary] {len(out)} rows ({n_gdsc2} gdsc2 + {n_soragni} soragni)")
+    print(f"[summary] {len(out)} rows ({n_gdsc2} gdsc2 + {n_sarcoma_organoids_2024} sarcoma_organoids_2024)")
     print(f"          pubchem_cid resolved: {n_cid}/{len(out)}")
     print(f"          inchikey resolved:    {n_ikey}/{len(out)}")
     print(f"          drugbank_id resolved: {n_db}/{len(out)}")

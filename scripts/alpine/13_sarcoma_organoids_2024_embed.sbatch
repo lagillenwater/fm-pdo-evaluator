@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=soragni-embed
+#SBATCH --job-name=sarcoma_organoids_2024-embed
 #SBATCH --partition=ah200             # same confirmed-working GPU partition as 06/11; module
                                        # load anaconda works here (unlike amem -- see 10/12's
                                        # comment), no PATH bypass needed.
@@ -34,13 +34,13 @@ module purge
 # Activate the `stack` env by PATH instead of the module system. `module load anaconda`
 # fails inside batch jobs (Lmod: module unknown) for reasons NOT established -- see
 # ralpine's submit comment; do not assert a cause here. This pattern is the one that is
-# PROVEN to work: 10_soragni_context and 12_soragni_score ran with it on 2026-08-22.
+# PROVEN to work: 10_sarcoma_organoids_2024_context and 12_sarcoma_organoids_2024_score ran with it on 2026-08-22.
 # `conda activate` is deliberately not used: this install ships no etc/profile.d/conda.sh.
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 
 QUERY="data/reference/stack_input_sarcoma.h5ad"   # 17 patients x genes -- the SAME tumor-RNA
-                                                    # baseline 10_soragni_context.sbatch seeds
+                                                    # baseline 10_sarcoma_organoids_2024_context.sbatch seeds
                                                     # generation from (one row per patient, no
                                                     # synthetic replicate pool needed here --
                                                     # embedding is a single forward pass, not
@@ -67,4 +67,4 @@ stack-embedding \
     --gene-name-col feature_name \
     --obs-source "$QUERY" \
     --device cuda \
-    --output "emb_soragni_${LABEL}.h5ad"
+    --output "emb_sarcoma_organoids_2024_${LABEL}.h5ad"

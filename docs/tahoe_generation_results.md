@@ -191,7 +191,7 @@ response, per-drug = within-drug line ranking, p_label = label-permutation p on 
 > finds that it requires a synthetic prompt with blending, stating that "Stack with synthetic
 > prompts outperforms alternative baselines **and Stack with original prompts** in capturing
 > donor-specific effects". Our generation (`04_stack_generate.sbatch`, and Path B's
-> `11_soragni_generate.sbatch`) uses ordinary drug-context prompts on the default `--mode mdm`
+> `11_sarcoma_organoids_2024_generate.sbatch`) uses ordinary drug-context prompts on the default `--mode mdm`
 > 5-step schedule — the "original prompts" arm. So the near-zero `interaction` for every
 > **generated delta** row is what v2 predicts for this configuration, and is not yet evidence
 > about Stack's ceiling on personalization. Re-running under the synthetic-prompt construction

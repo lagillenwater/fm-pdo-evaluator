@@ -8,7 +8,7 @@ To refresh it (only if Arc updates the model), download the file
 `basecount_1000per_15000max.pkl` from the Stack-Large HuggingFace repo and write
 its unpickled contents one symbol per line to data/static/stack_hvg_genes.txt.
 
-Writes data/static/stack_soragni_gene_map.csv (stack_symbol, entrez_id, match):
+Writes data/static/stack_sarcoma_organoids_2024_gene_map.csv (stack_symbol, entrez_id, match):
 the shared panel that puts expression, PCA, NMF, and Stack on the same genes.
 """
 
@@ -36,7 +36,7 @@ def main() -> None:
     measured = {int(c) for c in x_df.columns}
 
     panel = build_panel(genes, measured, stack)
-    dest = repo / "data/static/stack_soragni_gene_map.csv"
+    dest = repo / "data/static/stack_sarcoma_organoids_2024_gene_map.csv"
     panel.to_csv(dest, index=False)
 
     n = len(stack)

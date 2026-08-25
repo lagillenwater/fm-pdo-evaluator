@@ -120,7 +120,7 @@ def test_concrete_modality_metadata_without_data() -> None:
             "lower_is_better",
             "loo",  # n=17 organoids: leave-one-out, not 5-fold
             "regression",
-            "soragni_viability_tumor",
+            "sarcoma_organoids_2024_viability_tumor",
         ),
     ]
     for modality, direction, cv, task, name in expected:
@@ -131,7 +131,7 @@ def test_concrete_modality_metadata_without_data() -> None:
         assert modality.name() == name
     # The rna_source is the substrate, and it must show up in the name so tumor-
     # and organoid-RNA runs against the same target stay distinguishable.
-    assert SoragniViability(rna_source="organoid").name() == "soragni_viability_organoid"
+    assert SoragniViability(rna_source="organoid").name() == "sarcoma_organoids_2024_viability_organoid"
 
 
 def test_thresholded_modality_satisfies_protocol() -> None:
@@ -153,10 +153,10 @@ def test_gdsc2_auc_loads_real_data() -> None:
 
 
 @pytest.mark.skipif(
-    not (_REPO / "data/raw/soragni").exists(),
+    not (_REPO / "data/raw/sarcoma_organoids_2024").exists(),
     reason="requires local Soragni raw data",
 )
-def test_soragni_viability_loads_real_data() -> None:
+def test_sarcoma_organoids_2024_viability_loads_real_data() -> None:
     design = SoragniViability().load(_REPO)
     assert {"patient", "drug", "y"} <= set(design.columns)
     assert design["patient"].nunique() == 17
@@ -179,10 +179,10 @@ def test_gdsc2_auc_load_with_features_matches_load() -> None:
 
 
 @pytest.mark.skipif(
-    not (_REPO / "data/raw/soragni").exists(),
+    not (_REPO / "data/raw/sarcoma_organoids_2024").exists(),
     reason="requires local Soragni raw data",
 )
-def test_soragni_viability_load_with_features_matches_load() -> None:
+def test_sarcoma_organoids_2024_viability_load_with_features_matches_load() -> None:
     modality = SoragniViability()
     x_df, design = modality.load_with_features(_REPO)
     design_only = modality.load(_REPO)
@@ -191,10 +191,10 @@ def test_soragni_viability_load_with_features_matches_load() -> None:
 
 
 @pytest.mark.skipif(
-    not (_REPO / "data/raw/soragni").exists(),
+    not (_REPO / "data/raw/sarcoma_organoids_2024").exists(),
     reason="requires local Soragni raw data",
 )
-def test_soragni_viability_load_with_features_loads_the_tranche_exactly_once(
+def test_sarcoma_organoids_2024_viability_load_with_features_loads_the_tranche_exactly_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The bug this fixes: a caller needing both design and features used to

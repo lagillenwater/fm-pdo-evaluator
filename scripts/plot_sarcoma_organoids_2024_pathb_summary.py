@@ -1,12 +1,12 @@
 """Summary figure for Path B's faithful-generation rerun: the fair source (additive/PCA/NMF/
 Stack) x readout-adapter (hallmark/l1/l2) grid against real Soragni organoid viability.
 
-Reads docs/soragni_pathb_results.csv (written by scripts/score_viability_adapters.py's
+Reads docs/sarcoma_organoids_2024_pathb_results.csv (written by scripts/score_viability_adapters.py's
 --out-csv against 24-synthetic-replicate/patient, --mode mdm generation -- see
-scripts/alpine/10-12_soragni_*.sbatch); this script only lays the numbers out, so the figure
+scripts/alpine/10-12_sarcoma_organoids_2024_*.sbatch); this script only lays the numbers out, so the figure
 can be regenerated without re-running the Alpine pipeline.
 
-    python3 scripts/plot_soragni_pathb_summary.py [--out docs/figures/soragni_pathb_summary.png]
+    python3 scripts/plot_sarcoma_organoids_2024_pathb_summary.py [--out docs/figures/sarcoma_organoids_2024_pathb_summary.png]
 """
 
 from __future__ import annotations
@@ -83,8 +83,8 @@ def panel(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--results", type=Path, default=Path("docs/soragni_pathb_results.csv"))
-    ap.add_argument("--out", type=Path, default=Path("docs/figures/soragni_pathb_summary.png"))
+    ap.add_argument("--results", type=Path, default=Path("docs/sarcoma_organoids_2024_pathb_results.csv"))
+    ap.add_argument("--out", type=Path, default=Path("docs/figures/sarcoma_organoids_2024_pathb_summary.png"))
     args = ap.parse_args()
 
     df = pd.read_csv(args.results)

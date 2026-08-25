@@ -29,7 +29,7 @@ across different evaluation sets, not just different methods.
 
 --baseline must be the same tumor-RNA query file the generation step used
 (``stack_input_sarcoma.h5ad``, per the June 2026-06-26 "use tumor RNA as the Soragni
-model input" switch), NOT ``stack_input_soragni.h5ad`` -- a pre-switch, organoid-RNA
+model input" switch), NOT ``stack_input_sarcoma_organoids_2024.h5ad`` -- a pre-switch, organoid-RNA
 artifact left behind as a stale default until 2026-08-20 (correlation as low as 0.57
 against stack_input_sarcoma.h5ad on the same patient IDs; using it silently subtracts
 a mismatched-substrate baseline from every non-additive delta source).
@@ -83,7 +83,7 @@ from fmharness.deltas import (
     build_l1000_gdsc_pairs,
     build_learned_deltas,
     restrict_common_support,
-    soragni_pert_map,
+    sarcoma_organoids_2024_pert_map,
 )
 from fmharness.drug_targets import score_target_gene_predictors
 from fmharness.evaluation import build_sample_design, score_predictions
@@ -159,8 +159,8 @@ def main() -> None:
         default=None,
         metavar="LABEL=PATH",
         help="Stack embedding representations (label=path.h5ad, one row per patient -- e.g. "
-        "base=emb_soragni_base.h5ad aligned=emb_soragni_aligned.h5ad, from "
-        "scripts/alpine/13_soragni_embed.sbatch). Scored via leave-patient-out penalized "
+        "base=emb_sarcoma_organoids_2024_base.h5ad aligned=emb_sarcoma_organoids_2024_aligned.h5ad, from "
+        "scripts/alpine/13_sarcoma_organoids_2024_embed.sbatch). Scored via leave-patient-out penalized "
         "regression against the real Soragni AUC design, same treatment as Check 2's "
         "stack_emb representations (fmharness.check2.penalized_preds) -- l1/l2 only, no "
         "hallmark (an embedding has no gene identity to score a signature against).",
@@ -237,16 +237,16 @@ def main() -> None:
         "additive": build_additive_deltas(tr_delta, tr_key, patients)
     }
     if base_path.exists():
-        soragni_base = _read_baseline(base_path)
+        sarcoma_organoids_2024_base = _read_baseline(base_path)
         for reducer in ("pca", "nmf"):
             sources[reducer] = build_learned_deltas(
-                tr_base, tr_delta, tr_key, soragni_base, patients, reducer=reducer
+                tr_base, tr_delta, tr_key, sarcoma_organoids_2024_base, patients, reducer=reducer
             )
     else:
         print(f"(skipping pca/nmf sources: baseline {base_path} not found)")
     if args.generated_dir:
         sources["stack"] = build_generated_deltas(
-            Path(args.generated_dir), base_path, soragni_pert_map(repo)
+            Path(args.generated_dir), base_path, sarcoma_organoids_2024_pert_map(repo)
         )
 
     # Restrict every source to the SAME (patient, drug) support before scoring: sources have
@@ -408,7 +408,7 @@ def main() -> None:
     # no real treated-organoid RNA to build that kind of oracle/validation from (see this
     # script's module docstring), but DOES have the tumor-RNA baseline this control needs.
     if base_path.exists():
-        tgt = score_target_gene_predictors(design, soragni_base, n_perm=args.n_permutations)
+        tgt = score_target_gene_predictors(design, sarcoma_organoids_2024_base, n_perm=args.n_permutations)
         if tgt["n"]:
             print(f"\n[target_gene] known-biology positive control: n={int(tgt['n'])} pairs")
             out.append(
@@ -438,7 +438,7 @@ def main() -> None:
         uniq_lines = patients
         n_folds = max(1, min(args.folds, len(uniq_lines)))
         fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
-        # Plant AND score in the SAME small PCA subspace of soragni_base -- planting in the
+        # Plant AND score in the SAME small PCA subspace of sarcoma_organoids_2024_base -- planting in the
         # raw gene space (thousands of genes) and then fitting RidgeCV directly on it with
         # only ~n/folds training patients per fold cannot recover ANY signal at any effect
         # size (verified empirically against fmharness.check2.penalized_preds: r2/interaction
@@ -446,13 +446,13 @@ def main() -> None:
         # well below the smallest per-fold training-patient count so the fit is well-posed.
         plant_k = max(
             1,
-            min(5, len(uniq_lines) // (n_folds + 2), soragni_base.shape[1], len(uniq_lines) - 1),
+            min(5, len(uniq_lines) // (n_folds + 2), sarcoma_organoids_2024_base.shape[1], len(uniq_lines) - 1),
         )
-        plant_sc = StandardScaler().fit(soragni_base.to_numpy())
+        plant_sc = StandardScaler().fit(sarcoma_organoids_2024_base.to_numpy())
         plant_z = PCA(n_components=plant_k, random_state=0).fit_transform(
-            plant_sc.transform(soragni_base.to_numpy())
+            plant_sc.transform(sarcoma_organoids_2024_base.to_numpy())
         )
-        plant_z_df = pd.DataFrame(plant_z, index=soragni_base.index)
+        plant_z_df = pd.DataFrame(plant_z, index=sarcoma_organoids_2024_base.index)
         emb_per_row = plant_z_df.reindex(design["patient"]).to_numpy()
         within_drug_sd = float(
             np.std(

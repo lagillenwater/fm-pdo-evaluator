@@ -21,7 +21,7 @@ cd "$REPO"
 # Activate the `stack` env by PATH instead of the module system. `module load anaconda`
 # fails inside batch jobs (Lmod: module unknown) for reasons NOT established -- see
 # ralpine's submit comment; do not assert a cause here. This pattern is the one that is
-# PROVEN to work: 10_soragni_context and 12_soragni_score ran with it on 2026-08-22.
+# PROVEN to work: 10_sarcoma_organoids_2024_context and 12_sarcoma_organoids_2024_score ran with it on 2026-08-22.
 # `conda activate` is deliberately not used: this install ships no etc/profile.d/conda.sh.
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
