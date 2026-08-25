@@ -30,6 +30,9 @@ cd "$REPO"
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
+export PYTHONUNBUFFERED=1   # else stdout block-buffers to the log file and a multi-hour
+                           # job shows 0 bytes until it exits, making "working" and
+                           # "wedged" indistinguishable (job 31655278, 2026-08-25).
 export HF_HUB_CACHE="/scratch/alpine/$USER/hf"   # cache off /projects
 # do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"

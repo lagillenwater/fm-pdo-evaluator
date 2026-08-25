@@ -26,6 +26,9 @@ cd "$REPO"
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
+export PYTHONUNBUFFERED=1   # else stdout block-buffers to the log file and a multi-hour
+                           # job shows 0 bytes until it exits, making "working" and
+                           # "wedged" indistinguishable (job 31655278, 2026-08-25).
 
 python scripts/score_generation_eval.py \
     --deltas-bundle tahoe_deltas \

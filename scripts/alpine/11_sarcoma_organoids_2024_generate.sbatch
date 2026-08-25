@@ -57,6 +57,9 @@ module purge
 # `conda activate` is deliberately not used: this install ships no etc/profile.d/conda.sh.
 export PATH="/projects/$USER/software/anaconda/envs/stack/bin:$PATH"
 export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
+export PYTHONUNBUFFERED=1   # stack-generation is a python console script, so its stdout
+                           # block-buffers to the log too; without this a multi-hour GPU
+                           # job shows 0 bytes until it exits.
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 export HF_HOME="/scratch/alpine/$USER/hf"
 
