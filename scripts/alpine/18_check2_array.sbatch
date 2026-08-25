@@ -40,7 +40,7 @@ export PYTHONUNBUFFERED=1
 PLAN_DIR="${PLAN_DIR:?set PLAN_DIR to the directory check2_plan.py wrote}"
 TASK="${SLURM_ARRAY_TASK_ID:-0}"
 PARTS="${PARTS:-$PLAN_DIR/parts}"
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") PLAN_DIR=$PLAN_DIR TASK=$TASK PARTS=$PARTS"
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} PLAN_DIR=$PLAN_DIR TASK=$TASK PARTS=$PARTS"
 
 python scripts/check2_score_one.py \
     --plan-dir "$PLAN_DIR" \

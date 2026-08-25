@@ -49,7 +49,7 @@ export PYTHONUNBUFFERED=1   # stack-generation is a python console script, so it
 # reader open the exact script that ran. Without it a job log says which stage ran and nothing
 # about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
 # logs and most published numbers cannot be traced to their inputs.
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") "
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} "
 
                            # job shows 0 bytes until it exits.
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.29 fix

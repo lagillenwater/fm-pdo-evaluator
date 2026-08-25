@@ -18,7 +18,7 @@ export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 PARTS="${PARTS:-promote/de_null_parts}"
 OUT="${OUT:-promote/de_permutation_null.csv}"
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") PARTS=$PARTS OUT=$OUT"
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} PARTS=$PARTS OUT=$OUT"
 python - "$PARTS" "$OUT" <<'PY'
 import sys, glob
 import pandas as pd

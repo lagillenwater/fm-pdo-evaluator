@@ -37,7 +37,7 @@ DE_CALLS="${DE_CALLS:-tahoe_de_calls/de_calls.parquet}"
 SHUFFLES="${SHUFFLES:-200}"
 PARTS="${PARTS:-promote/de_null_parts}"
 TASK="${SLURM_ARRAY_TASK_ID:-0}"
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") SOURCES=$SOURCES DE_CALLS=$DE_CALLS SHUFFLES=$SHUFFLES TASK=$TASK"
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} SOURCES=$SOURCES DE_CALLS=$DE_CALLS SHUFFLES=$SHUFFLES TASK=$TASK"
 
 mkdir -p "$PARTS"
 

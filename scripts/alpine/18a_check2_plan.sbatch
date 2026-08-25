@@ -21,7 +21,7 @@ export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
 PLAN_DIR="${PLAN_DIR:-results/plan_${SLURM_JOB_ID:-local}}"
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") PLAN_DIR=$PLAN_DIR"
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} PLAN_DIR=$PLAN_DIR"
 
 python scripts/check2_plan.py \
     --deltas-bundle tahoe_deltas \

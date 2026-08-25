@@ -21,7 +21,7 @@ export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
 PLAN_DIR="${PLAN_DIR:?set PLAN_DIR}"
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) script=$(basename "${BASH_SOURCE[0]}") PLAN_DIR=$PLAN_DIR"
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} PLAN_DIR=$PLAN_DIR"
 
 python scripts/check2_gather.py \
     --plan-dir "$PLAN_DIR" \
