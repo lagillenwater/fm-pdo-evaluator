@@ -49,8 +49,8 @@ generation-based source (additive/pca/nmf/stack) gets the SAME random-feature co
 its l1/l2 rows too, fit AND applied on matching-shape noise (not just noise fed through a
 model trained on real genes, which would test something unrelated) -- ``f"{source}_random"``.
 
-No oracle/ceiling VALIDATION (the real measured post-treatment delta scored as its own
-"prediction", as Check 1/2's driver scripts now add via ``score_check2``'s ``oracle=``):
+No measured-delta reference (the real measured post-treatment delta scored as its own
+"prediction", as Check 1/2's driver scripts now add via ``score_check2``'s ``measured_delta=``):
 Soragni has no real treated-organoid RNA-seq, only the untreated tumor-RNA baseline -- there
 is nothing to feed as a ceiling input here, unlike Tahoe/GDSC2 where the real per-(line, drug)
 delta exists. DOES get the flowchart's actual "positive control" (planted interaction,
@@ -403,9 +403,9 @@ def main() -> None:
 
     # Known-biology positive control: each drug's own molecular target gene's baseline
     # expression (fmharness.drug_targets, target-dependency hypothesis: higher target
-    # expression -> more sensitive to inhibiting it). Complements the oracle/ceiling
-    # VALIDATION Check 1/2's driver scripts add via score_check2's oracle= -- Soragni has
-    # no real treated-organoid RNA to build that kind of oracle/validation from (see this
+    # expression -> more sensitive to inhibiting it). Complements the measured-delta reference
+    # VALIDATION Check 1/2's driver scripts add via score_check2's measured_delta= -- Soragni has
+    # no real treated-organoid RNA to build that kind of measured_delta/validation from (see this
     # script's module docstring), but DOES have the tumor-RNA baseline this control needs.
     if base_path.exists():
         tgt = score_target_gene_predictors(design, sarcoma_organoids_2024_base, n_perm=args.n_permutations)
@@ -429,7 +429,7 @@ def main() -> None:
     # Positive control: plant a KNOWN organoid x drug interaction into the tumor-RNA baseline
     # space (fmharness.controls.plant_interaction) and confirm the SAME leave-patient-out
     # penalized grid recovers it -- the flowchart's actual "positive control: planted
-    # interaction, recovered" (distinct from the oracle/ceiling VALIDATION Check 1/2 add,
+    # interaction, recovered" (distinct from the measured-delta reference Check 1/2 add,
     # which uses real data with no controlled effect size, and from the known-biology
     # target_gene control, which is a real hypothesis, not a simulation). Soragni's data gap
     # (no real treated-organoid RNA) doesn't apply here since nothing is measured -- it's

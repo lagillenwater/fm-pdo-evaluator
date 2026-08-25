@@ -73,7 +73,7 @@ def test_run_check1_reports_one_row_per_source_including_stack(tmp_path: Path) -
         k=1,
         hallmark_path=_hallmark_gmt(tmp_path),
     )
-    assert set(table["source"]) == {"additive", "knn", "pca", "nmf", "stack", "oracle"}
+    assert set(table["source"]) == {"additive", "knn", "pca", "nmf", "stack", "measured_delta"}
     assert {"r", "r_offdiag", "rank", "n_pairs", "n_genes"} <= set(table.columns)
 
 

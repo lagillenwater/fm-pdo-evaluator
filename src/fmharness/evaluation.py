@@ -194,9 +194,13 @@ def _two_way_demean(values: np.ndarray, patient: np.ndarray, drug: np.ndarray) -
     """Remove additive patient AND drug main effects (the two-way within transformation).
 
     On a BALANCED panel one pass of each is exact. On an incomplete panel it is not:
-    subtracting patient means shifts the drug means and vice versa, so this alternates
-    until the residual stops moving. What remains carries neither main effect, which is
-    the definition of the interaction term.
+    subtracting patient means shifts the drug means and vice versa, so this alternates until
+    the residual stops moving. What remains carries neither main effect, which is the
+    definition of the interaction term.
+
+    Implemented with ``np.bincount`` over factorised codes rather than pandas groupby. The
+    permutation null calls this 1000 times per scored row, and the groupby version made each
+    ``score_check2`` test take 45-63 seconds on its own.
 
     WHY iterate rather than one pass each: artifact
     ``tests/test_evaluation.py::test_interaction_rho_is_zero_for_a_predictor_with_no_patient_information``
@@ -204,13 +208,23 @@ def _two_way_demean(values: np.ndarray, patient: np.ndarray, drug: np.ndarray) -
     (44 lines x 30 drugs, 17 pairs missing, 1.3% incomplete).
     """
     v = np.asarray(values, dtype=np.float64).copy()
+    pc, pn = _codes(patient)
+    dc, dn = _codes(drug)
+    pcount = np.bincount(pc, minlength=pn).astype(np.float64)
+    dcount = np.bincount(dc, minlength=dn).astype(np.float64)
     for _ in range(100):
         prev = v.copy()
-        v -= pd.Series(v).groupby(drug).transform("mean").to_numpy()
-        v -= pd.Series(v).groupby(patient).transform("mean").to_numpy()
+        v -= (np.bincount(dc, weights=v, minlength=dn) / dcount)[dc]
+        v -= (np.bincount(pc, weights=v, minlength=pn) / pcount)[pc]
         if float(np.max(np.abs(v - prev))) < 1e-12:
             break
     return v
+
+
+def _codes(labels: np.ndarray) -> tuple[np.ndarray, int]:
+    """Integer codes for a label array, and how many distinct labels there are."""
+    codes, uniq = pd.factorize(pd.Index(labels), sort=False)
+    return np.asarray(codes, dtype=np.intp), len(uniq)
 
 
 def interaction_rho(preds: pd.DataFrame, pred_col: str = "y_resid", min_n: int = 3) -> float:
@@ -293,6 +307,17 @@ def per_drug_spearman(preds: pd.DataFrame, pred_col: str = "y_pred", min_n: int 
     return float(np.median(rhos)) if rhos else float("nan")
 
 
+def _interaction_from_demeaned(
+    t_dem: np.ndarray, p_dem: np.ndarray, drug: np.ndarray, scale: float, min_n: int = 3
+) -> float:
+    """interaction_rho's tail, on already-demeaned arrays. Same result, no re-demeaning."""
+    if float(np.std(p_dem)) <= 1e-9 * max(scale, 1e-30):
+        return 0.0
+    frame = pd.DataFrame({"drug": drug, "_t": t_dem, "_p": p_dem})
+    return _within_drug_corr(frame, "_t", "_p", min_n)
+
+
+
 def score_predictions(
     preds: pd.DataFrame, *, n_perm: int = 1000, seed: int = 0
 ) -> dict[str, float]:
@@ -323,17 +348,27 @@ def score_predictions(
     if "y_prior" in preds.columns:
         scored = preds.assign(y_pred=preds["y_pred"] - preds["y_prior"])
     it = interaction_rho(scored, "y_pred")
+    # y_pred is identical across permutations -- only the labels move -- so demean it once
+    # rather than once per draw.
+    _pat = scored["patient"].to_numpy()
+    _drg = scored["drug"].to_numpy()
+    _p_dem = _two_way_demean(scored["y_pred"].to_numpy(dtype=float), _pat, _drg)
+    _scale = float(np.std(scored["y_pred"].to_numpy(dtype=float)))
     null = np.array(
         [
-            interaction_rho(
-                scored.assign(
-                    y_true=permute_within_drug(
+            _interaction_from_demeaned(
+                _two_way_demean(
+                    permute_within_drug(
                         cast("pd.Series", scored["drug"]),
                         cast("pd.Series", scored["y_true"]),
                         np.random.default_rng(seed + 1 + b),
-                    )
+                    ),
+                    _pat,
+                    _drg,
                 ),
-                "y_pred",
+                _p_dem,
+                _drg,
+                _scale,
             )
             for b in range(n_perm)
         ]

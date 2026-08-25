@@ -123,11 +123,11 @@ def run_check1(
         "pca": loo_baseline_source("pca", fd, fk, base, k=k, genes=learned_genes),
         "nmf": loo_baseline_source("nmf", fd, fk, base, k=k, genes=learned_genes),
         "stack": build_generated_deltas(generated_dir, query_baseline, pert_to_drug),
-        # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+        # measured-delta reference (not a positive control -- see fmharness.controls'
         # plant_interaction/"planted" for the real one, the flowchart's "planted interaction,
         # recovered"): the REAL measured delta as its own "prediction", a pipeline sanity
         # check (trivially r=1) and the best-case ceiling every other row is judged against.
-        "oracle": (fd.copy(), fk.copy()),
+        "measured_delta": (fd.copy(), fk.copy()),
     }
 
     # score_delta_sources restricts every source to their shared (patient, drug) support

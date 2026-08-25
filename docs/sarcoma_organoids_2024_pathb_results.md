@@ -36,7 +36,7 @@ committing to the much longer Check 1/2 Tahoe/GDSC2 LOO reruns, which now also C
 > v2 predicts for this setup, and does not yet bound what Stack could do here. Note the
 > transfer is not free: 2.6's construction needs a *reference perturbed profile* for the same
 > perturbation in a matched cell type, which Path B lacks -- there is no real treated-organoid
-> RNA-seq (see the oracle/ceiling row under Controls). Any Path B analogue would have to
+> RNA-seq (see the measured-delta reference row under Controls). Any Path B analogue would have to
 > import that reference from elsewhere (Tahoe per-drug deltas, or L1000), which is an extra
 > assumption on top of the method. Settle it on Check 2 first, where the reference exists.
 
@@ -52,7 +52,7 @@ the real sources, so a control's behavior is directly comparable to a real row.
 | **`planted`** (l1/l2) | positive: a KNOWN, controlled-effect-size interaction planted into the tumor-RNA baseline (`fmharness.controls.plant_interaction`) -- must recover, or the fold structure/model/metric itself is broken | interaction **0.536**/0.510, p_label **0.000**/0.000 | identical (same design/baseline, checkpoint-independent) |
 | **`*_random`** (l1/l2) | negative: same-width i.i.d. Gaussian noise per source, fit AND applied on matching-shape noise -- must NOT show real signal | l2 near-null (−0.20 to 0.20); l1 identical across sources (LassoCV correctly zeros all coefficients on pure noise, converging to the same "predict the mean" answer regardless of which noise) -- one cell (`pca_random`/l2) at p=0.013, expected multiple-comparison noise across ~8 tested cells, not a flag | same pattern |
 | **`target_gene`** | known-biology positive control: each of the 26 screened drugs' own molecular target gene's baseline expression (`fmharness.drug_targets`) | interaction 0.010, p_label 0.282 (n=237) -- null, consistent with this being a much weaker/messier hypothesis than a guaranteed-by-construction planted signal, especially given several of the 26 drugs are classical cytotoxics (docetaxel, gemcitabine, topotecan, vinorelbine) where target-expression dependence is a poor fit to begin with | same |
-| oracle/ceiling (validation) | N/A for Path B -- no real treated-organoid RNA-seq exists to build a ceiling from (only the untreated tumor-RNA baseline); Check 1/2's Tahoe/GDSC2 pipelines have this via `score_check2`'s `oracle=` | -- | -- |
+| measured-delta reference | N/A for Path B -- no real treated-organoid RNA-seq exists to build a ceiling from (only the untreated tumor-RNA baseline); Check 1/2's Tahoe/GDSC2 pipelines have this via `score_check2`'s `measured_delta=` | -- | -- |
 
 **Conclusion: the controls behave as a trustworthy harness should.** The positive control
 recovers cleanly and significantly; the negative controls are null modulo ordinary
@@ -84,11 +84,11 @@ already does and Path B doesn't yet. Worth a follow-up, not a headline claim yet
 
 Controls validated. The original plan from here was to proceed to the expensive Check 1/2
 Tahoe/GDSC2 LOO reruns (CV-tuned `n_components`/`k` per held-out line for
-`additive`/`knn`/`pca`/`nmf`, plus `oracle`, `planted`, per-representation `random`).
+`additive`/`knn`/`pca`/`nmf`, plus `measured_delta`, `planted`, per-representation `random`).
 **That is on hold as of 2026-08-24**, because the Check 2 controls run (Slurm 31564601,
 2026-08-22) returned two results that make the LOO spend hard to justify in its current form:
 
-1. **The `oracle` -- the real measured Tahoe delta, the best-case ceiling -- also fails.**
+1. **The `measured_delta` -- the real measured Tahoe delta, the best-case ceiling -- also fails.**
    Interaction −0.095 to −0.179, `p_label` ~1.0, and it does not beat a same-width
    random-feature control on `global` either. Scaling up a run to measure a quantity the
    ceiling cannot move is unlikely to change any conclusion.

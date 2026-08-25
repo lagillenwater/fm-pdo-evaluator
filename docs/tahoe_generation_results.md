@@ -200,9 +200,9 @@ response, per-drug = within-drug line ranking, p_label = label-permutation p on 
 > embedding rows, none of which involve generation.
 >
 > **2. No row here has faced a same-width random-feature control.** The 2026-08-22 controls run
-> (Slurm 31564601) scored `expr`, `stack` and `oracle` against matched i.i.d. Gaussian features
+> (Slurm 31564601) scored `expr`, `stack` and `measured_delta` against matched i.i.d. Gaussian features
 > through this identical pipeline, and **0 of 9 real rows beat their own noise control on
-> `global`**, on both checkpoints — including `oracle`, the real measured Tahoe delta. That
+> `global`**, on both checkpoints — including `measured_delta`, the real measured Tahoe delta. That
 > exposes `global` here as largely a drug-mean artifact: a CV-tuned model on pure noise shrinks
 > to the per-drug training mean, which already ranks drug potency about as well as anything.
 > Critically, **`base (embed)` was not in that run**, and it is the one representation whose

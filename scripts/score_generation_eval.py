@@ -174,16 +174,16 @@ def main() -> None:
         "nmf": loo_baseline_source(
             "nmf", real_delta, real_key, base, k=args.k, genes=learned_genes
         ),
-        # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+        # measured-delta reference (not a positive control -- see fmharness.controls'
         # plant_interaction, wired into score_check2's part b below as the "planted" row, the
         # flowchart's real "planted interaction, recovered"): the REAL measured delta as its
         # own "prediction", a Check-1 pipeline sanity check (trivially r=1). Passed to Check
         # 2's penalized grid
-        # separately below (score_check2's own oracle= param), NOT included here in `sources`
+        # separately below (score_check2's own measured_delta= param), NOT included here in `sources`
         # for the score_check2 call -- Check 2's part (a) real-delta-vs-real-AUC validation is
         # already the Gate print below (Hallmark + a random-gene-set null, richer than a plain
-        # oracle row there would be); see score_check2's oracle= docstring.
-        "oracle": (real_delta.copy(), real_key.copy()),
+        # measured_delta row there would be); see score_check2's measured_delta= docstring.
+        "measured_delta": (real_delta.copy(), real_key.copy()),
     }
     # Stack's generated delta joins the same ladder when a generation run is supplied:
     # delta = logcpm(generated) - logcpm(query baseline), keyed (query line, drug CID). It
@@ -240,7 +240,7 @@ def main() -> None:
 
     fixed_methods = tuple(m.strip() for m in args.methods.split(",") if m.strip())
     penalties = tuple(p.strip() for p in args.penalties.split(",") if p.strip())
-    sources_check2 = {k: v for k, v in sources.items() if k != "oracle"}
+    sources_check2 = {k: v for k, v in sources.items() if k != "measured_delta"}
     out_df = score_check2(
         sources_check2,
         real_key,
@@ -252,7 +252,7 @@ def main() -> None:
         penalties=penalties,
         folds=args.folds,
         stack_emb=stack_emb_map,
-        oracle=sources["oracle"],
+        measured_delta=sources["measured_delta"],
         n_permutations=args.n_permutations,
     )
     print(f"\n=== check 2: end-to-end vs {args.auc_tranche} AUC (leave-cell-line-out) ===")

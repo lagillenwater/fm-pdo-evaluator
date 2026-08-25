@@ -41,7 +41,7 @@ itself:
     only recover a signal that lives in its own input space, so Stack needs its own plant
     -- an expr-space plant under-tests it. In screen-free the SAME per-drug direction is
     planted in GDSC2 and Soragni so the matching transfer model can recover it: that
-    model's regret drops toward oracle and its lift over the prior turns significant,
+    model's regret drops toward measured_delta and its lift over the prior turns significant,
     proving the apparatus has power and the real null is biological, not a dead pipeline.
 
   uv run python scripts/per_patient_eval.py
@@ -311,7 +311,7 @@ def _screenfree_scores(
             f"  [in-dist sanity] expr_transfer per-drug rho={rho_e:+.3f}  bilinear rho={rho_b:+.3f}"
         )
 
-    order = ["oracle", "gdsc_mean", "expr_transfer"]
+    order = ["measured_delta", "gdsc_mean", "expr_transfer"]
     if stack_gdsc and stack_sarcoma_organoids_2024:
         sg = pd.read_csv(stack_gdsc, index_col=0)
         ss = pd.read_csv(stack_sarcoma_organoids_2024, index_col=0)
@@ -417,7 +417,7 @@ def _build_scores(
             if bm["drug"] in s and p in alt[bm["kind"]].get(bm["gene"], set()):
                 s[bm["drug"]] += -1e6 if bm["direction"] == "sensitize" else 1e6
         scores["biomarker"][p] = s
-    order = ["oracle", "drugmean_sarcoma_organoids_2024", "drugmean_gdsc", "expr_pca", "expr_nobase"]
+    order = ["measured_delta", "drugmean_sarcoma_organoids_2024", "drugmean_gdsc", "expr_pca", "expr_nobase"]
     if "stack" in scores:
         order += ["stack", "stack_nobase"]
     order += ["biomarker", "random"]
@@ -428,11 +428,11 @@ def _score(
     scores: dict, panel: dict, patients: list[str], n_rand: int, rng: np.random.Generator
 ) -> dict[str, list[dict]]:
     """regret/recall record per policy per patient for the current response."""
-    recs: dict[str, list[dict]] = {pol: [] for pol in ["oracle", "random", *scores]}
+    recs: dict[str, list[dict]] = {pol: [] for pol in ["measured_delta", "random", *scores]}
     for p in patients:
         viab = panel[p]
         drugs = list(viab)
-        recs["oracle"].append(_regret_recall(sorted(drugs, key=lambda d: viab[d]), viab))
+        recs["measured_delta"].append(_regret_recall(sorted(drugs, key=lambda d: viab[d]), viab))
         rr = [_regret_recall(list(rng.permutation(drugs)), viab) for _ in range(n_rand)]
         recs["random"].append({k: float(np.mean([r[k] for r in rr if k in r])) for k in rr[0]})
         for pol, sc in scores.items():
@@ -477,7 +477,7 @@ def _personalization(score_by_patient: dict, patients: list[str]) -> tuple[float
 
 
 def _diagnostic(scores: dict, order: list[str], panel: dict, patients: list[str]) -> dict:
-    """Personalization row per policy + the observed reference (== oracle ranking)."""
+    """Personalization row per policy + the observed reference (== measured_delta ranking)."""
     rows = {"observed": _personalization(panel, patients)}
     for pol in order:
         if pol in scores:
@@ -749,7 +749,7 @@ def main() -> None:
 
     print(f"\n=== Lift: paired Wilcoxon of regret_norm@1 vs {baseline} ===")
     base = [r.get("regret_norm@1", np.nan) for r in all_recs[baseline]]
-    for pol in [o for o in order if o not in ("oracle", "random", baseline)]:
+    for pol in [o for o in order if o not in ("measured_delta", "random", baseline)]:
         diff = np.array([r.get("regret_norm@1", np.nan) for r in all_recs[pol]]) - np.array(base)
         diff = diff[np.isfinite(diff)]
         if np.any(diff != 0):
@@ -771,7 +771,7 @@ def main() -> None:
     )
     print(f"{'policy':18s}{'cross_pt_rho':>13}{'distinct_top1':>14}{'modal_share':>12}")
     ro, do, mo = adiag["observed"]
-    print(f"{'observed/oracle':18s}{ro:>13.2f}{do:>14.1f}{mo:>12.2f}")
+    print(f"{'observed/measured_delta':18s}{ro:>13.2f}{do:>14.1f}{mo:>12.2f}")
     for pol in order:
         if pol in adiag:
             rr, dd, mm = adiag[pol]

@@ -36,7 +36,7 @@ PENALTY_NAMES: tuple[str, ...] = ("l2", "l1", "en")  # every penalty make_penalt
 # own 3-way representation-controlled grid, which imports both from here.
 
 
-# WHY: artifact scripts/diagnose_oracle_additive.py (Alpine job 31633070, 2026-08-24).
+# WHY: artifact scripts/diagnose_measured_delta_additive.py (Alpine job 31633070, 2026-08-24).
 # The previous path, logspace(-2, 3, 12), was measured to be BINDING: RidgeCV landed on its
 # 1e3 ceiling in 77.3% of per-drug-fold fits at p~2000 / ~40 training lines. Given room to
 # 1e8, 78% of fits chose an alpha above 1e3. So the docstring's claim that alpha is tuned per
@@ -72,7 +72,7 @@ def alpha_is_interior(model: object, *, rtol: float = 1e-6) -> bool:
     means the optimum is outside the path and the reported value is an artifact of where the
     grid stopped. Returns True for models that expose no ``alpha_`` (nothing to check).
 
-    WHY this exists: artifact scripts/diagnose_oracle_additive.py measured the old
+    WHY this exists: artifact scripts/diagnose_measured_delta_additive.py measured the old
     logspace(-2, 3, 12) path pinned at its ceiling in 77.3% of fits, which silently falsified
     the "alpha tuned per representation" fairness claim for most of the Check-2 grid.
     """

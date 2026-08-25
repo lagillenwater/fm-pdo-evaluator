@@ -129,11 +129,11 @@ def run_check2(
         "stack": build_generated_deltas(generated_dir, query_baseline, pert_to_drug),
     }
 
-    # oracle/ceiling VALIDATION (not a positive control -- see fmharness.controls'
+    # measured-delta reference (not a positive control -- see fmharness.controls'
     # plant_interaction/"planted", the flowchart's real "planted interaction, recovered"):
     # the REAL measured delta as its own "prediction", the best-case ceiling for the
     # penalized grid (score_check2's part b), passed via
-    # oracle= rather than folded into `sources` (part a) -- see score_check2's oracle=
+    # measured_delta= rather than folded into `sources` (part a) -- see score_check2's measured_delta=
     # docstring for why (this driver has no Gate print of its own, but score_check2's own
     # part (a)/part (b) split stays consistent regardless of caller).
     return score_check2(
@@ -147,7 +147,7 @@ def run_check2(
         penalties=penalties,
         folds=folds,
         stack_emb=stack_emb,
-        oracle=(real_delta.copy(), real_key.copy()),
+        measured_delta=(real_delta.copy(), real_key.copy()),
         n_permutations=n_permutations,
     )
 

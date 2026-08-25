@@ -7,7 +7,7 @@ that loader directly, not guessed from a name list).
 Rationale (target-dependency hypothesis): a cancer's dependence on its drug's own
 molecular target is a well-established, independently-motivated prior for sensitivity --
 distinct from this harness's other two "does a real signal get detected" checks: the
-oracle/real-delta ceiling (a data-derived VALIDATION, not a control -- real data, no planted
+measured_delta/real-delta ceiling (a data-derived VALIDATION, not a control -- real data, no planted
 effect size) and ``fmharness.controls.plant_interaction`` (the flowchart's actual positive
 control: a SIMULATED signal with a known, controlled effect size). This one is a hand-picked,
 externally-justified predictor from real pharmacology, not real data or a simulation. Higher

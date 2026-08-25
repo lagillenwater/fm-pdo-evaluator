@@ -257,8 +257,8 @@ def detect_degenerate_representations(
     Returns ``(name_a, name_b, mean_correlation)`` for every pair whose per-drug mean
     correlation between standardised features exceeds ``threshold`` in absolute value.
 
-    WHY this exists: artifact scripts/diagnose_oracle_additive.py (Alpine job 31633196,
-    2026-08-24) measured `additive` and `oracle` at correlation exactly -1.000000 across all
+    WHY this exists: artifact scripts/diagnose_measured_delta_additive.py (Alpine job 31633196,
+    2026-08-24) measured `additive` and `measured_delta` at correlation exactly -1.000000 across all
     32 drugs. `additive_i` is the mean over the OTHER lines, (S - real_i)/(n-1), which is
     affine in real_i -- so the leave-one-out construction added to avoid leakage is precisely
     what made it carry the held-out line's own information. Nothing caught that for weeks
@@ -303,8 +303,9 @@ def score_check2(
     penalties: tuple[str, ...] = PENALTY_NAMES,
     folds: int = 5,
     stack_emb: dict[str, pd.DataFrame] | None = None,
-    oracle: tuple[pd.DataFrame, pd.DataFrame] | None = None,
+    measured_delta: tuple[pd.DataFrame, pd.DataFrame] | None = None,
     n_permutations: int = 1000,
+    random_draws: int | None = None,
 ) -> pd.DataFrame:
     """Check-2 table: fixed-signature readouts + representation-controlled penalized grid.
 
@@ -319,12 +320,12 @@ def score_check2(
     model (Kurilov 2020). Returns one row per (source, method) with
     global/interaction/perdrug/p_label/regret@1/regret@3/n.
 
-    ``oracle`` (2026-08-22), if given, is a real ``(delta, key)`` pair -- e.g. the real
+    ``measured_delta`` (2026-08-22), if given, is a real ``(delta, key)`` pair -- e.g. the real
     measured Tahoe delta -- scored ONLY in part (b), not part (a): part (a)'s real-delta-vs-
     real-AUC validation is already the caller's own "Gate" print (real delta through Hallmark
-    with a random-gene-set null, richer than a plain oracle row there would be), so including
+    with a random-gene-set null, richer than a plain measured_delta row there would be), so including
     it in ``sources``/part (a) would just duplicate that at lower fidelity. Part (b) has no
-    such existing check, so ``oracle`` gives the penalized grid's l1/l2/en axes a best-case
+    such existing check, so ``measured_delta`` gives the penalized grid's l1/l2/en axes a best-case
     ceiling the Gate doesn't cover.
     """
     fixed_sigs = {
@@ -402,8 +403,8 @@ def score_check2(
         # over the OTHER lines, (S - real_i)/(n-1), which is affine in real_i with negative
         # slope, so after per-feature standardisation it is exactly -1 x the standardised real
         # delta. Measured: per-drug correlation -1.000000 across all 32 drugs, and identical
-        # ridge coefficient norms and predictions (2.7e-15) versus the `oracle` row.
-        # Artifact: scripts/diagnose_oracle_additive.py, Alpine job 31633196.
+        # ridge coefficient norms and predictions (2.7e-15) versus the `measured_delta` row.
+        # Artifact: scripts/diagnose_measured_delta_additive.py, Alpine job 31633196.
         "prior": lambda _drug: pd.DataFrame(
             0.0, index=base_hvg.index, columns=pd.Index(["const"])
         ),
@@ -412,8 +413,8 @@ def score_check2(
         representations[name] = repr_by_drug(d, kk, hvg)
     for label, emb in (stack_emb or {}).items():
         representations[label] = (lambda e: lambda _drug: e)(emb)
-    if oracle is not None:
-        representations["oracle"] = repr_by_drug(oracle[0], oracle[1], hvg)
+    if measured_delta is not None:
+        representations["measured_delta"] = repr_by_drug(measured_delta[0], measured_delta[1], hvg)
     # same-width random-feature negative control (random_control_representation), one per
     # representation -- not just stack_emb: an apparent win from ANY representation (expr,
     # pca, nmf, stack, ...) should be checked against raw capacity alone, so every row of
@@ -436,14 +437,23 @@ def score_check2(
     # A detector, not a decoration: print any pair of representations that are linear images
     # of each other, because such a pair is one measurement reported twice and any "X beats
     # the Y floor" comparison across it is comparing a thing to itself.
-    for a, b, corr in detect_degenerate_representations(restricted_representations):
+    degenerate = detect_degenerate_representations(restricted_representations)
+    for a, b, corr in degenerate:
         print(f"  DEGENERATE: {a!r} and {b!r} are the same feature space (corr {corr:+.6f})")
+    # Which representations are a linear image of another, so the emitted table can say so per
+    # row. A job log scrolls past; a CSV gets read months later by someone comparing rows, and
+    # `additive` vs `measured_delta` differ by a sign after standardisation -- the same numbers
+    # under two names. Kept as separate rows deliberately, but never silently.
+    twinned: dict[str, str] = {}
+    for a, b, _ in degenerate:
+        twinned.setdefault(a, b)
+        twinned.setdefault(b, a)
     # Build the empirical noise null per (representation, penalty): RANDOM_DRAWS independent
     # same-width Gaussian draws through the identical pipeline. Only the interaction is needed,
     # so the permutation test is skipped here -- that is what makes the extra draws affordable.
     null_by_row: dict[tuple[str, str], list[float]] = {}
     for name in [n for n in representations if not n.endswith("_random") and n != "prior"]:
-        for d in range(RANDOM_DRAWS):
+        for d in range(RANDOM_DRAWS if random_draws is None else random_draws):
             drawn = restrict_representation_support(
                 {
                     "d": random_control_representation(
@@ -470,6 +480,8 @@ def score_check2(
                 continue
             s = score_predictions(preds, n_perm=n_permutations)
             row: dict[str, object] = {"source": repr_name, "method": pen, **_row(s)}
+            if repr_name in twinned:
+                row["same_as"] = twinned[repr_name]
             # Significance against the NOISE distribution rather than against label permutation.
             # p_label shuffles y_true while leaving y_pred, which was built from the original
             # y_true, so it destroys the fold-intercept artifact in the null but not in the
@@ -492,7 +504,7 @@ def score_check2(
     # expression space (fmharness.controls.plant_interaction) and confirm the SAME penalized
     # grid recovers it -- proves the fold structure + model + interaction_rho actually detect
     # a real interaction when one is guaranteed to exist, the flowchart's "positive control:
-    # planted interaction, recovered" (distinct from the oracle/random-feature controls,
+    # planted interaction, recovered" (distinct from the measured delta/random-feature controls,
     # which use real data or noise, not a simulation with a known, controlled effect size).
     #
     # Plant AND score in the SAME small PCA subspace of base_hvg -- planting in the raw

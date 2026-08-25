@@ -3,7 +3,11 @@
 # Generated 2026-08-25 from the live listing; every target was checked against a path
 # the renamed scripts actually reference. Run from the repo root ON ALPINE.
 set -euo pipefail
-cd "$(dirname "$0")"
+# The artifacts live at the REPO ROOT, not beside this script. The first version cd'd to
+# $(dirname "$0") -- scripts/alpine/ -- so the guards all missed and the run was a no-op that
+# looked like a success. Resolve the root from git instead of from this file's location.
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+echo "working in: $PWD"
 echo "before:"; ls -d *soragni* 2>/dev/null || echo "  (none)"
 
 [ -e context_by_drug_soragni                    ] && mv -vn context_by_drug_soragni                    context_by_drug_sarcoma_organoids_2024           # referenced by the code
