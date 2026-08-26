@@ -87,7 +87,29 @@ def main() -> None:
     else:
         src_for_fit = source
 
-    if arm == "cross_platform":
+    if arm == "bulk_target":
+        # Fit in-platform on Tahoe, then predict from the GDSC2 BULK profile of the same line.
+        # Platform, drug and line are held fixed; only the profile's construction changes, so
+        # the gap from in_platform is the cost of a bulk representation rather than a pseudobulk
+        # one -- the baselines' analogue of Stack's 1G/2G.
+        bulk_path = d / "bulk_base.parquet"
+        if not bulk_path.exists():
+            print("bulk_base.parquet absent -- the plan skipped this arm; nothing to do")
+            return
+        b_base = pd.read_parquet(bulk_path)
+        targets = [ln for ln in targets if ln in b_base.index]
+        if not targets:
+            raise SystemExit("no line has both a Tahoe pseudobulk and a GDSC2 bulk profile")
+        tk0 = t_key.assign(patient=t_key["line"].astype(str), drug=t_key["dname"].astype(str))
+        if source in ("prior", "observed_delta"):
+            pred, pkey = build_additive_deltas(t_delta, tk0, targets)
+        elif source == "knn":
+            pred, pkey = build_knn_deltas(t_base, t_delta, tk0, b_base.loc[targets], targets, k=args.k)
+        else:
+            pred, pkey = build_learned_deltas(
+                t_base, t_delta, tk0, b_base.loc[targets], targets, reducer=src_for_fit, k=args.k
+            )
+    elif arm == "cross_platform":
         tr_delta = pd.read_parquet(d / "l1000_delta.parquet")
         tr_key = pd.read_parquet(d / "l1000_key.parquet")
         tr_base = pd.read_parquet(d / "l1000_base.parquet")

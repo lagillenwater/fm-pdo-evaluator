@@ -40,7 +40,18 @@ from fmharness.deltas import common_gene_panel, load_panel_constraint
 # a transfer penalty is uninterpretable -- a source could "transfer well" simply by predicting
 # the drug mean on both platforms, which is exactly what `additive`/`measured_delta` does.
 SOURCES = ("prior", "knn", "pca", "nmf", "observed_delta", "shuffled")
-ARMS = ("in_platform", "cross_platform")
+# bulk_target is the BASELINES' granularity control, and it exists because "both sides are one
+# profile per line" describes shape, not distribution. A Tahoe profile is a pseudobulk average
+# over thousands of single cells, carrying 10x dropout structure and a homogeneous cell line; an
+# organoid profile is a bulk library of heterogeneous tissue. The maps are fit on the first and
+# applied to the second, so the baselines face a representation shift too -- a different one from
+# Stack's, which is about WHERE aggregation happens rather than what the profile is.
+#
+# 44 cell lines carry both a Tahoe pseudobulk baseline and GDSC2 bulk RNA-seq [job 31659975], so
+# the same biological samples exist under both constructions. This arm fits in-platform on Tahoe
+# and predicts from the GDSC2 BULK profile of the same line, holding platform, drug and line
+# fixed so only the profile's construction varies.
+ARMS = ("in_platform", "cross_platform", "bulk_target")
 
 
 def norm_line(s: object) -> str:
@@ -72,6 +83,12 @@ def main() -> None:
     ap.add_argument("--pert-map", type=Path, default=Path("context_by_drug/pert_to_cid.tsv"))
     ap.add_argument("--model-csv", type=Path, default=Path("data/raw/gdsc2_sarcoma/depmap/Model.csv"))
     ap.add_argument("--panel-source", action="append", default=None, help="label=path, repeatable")
+    ap.add_argument(
+        "--bulk-base",
+        type=Path,
+        default=Path("data/reference/stack_input_gdscv2.h5ad"),
+        help="bulk RNA-seq baseline for the SAME lines, for the bulk_target granularity arm",
+    )
     ap.add_argument("--time", type=float, default=24.0)
     ap.add_argument("--treated-cap", type=int, default=8)
     ap.add_argument("--dmso-cap", type=int, default=60)
@@ -172,6 +189,29 @@ def main() -> None:
     print(f"rung-2 panel: {len(panel)} genes (rung 1 runs on a wider one; see the docstring)")
     if len(panel) < 500:
         raise SystemExit(f"panel collapsed to {len(panel)} genes -- refusing to score on it")
+
+    # Pin the bulk baseline for the lines Tahoe and GDSC2 share, on the same panel.
+    if args.bulk_base.exists():
+        import h5py
+
+        with h5py.File(args.bulk_base, "r") as f:
+            var, obs = f["var"], f["obs"]
+            vi = var.attrs.get("_index", "_index"); vi = vi.decode() if isinstance(vi, bytes) else str(vi)
+            oi = obs.attrs.get("_index", "_index"); oi = oi.decode() if isinstance(oi, bytes) else str(oi)
+            genes_b = [x.decode() if isinstance(x, bytes) else str(x) for x in var[vi][:]]
+            rows_b = [x.decode() if isinstance(x, bytes) else str(x) for x in obs[oi][:]]
+            Xb = f["X"][:] if isinstance(f["X"], h5py.Dataset) else None
+        if Xb is not None:
+            bulk = pd.DataFrame(Xb, index=pd.Index([ach2name.get(norm_line(r), norm_line(r)) for r in rows_b]),
+                                columns=pd.Index(genes_b))
+            bulk = bulk.loc[~bulk.index.duplicated()]
+            shared_b = [ln for ln in t_base.index if ln in bulk.index]
+            print(f"  bulk_target arm: {len(shared_b)} lines with BOTH Tahoe pseudobulk and GDSC2 bulk")
+            bulk.reindex(index=shared_b, columns=panel).to_parquet(args.out_dir / "bulk_base.parquet")
+        else:
+            print("  bulk_target arm: X is not a dense dataset; skipping (arm will be absent)")
+    else:
+        print(f"  bulk_target arm: {args.bulk_base} not present; skipping")
 
     t_delta[panel].to_parquet(args.out_dir / "tahoe_delta.parquet")
     t_key.to_parquet(args.out_dir / "tahoe_key.parquet")
