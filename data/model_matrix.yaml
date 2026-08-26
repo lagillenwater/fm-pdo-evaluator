@@ -41,11 +41,14 @@ variants:
     what: >
       Same generation procedure, from the sci-Plex drug-aligned fine-tune. Carries the stronger
       of the two published Check-1b claims (de_spearman_lfc 0.466 against cytokine's 0.357).
-    checkpoint: finetuned-epoch=5-val_loss=6.1078.ckpt
+    checkpoint: /scratch/alpine/$USER/sciplex_finetune/finetuned-epoch=5-val_loss=6.1078.ckpt
     artifact: generated_drug_aligned_agg
     raw_artifact: generated_drug_aligned
     checks: [check1, check1b, check2]
     note: >
+      Recorded as a bare filename until 2026-08-25, which sent a generation job looking for it
+      at the repo root; it lives on scratch. A checkpoint reference has to be resolvable from
+      the record alone.
       The specs claim this used finetuned-epoch=4-val_loss=5.0847.ckpt, selected as lowest
       val_loss. The job logs show epoch=5/6.1078 for both published drug-aligned arms. See
       docs/results/alpine_resolved_ckpt.txt; the spec carries a dated correction.
