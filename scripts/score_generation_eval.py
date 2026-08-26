@@ -54,6 +54,8 @@ import pandas as pd
 from fmharness.check2 import FIXED_READOUTS, PENALTY_NAMES, load_line_matrix, score_check2
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
+    assert_common_genes,
+    common_gene_panel,
     build_generated_deltas,
     build_tahoe_deltas,
     learned_gene_panel,

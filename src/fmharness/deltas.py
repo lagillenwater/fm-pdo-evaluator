@@ -633,6 +633,53 @@ def learned_gene_panel(
     return hvg.union(sig_genes)
 
 
+def common_gene_panel(
+    real_delta: pd.DataFrame, generated: dict[str, pd.DataFrame] | None = None
+) -> pd.Index:
+    """The largest gene set EVERY source can supply, so all are scored on the same genes.
+
+    Nothing controlled this before. `additive`/`knn`/`measured_delta` are derived from
+    ``real_delta`` and carried all 53,393 genes; the Stack variants carried the 14,725 their
+    generation gene list produced; and `pca`/`nmf` carried 2,647 because
+    ``learned_gene_panel`` restricted them at construction time. Three gene spaces, and
+    ``de_fidelity`` drops whatever a source lacks -- so each was scored on its own universe.
+    That is the gene-axis twin of the (patient, drug) support bug ``restrict_common_support``
+    exists to fix, and it hits ``pr_auc`` hardest: average precision depends on the positive
+    rate, and a 5%-of-transcriptome panel chosen as high-variance-union-Hallmark is enriched
+    for genes that actually move.
+
+    The ceiling is set by the only genuinely constrained sources, the generated deltas: a
+    generator cannot emit a gene its gene list never had. Everything else is a subset of
+    ``real_delta`` and can be restricted to whatever this returns. Measured 2026-08-25:
+    real_delta 53,393, both Stack variants 14,725 (identical sets), intersection 14,588.
+
+    ``pca``/``nmf`` must be REBUILT on this panel, not filtered onto it -- only 925 of their
+    2,647 genes fall inside it, so filtering alone would leave them narrower still.
+    """
+    panel = pd.Index(real_delta.columns)
+    for name, gen in (generated or {}).items():
+        before = len(panel)
+        panel = panel.intersection(pd.Index(gen.columns))
+        print(f"  common panel: {before} -> {len(panel)} after intersecting {name}")
+    return panel
+
+
+def assert_common_genes(sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]]) -> None:
+    """Fail loudly if any source carries a different gene set from the others.
+
+    A guard rather than a fix: the panel is applied at construction, and this catches a source
+    that slipped past it. Scoring sources on different genes produces a table that looks
+    well-formed and compares different things.
+    """
+    sizes = {name: d.shape[1] for name, (d, _) in sources.items()}
+    if len(set(sizes.values())) > 1:
+        raise ValueError(
+            "sources do not share a gene panel, so their metrics are not comparable: "
+            f"{sizes}. Build them with genes=common_gene_panel(...)."
+        )
+
+
+
 def build_l1000_gdsc_pairs(
     repo: Path,
     l1000_dir: Path,

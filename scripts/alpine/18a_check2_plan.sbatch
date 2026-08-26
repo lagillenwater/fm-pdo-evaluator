@@ -25,7 +25,8 @@ echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || ec
 
 python scripts/check2_plan.py \
     --deltas-bundle tahoe_deltas \
-    --generated-dir generated_agg \
+    --generated-dir stack_cytokine=generated_agg \
+    --generated-dir stack_drug_aligned=generated_drug_aligned_agg \
     --query-baseline tahoe_query_baseline.h5ad \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --stack-emb base=emb_base.h5ad aligned=emb_aligned.h5ad \

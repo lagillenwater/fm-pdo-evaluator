@@ -45,7 +45,13 @@ from fmharness.check2 import (
     seed_for_name,
 )
 from fmharness.data.loaders import load_tranche
-from fmharness.deltas import build_generated_deltas, load_pert_map, loo_baseline_source
+from fmharness.deltas import (
+    assert_common_genes,
+    build_generated_deltas,
+    common_gene_panel,
+    load_pert_map,
+    loo_baseline_source,
+)
 from fmharness.evaluation import build_sample_design
 from fmharness.signatures import load_hallmark
 
