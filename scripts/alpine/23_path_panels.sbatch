@@ -32,6 +32,7 @@ SRC=(
   --source "sciplex=h5ad=$S/sciplex/SrivatsanTrapnell2020_sciplex3.h5ad"
   --source "gdsc2=h5ad=data/reference/stack_input_gdscv2.h5ad"
   --source "organoids=h5ad=data/reference/stack_input_sarcoma.h5ad"
+  --source "l1000=gene_info=GSE92742_Broad_LINCS_gene_info.txt.gz"
 )
 
 echo "=============== Path A / Check 1: tahoe n stack n sciplex ==============="
@@ -50,3 +51,11 @@ echo "=========== Path B: tahoe as the delta-transfer corpus ==========="
 python scripts/gene_panel_audit.py "${SRC[@]}" \
     --require "tahoe,stack_cytokine,stack_drug_aligned,organoids,gdsc2" \
     --out-dir "promote/panel_pathB_$J"
+
+echo
+echo "=========== Path B alternative: L1000 as the delta-transfer corpus ==========="
+# The comparison the drug measurement forces. Tahoe gives a wider panel but covers only 8 of
+# the organoids' 34 drugs; L1000 covers 25. Both panels are computed so the trade is exact.
+python scripts/gene_panel_audit.py "${SRC[@]}" \
+    --require "l1000,stack_cytokine,stack_drug_aligned,organoids,gdsc2" \
+    --out-dir "promote/panel_pathB_l1000_$J"
