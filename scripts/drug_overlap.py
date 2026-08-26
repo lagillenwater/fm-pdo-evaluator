@@ -29,11 +29,28 @@ def norm_name(s: object) -> str:
     return "".join(ch for ch in str(s).lower() if ch.isalnum())
 
 
+def _find(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
+    """Locate a column CASE-INSENSITIVELY, ignoring separators.
+
+    Matching exactly cost a whole run: the organoid screen's column is `Drug_Name`, which is
+    not `drug_name` or `DRUG_NAME`, so the cohort reported zero drugs and every overlap
+    involving it read as a clean 0. A zero from a missed column is indistinguishable from a
+    zero that means "these cohorts share no drugs", and the second is a finding.
+    """
+    norm = {str(c).lower().replace("_", "").replace(" ", ""): c for c in df.columns}
+    for cand in candidates:
+        key = cand.lower().replace("_", "").replace(" ", "")
+        if key in norm:
+            return norm[key]
+    return None
+
+
 def cids_from(df: pd.DataFrame) -> set[str]:
     """PubChem CIDs from whichever column carries them."""
-    for c in ("pubchem_cid", "PubChemCID", "cid", "drug"):
-        if c in df.columns:
-            vals = {str(v).strip() for v in df[c].dropna()}
+    for c in ("pubchem_cid", "cid", "drug"):
+        col = _find(df, (c,))
+        if col is not None:
+            vals = {str(v).strip() for v in df[col].dropna()}
             numeric = {v.split(".")[0] for v in vals if v.replace(".", "", 1).isdigit()}
             if len(numeric) > len(vals) / 2:
                 return numeric
@@ -42,9 +59,10 @@ def cids_from(df: pd.DataFrame) -> set[str]:
 
 def names_from(df: pd.DataFrame) -> set[str]:
     """Drug names from whichever column carries them."""
-    for c in ("drug", "drug_name", "DRUG_NAME", "pert_iname", "compound", "product_name"):
-        if c in df.columns:
-            vals = {norm_name(v) for v in df[c].dropna()}
+    for c in ("drug_name", "drug", "pert_iname", "compound", "product_name", "name"):
+        col = _find(df, (c,))
+        if col is not None:
+            vals = {norm_name(v) for v in df[col].dropna()}
             if vals and not all(v.isdigit() for v in vals):
                 return vals - {""}
     return set()
@@ -81,6 +99,10 @@ def main() -> None:
             continue
         if p.suffix in (".tsv", ".txt"):
             df = pd.read_csv(p, sep="\t", low_memory=False)
+            if not any(str(c).lower().replace("_", "") in
+                       ("drug", "drugname", "cid", "pubchemcid", "pertiname") for c in df.columns):
+                # headerless: the first data row became the column labels
+                df = pd.read_csv(p, sep="\t", header=None, names=["drug_name", "pubchem_cid"])
         elif p.suffix == ".csv":
             df = pd.read_csv(p, low_memory=False)
         else:
@@ -90,6 +112,10 @@ def main() -> None:
                        "n_cid": len(cids[label]), "n_name": len(names[label])}
         print(f"  {label:<22} {len(cids[label]):>6} CIDs  {len(names[label]):>6} names  "
               f"cols={[str(c) for c in df.columns][:6]}")
+        print(f"  {'':22} cid ex={sorted(cids[label])[:3]} name ex={sorted(names[label])[:3]}")
+        if not cids[label] and not names[label]:
+            print(f"  {'':22} WARNING: no drug axis found -- every overlap for {label} will be a")
+            print(f"  {'':22} false zero. Columns present: {[str(c) for c in df.columns][:12]}")
 
     for spec in args.generated_dir:
         label, _, d = spec.partition("=")
@@ -101,6 +127,7 @@ def main() -> None:
         cids[label], names[label] = set(), nm
         meta[label] = {"path": str(dd), "n_cid": 0, "n_name": len(nm)}
         print(f"  {label:<22} {0:>6} CIDs  {len(nm):>6} names  (from filenames)")
+        print(f"  {'':22} name ex={sorted(nm)[:4]}")
 
     labels = list(names)
     for title, sets in (("BY PUBCHEM CID", cids), ("BY NORMALISED NAME", names)):
