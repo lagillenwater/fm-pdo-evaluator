@@ -73,6 +73,36 @@ def _split_half_deltas(paths: list[str], target_names: list[str], repl: str | No
     return de, chosen
 
 
+
+def _write_params_sidecar(result_path, args_ns, extra=None) -> None:
+    """Record the git sha and every resolved argument beside the result.
+
+    A ceiling used as a denominator has to be checkable against a rerun; a bare CSV is a number
+    with no way back to the code and parameters that produced it. This script had none, which is
+    how its value lived in doc prose for weeks with nothing behind it.
+    """
+    import json as _json
+    import subprocess as _sp
+    from pathlib import Path as _P
+
+    try:
+        sha = _sp.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                      check=True).stdout.strip()
+    except Exception:
+        sha = "unknown"
+    import os as _os
+
+    side = _P(str(result_path)).with_suffix(".params.json")
+    side.write_text(_json.dumps({
+        "result": _P(str(result_path)).name,
+        "git_sha": sha,
+        "slurm_job_id": _os.environ.get("SLURM_JOB_ID", "local"),
+        "args": {k: str(v) for k, v in vars(args_ns).items()},
+        **(extra or {}),
+    }, indent=2) + "\n")
+    print(f"wrote {side}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--local-dir", required=True, help="dir with the Tahoe DE parquet (on scratch)")
@@ -184,6 +214,7 @@ def main() -> None:
     out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame([summary]).to_csv(out, index=False)
+    _write_params_sidecar(out, args, extra={'n_pairs': int(r.size)})
     print("\n=== delta reproducibility ceiling (real Tahoe delta, plate split-half) ===")
     for k, v in summary.items():
         print(f"  {k:22s} {v}")

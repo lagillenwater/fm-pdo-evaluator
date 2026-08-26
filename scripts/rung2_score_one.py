@@ -163,7 +163,8 @@ def main() -> None:
         pkey = pd.concat(keys, ignore_index=True)
 
     tk = t_key.assign(line=t_key["line"].astype(str), dname=t_key["dname"].astype(str))
-    rhos, labels = score_pairs(pred, pkey, t_delta, tk, genes)
+    truth = planted_truth if planted_truth is not None else t_delta
+    rhos, labels = score_pairs(pred, pkey, truth, tk, genes)
     if not rhos:
         raise SystemExit(f"no scorable pairs for {args.cell}")
 
@@ -177,7 +178,7 @@ def main() -> None:
         i = rng.integers(len(pred))
         j = int(rng.choice(idx))
         p = pred.iloc[int(i)][genes].to_numpy(dtype=float)
-        t = t_delta.iloc[j][genes].to_numpy(dtype=float)
+        t = truth.iloc[j][genes].to_numpy(dtype=float)
         ok = np.isfinite(p) & np.isfinite(t)
         if ok.sum() >= 50:
             null.append(float(stats.spearmanr(p[ok], t[ok]).statistic))

@@ -1,0 +1,20 @@
+{
+  "name": "promoted_provenance",
+  "claim": "Provenance status of every promoted result: sidecar present, job id, input count, and whether a later fix supersedes it. check2_grid_5fold_corrected.csv (job 31655278) is superseded, having been produced before the gene panel was wired and before the planted positive control was restored to the Check-2 array path.",
+  "script": "scripts/audit_ladder.py",
+  "git_sha": "ec2be62d679e4f8c06f414703b60213844825c83",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/promoted_provenance.csv",
+    "sha256": "c2f69cb82aa452bb3c325afada54405e4a041d379af68960ea4c946d3b0010f4",
+    "bytes": 1445
+  },
+  "inputs": [
+    {
+      "path": "promote/ladder_audit/ladder_audit.params.json",
+      "sha256": "e2d1e6b0c390ccc9ee8e9d3ef04e483d82fee9412802bf456485949453c41728",
+      "bytes": 395
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "local"
+}

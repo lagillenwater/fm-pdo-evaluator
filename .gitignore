@@ -286,3 +286,6 @@ stack_input_sarcoma.h5ad
 
 # Claude Code harness config (local tooling preferences, not project code)
 .claude/
+
+# scratch outputs staged for promotion; the promoted copy under docs/results/ is the artifact
+promote/

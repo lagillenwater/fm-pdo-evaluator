@@ -1,0 +1,16 @@
+result,sidecar,job_id,script,n_inputs,superseded,superseded_why
+check2_grid_5fold_corrected.csv,True,31655278,scripts/score_generation_eval.py,1,True,common gene panel wired into both scoring paths
+dataset_cell_line_overlap.csv,True,31659975,scripts/dataset_overlap_matrix.py,1,False,
+dataset_gene_overlap.csv,True,31659975,scripts/dataset_overlap_matrix.py,1,False,
+de_permutation_null_both_checkpoints.csv,True,31660552,scripts/de_permutation_null.py,1,False,
+gen_logit_threshold_sweep.csv,True,31636241,scripts/sweep_gen_logit.py,1,False,
+l1000_imputation_fidelity.csv,True,31661570,scripts/l1000_imputation_fidelity.py,1,False,
+l1000_imputation_fidelity_paired.csv,True,31661570,scripts/l1000_imputation_fidelity.py,1,False,
+l1000_imputation_fidelity_per_pair.csv,True,31661570,scripts/l1000_imputation_fidelity.py,1,False,
+l1000_tahoe_agreement_per_pair.csv,True,31661769,scripts/l1000_tahoe_agreement_diagnosis.py,1,False,
+l1000_tahoe_agreement_summary.csv,True,31661769,scripts/l1000_tahoe_agreement_diagnosis.py,1,False,
+l1000_tahoe_transform_sweep.csv,True,31661918,scripts/l1000_tahoe_agreement_diagnosis.py,1,False,
+organoid_drug_coverage.csv,True,31660822,scripts/drug_overlap.py,1,False,
+rung3_label_ceiling.csv,True,31663627,scripts/label_ceiling.py,1,False,
+rung4_feasibility.csv,True,31663218,scripts/organoid_rung4_feasibility.py,1,False,
+rung4_table_granularity.csv,True,31663218,scripts/organoid_rung4_feasibility.py,1,False,

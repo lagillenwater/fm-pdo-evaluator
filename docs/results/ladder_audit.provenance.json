@@ -1,0 +1,20 @@
+{
+  "name": "ladder_audit",
+  "claim": "Mechanical audit of all six ladder rungs on six axes: floor, negative control, positive control, params sidecar, gene panel, drug alignment. Verifies machinery is present and wired, NOT that it is correct. After closing five gaps, two remain, both in rung 4, which is frozen as the embargoed holdout and must have them closed before unfreezing.",
+  "script": "scripts/audit_ladder.py",
+  "git_sha": "ec2be62d679e4f8c06f414703b60213844825c83",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/ladder_audit.csv",
+    "sha256": "99906780bbc3bb153dcb43b426f31c20ef9dab31c9b3734da12aab61c24106db",
+    "bytes": 1563
+  },
+  "inputs": [
+    {
+      "path": "promote/ladder_audit/ladder_audit.params.json",
+      "sha256": "e2d1e6b0c390ccc9ee8e9d3ef04e483d82fee9412802bf456485949453c41728",
+      "bytes": 395
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "local"
+}

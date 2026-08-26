@@ -39,7 +39,11 @@ from fmharness.deltas import common_gene_panel, load_panel_constraint
 # to a line-permuted baseline, which must collapse to the null. Without a floor and a noise row
 # a transfer penalty is uninterpretable -- a source could "transfer well" simply by predicting
 # the drug mean on both platforms, which is exactly what `additive`/`measured_delta` does.
-SOURCES = ("prior", "knn", "pca", "nmf", "observed_delta", "shuffled")
+# `planted` is the positive control: a delta built to be perfectly predictable from the target
+# baseline, which the same fit must recover. Without something that MUST succeed, a grid of
+# small numbers cannot distinguish "transfer is hard" from "this pipeline cannot fit anything",
+# and rung 2 is exactly where that ambiguity bites -- every arm is expected to score low.
+SOURCES = ("prior", "knn", "pca", "nmf", "observed_delta", "shuffled", "planted")
 # bulk_target is the BASELINES' granularity control, and it exists because "both sides are one
 # profile per line" describes shape, not distribution. A Tahoe profile is a pseudobulk average
 # over thousands of single cells, carrying 10x dropout structure and a homogeneous cell line; an
