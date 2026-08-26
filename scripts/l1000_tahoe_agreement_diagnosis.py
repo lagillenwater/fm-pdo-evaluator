@@ -73,6 +73,84 @@ def git_sha() -> str:
         return "unknown"
 
 
+def transforms() -> dict:
+    """Candidate normalisations, each applied to a (pairs x genes) delta matrix.
+
+    Rank correlation is invariant to any monotone transform applied WITHIN a profile, so a
+    per-profile rescaling cannot move the number by construction and is not worth a job. What
+    can move it is a per-GENE transform across pairs, which re-orders genes within a profile:
+    if the platforms disagree because each gene has its own scale and offset on each platform,
+    removing that per-gene term is exactly the correction needed. If instead they disagree on
+    the biology, no amount of normalisation will help, and these will all sit at baseline.
+    """
+    def zscore_gene(m: np.ndarray) -> np.ndarray:
+        sd = m.std(axis=0, ddof=0)
+        return (m - m.mean(axis=0)) / np.where(sd > 0, sd, 1.0)
+
+    def center_gene(m: np.ndarray) -> np.ndarray:
+        return m - m.mean(axis=0)
+
+    def rank_gene(m: np.ndarray) -> np.ndarray:
+        return np.apply_along_axis(stats.rankdata, 0, m)
+
+    def robust_gene(m: np.ndarray) -> np.ndarray:
+        med = np.median(m, axis=0)
+        iqr = np.subtract(*np.percentile(m, [75, 25], axis=0))
+        return (m - med) / np.where(iqr > 0, iqr, 1.0)
+
+    def drop_pc1(m: np.ndarray) -> np.ndarray:
+        """Remove the leading component, which on cross-platform data is usually technical."""
+        c = m - m.mean(axis=0)
+        u, s, vt = np.linalg.svd(c, full_matrices=False)
+        s1 = s.copy()
+        s1[0] = 0.0
+        return u @ np.diag(s1) @ vt
+
+    return {
+        "none": lambda m: m,
+        "center_per_gene": center_gene,
+        "zscore_per_gene": zscore_gene,
+        "rank_per_gene": rank_gene,
+        "robust_scale_per_gene": robust_gene,
+        "drop_pc1": drop_pc1,
+        "zscore_then_drop_pc1": lambda m: drop_pc1(zscore_gene(m)),
+    }
+
+
+def sweep_transforms(L: np.ndarray, T: np.ndarray, n_perm: int, rng) -> list[dict]:
+    """Cross-platform agreement under each normalisation, each against its OWN null.
+
+    The null is recomputed per transform and this is not optional: a transform that inflates
+    every correlation -- including between perturbations that have nothing to do with each
+    other -- would otherwise look like an improvement. Only lift over the matched null counts.
+    """
+    out = []
+    n = L.shape[0]
+    for name, fn in transforms().items():
+        Lt, Tt = fn(L.copy()), fn(T.copy())
+        obs = [float(stats.spearmanr(Lt[i], Tt[i]).statistic) for i in range(n)]
+        null = []
+        for _ in range(n_perm):
+            i, j = rng.choice(n, size=2, replace=False)
+            null.append(float(stats.spearmanr(Lt[i], Tt[j]).statistic))
+        o, nl = np.asarray(obs), np.asarray(null)
+        o, nl = o[np.isfinite(o)], nl[np.isfinite(nl)]
+        sign = float(np.mean(np.sign(Lt) == np.sign(Tt))) if name != "rank_per_gene" else float("nan")
+        out.append({
+            "transform": name,
+            "mean_rho": round(float(o.mean()), 4),
+            "sd_rho": round(float(o.std(ddof=1)), 4),
+            "null_mean": round(float(nl.mean()), 4),
+            "lift_over_null": round(float(o.mean() - nl.mean()), 4),
+            "p_vs_null": round(float((1 + np.sum(nl >= o.mean())) / (1 + nl.size)), 4),
+            "sign_concordance": round(sign, 4) if np.isfinite(sign) else "",
+            "n_pairs": int(o.size),
+        })
+        print(f"  {name:<24} rho={out[-1]['mean_rho']:+.4f}  null={out[-1]['null_mean']:+.4f}"
+              f"  lift={out[-1]['lift_over_null']:+.4f}  p={out[-1]['p_vs_null']}")
+    return out
+
+
 def main() -> None:
     """Measure the noise ceiling, sign concordance and magnitude for each shared pair."""
     ap = argparse.ArgumentParser(description=__doc__)
@@ -85,6 +163,7 @@ def main() -> None:
     ap.add_argument("--treated-cap", type=int, default=8)
     ap.add_argument("--dmso-cap", type=int, default=60)
     ap.add_argument("--top-n", type=int, default=100, help="genes by |Tahoe delta| for the moved-gene arm")
+    ap.add_argument("--n-perm", type=int, default=200, help="mismatched-pair draws per transform")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-dir", required=True, type=Path)
     args = ap.parse_args()
@@ -147,6 +226,8 @@ def main() -> None:
     t_index = {(r.line, r.dname): i for i, r in enumerate(t_key.itertuples())}
 
     rows: list[dict[str, object]] = []
+    mat_l1000: list[np.ndarray] = []
+    mat_tahoe: list[np.ndarray] = []
     for (line, dname), grp in t_wells.groupby(["line", "dname"], sort=False):
         if (line, dname) not in t_index:
             continue
@@ -172,6 +253,8 @@ def main() -> None:
         sign_all = float(np.mean(np.sign(full) == np.sign(tv)))
         sign_top = float(np.mean(np.sign(full[top]) == np.sign(tv[top])))
 
+        mat_l1000.append(full)
+        mat_tahoe.append(tv)
         rows.append({
             "line": line, "drug": dname,
             "n_treated_wells": int(len(tw)), "n_dmso_wells": int(len(cw)),
@@ -224,6 +307,15 @@ def main() -> None:
                         "n_pairs": int(len(df)), "p": round(float(tt.pvalue), 4)})
 
     pd.DataFrame(summary).to_csv(args.out_dir / "l1000_tahoe_agreement_summary.csv", index=False)
+
+    # Can a normalisation recover agreement the raw comparison misses?
+    print("\n============ TRANSFORMATION SWEEP ============")
+    print(f"  (noise ceiling from split-half is {df['splithalf_rho_l1000'].mean():+.4f}; a"
+          f" transform that helps should move toward it)")
+    L = np.vstack(mat_l1000)
+    T = np.vstack(mat_tahoe)
+    sweep = sweep_transforms(L, T, args.n_perm, rng)
+    pd.DataFrame(sweep).to_csv(args.out_dir / "l1000_tahoe_transform_sweep.csv", index=False)
     (args.out_dir / "l1000_tahoe_agreement.params.json").write_text(
         json.dumps({
             "git_sha": git_sha(), "args": {k: str(v) for k, v in vars(args).items()},
