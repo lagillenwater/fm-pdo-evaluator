@@ -1,0 +1,25 @@
+{
+  "name": "rung3_label_ceiling",
+  "claim": "Rung-3 ceiling: agreement between GDSC2 and independent viability screens on shared (cell line, drug) pairs. GDSC2 vs CTRPv2 interaction 0.457 over 25028 pairs, 513 lines, 71 drugs, global 0.689. GDSC2 vs PRISM interaction 0.305 over 27443 pairs, 311 lines, 105 drugs, global 0.590. Both p_label 0.001. This REPRODUCES the 0.31-0.47 figure previously quoted in docs/tahoe_generation_results.md with no artifact behind it; the comparator data was absent from Alpine and had to be re-fetched via coderdata.download, so the number was correct but unverifiable until this job.",
+  "script": "scripts/label_ceiling.py",
+  "git_sha": "b5aab1e9d3a30a1577f0b2e5418057c3c130f773",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung3_label_ceiling.csv",
+    "sha256": "4711574f3c5f6afdbcda736de6a752f300aa6f2ddb47112d4426c4b7cb56398a",
+    "bytes": 266
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/lc/run.log",
+      "sha256": "675895dd78a9fd6618d4377e6c3007f12610d8382109d91ee2f43894ce540b73",
+      "bytes": 3387
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31663627",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/lc/run.log",
+    "sha256": "675895dd78a9fd6618d4377e6c3007f12610d8382109d91ee2f43894ce540b73",
+    "bytes": 3387
+  }
+}
