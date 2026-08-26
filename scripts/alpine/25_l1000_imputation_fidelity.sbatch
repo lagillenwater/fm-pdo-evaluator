@@ -4,9 +4,9 @@
 #SBATCH --qos=cpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=96G
-#SBATCH --time=03:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=02:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
@@ -17,6 +17,9 @@
 # which is a few thousand wells out of 1.3M. Splitting by pair would re-open and re-seek the
 # same .gctx per task, and the DMSO baseline is shared across all pairs of a line -- a per-pair
 # split would recompute it identically N times. The work after the read is seconds.
+# Right-sized after 31661349 sat PENDING on (Priority) with a 96G/8-CPU ask. The .gctx is read
+# in 2000-well chunks (~200MB per block) and the Tahoe delta frame is under 1GB, so the original
+# request was several times the working set and only bought queue delay.
 set -euo pipefail
 REPO="${REPO:-$SLURM_SUBMIT_DIR}"
 cd "$REPO"
