@@ -1,0 +1,25 @@
+{
+  "name": "rung2_l1000_context_generation",
+  "claim": "Stack's actual rung-2 arm (D3: generation from an L1000-built context, query baseline held at Tahoe), scored for the FIRST TIME (job 31678008) after building the missing BRD-K -> PubChem-CID mapping. 14 of Tahoe's drugs matched (one CID collision, matching D3's documented 15-name/14-CID limitation), 618 shared (line, drug) pairs after common-support restriction. Both checkpoints are null: stack_cytokine r=-0.001 (r_offdiag=-0.004, rank=0.523 -- indistinguishable from a non-specific predictor), stack_drug_aligned r=0.011 (r_offdiag=0.003, rank=0.596). This matches rung 1's Tahoe-context result (r=0.018/0.040) within noise: Stack's generation is null regardless of which platform its in-context examples come from -- the failure is not explained by a context/platform mismatch.",
+  "script": "scripts/score_l1000_context_generation.py",
+  "git_sha": "88db4fb3c9966b8adf68fd9230c85bd2ff7c42a5",
+  "result": {
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/rung2_l1000_context_generation.csv",
+    "sha256": "74acf14aac38c0d7fc73b19c7d651054a4e2fcb1995d0c6a6f8167a89fbea3e9",
+    "bytes": 130
+  },
+  "inputs": [
+    {
+      "path": "/tmp/pull_l1000ctx/l1000_context_generation.params.json",
+      "sha256": "2158a0bbf024aa88e5c5a4cc4c9968e359ac9e35fa4d13d4c4591d0af82d2018",
+      "bytes": 830
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31678008",
+  "log": {
+    "path": "/tmp/pull_l1000ctx/l1000_context_generation.params.json",
+    "sha256": "2158a0bbf024aa88e5c5a4cc4c9968e359ac9e35fa4d13d4c4591d0af82d2018",
+    "bytes": 830
+  }
+}

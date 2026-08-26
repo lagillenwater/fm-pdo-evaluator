@@ -112,6 +112,12 @@ each half aggregated to a delta, halves correlated, Spearman-Brown to full data.
   different platform", which is the platform-shift analogue for a model that is never fitted.
   Known limitation: only 15 of Tahoe's 33 drugs matched L1000 by PubChem CID, so this is a
   14-drug comparison (one CID collision) against the baselines' wider one.
+  **Scored** [job 31678008, `docs/results/rung2_l1000_context_generation.csv`, via
+  `scripts/score_l1000_context_generation.py`]: 618 shared (line, drug) pairs, both checkpoints
+  null (`stack_cytokine` r=-0.001, `stack_drug_aligned` r=0.011), matching rung 1's Tahoe-context
+  result (r=0.018/0.040) within noise. Stack's generation is null regardless of which platform
+  its in-context examples come from — the rung-1 failure is not explained by a context/platform
+  mismatch.
 - A DIFFERENT, narrower measurement — give Stack the L1000 DMSO profile of line X as its query
   baseline instead of Tahoe's untreated profile, still scored against the Tahoe delta — shifts
   Stack's INPUT rather than its context, and answers a different question again. D3 considered
@@ -178,13 +184,19 @@ scored under either representation source on an identical drug set.
 
 | ceiling | value | status |
 |---|---|---|
-| rung 0 — delta reproducibility | 0.30 raw / 0.46 Spearman-Brown | quoted in `tahoe_generation_results.md:66`; **rerunning** for a promoted artifact |
-| rung 3 — screen agreement | 0.47 (GDSC2↔CTRP), 0.31 (GDSC2↔PRISM) | quoted at `:448`; **rerunning** |
+| rung 0 — delta reproducibility | 0.109 split-half median / 0.197 Spearman-Brown | **promoted** [job 31676846], on the SAME 14,121-gene panel as rung 1 (`docs/results/rung0_delta_reproducibility.csv`). Supersedes the earlier 0.30/0.46 figure, which was computed on an unpinned top-2000-HVG panel and cannot denominate rung 1. |
+| rung 3 — screen agreement | 0.47 (GDSC2↔CTRP), 0.31 (GDSC2↔PRISM) | **promoted** [job 31663627] (`docs/results/rung3_label_ceiling.csv`) |
 | rung 4 | none exists | verified [job 31663218] |
 
-Both existing ceilings are doc prose with committed scripts but no promoted artifact — no job
-id, no sidecar, no hash. A number used as a denominator has to be verifiable, so both are being
-regenerated before anything is reported as a fraction of them.
+**Open issue, not yet reconciled:** rung 1's baselines (knn/pca/nmf, mean_rho 0.28-0.32) now
+numerically EXCEED the correctly-panelled rung-0 ceiling (0.109-0.197). This is not evidence a
+baseline beats reproducibility itself -- it is the still-unresolved invariant-2/invariant-3
+mismatch: rung 0 aggregates by MEDIAN and scores Pearson, rung 1 aggregates by MEAN and also
+scores Pearson (rung 2 alone scores Spearman). A right-skewed per-pair distribution has a mean
+well above its median, and that alone could close most of the gap. **Do not report a rung-1
+"fraction of ceiling" until this is fixed** — either rung 0's headline switches to
+`splithalf_mean_r` (already computed, just not the reported statistic) or rung 1 switches to a
+median, and the two must agree before division means anything.
 
 ## Artifacts
 
