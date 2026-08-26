@@ -55,7 +55,6 @@ Shared vocabulary, from `data/model_matrix.yaml`:
 | id | kind | what |
 |---|---|---|
 | `prior` | control | one constant feature — per-drug intercept only. The true line-independent floor; scores interaction exactly 0.000 |
-| `additive` | baseline | each drug's mean delta over the OTHER lines. **DEGENERATE** — `(S − real_i)/(n−1)` is affine in `real_i`, so after standardisation it is `measured_delta` sign-flipped (corr −1.000000). Report as a twin, never as a floor |
 | `knn` | baseline | mean delta of the k most similar other lines by baseline expression |
 | `pca` | baseline | ridge on PCA components of the baseline, predicting the delta residual |
 | `nmf` | baseline | as `pca`, non-negative factorisation |
@@ -64,7 +63,7 @@ Shared vocabulary, from `data/model_matrix.yaml`:
 | `aligned` | model | per-line embedding from the cytokine-aligned encoder |
 | `stack_cytokine` | model | generated delta, cytokine-aligned checkpoint |
 | `stack_drug_aligned` | model | generated delta, sci-Plex drug-aligned fine-tune |
-| `measured_delta` | reference | the real delta as its own prediction — best-case input, not a positive control |
+| `measured_delta` | reference | the real delta as its own prediction — best-case input, not a positive control. `additive` (each drug's mean delta over the OTHER lines) is the same quantity: `(S − real_i)/(n−1)` is affine in `real_i`, so after standardisation it is this row sign-flipped, corr −1.000000. Still computed, reported under this name |
 | `planted` | control | a known interaction planted at controlled effect size. Must be recovered |
 | `*_random` | control | per-representation noise control, one per representation |
 
@@ -73,24 +72,35 @@ each half aggregated to a delta, halves correlated, Spearman-Brown to full data.
 
 **Rung 1** (delta, held-out Tahoe line, LOO/5-fold over 50 lines)
 - Floor: `prior`
-- Baselines: `knn`, `pca`, `nmf`, and `additive` **flagged degenerate**
+- Baselines: `knn`, `pca`, `nmf`
 - Models: `stack_cytokine`, `stack_drug_aligned`
 - Reference: `measured_delta` · Controls: `planted`, `*_random`
 - Nulls: `within_drug` (the test of line specificity) and `shuffle_all` (reported, but every
   source clears it at the p floor, so it is uninformative — [job 31660552])
 
 **Rung 2** (delta, Tahoe test set, maps fit on L1000)
-- Baselines refit on L1000: `knn`, `pca`, `nmf`, `additive`
-- **Asymmetry to report, not hide:** Stack is a pretrained generator with no train set here, so
-  its rung-2 and rung-1 numbers are identical — it faces no platform shift. That is a real
-  property of foundation models in this design and an argument in their favour, provided it is
-  stated rather than allowed to look like a win on the same task.
-- The comparison that carries the rung: each baseline's rung-2 minus rung-1 score, the transfer
-  penalty.
+- Baselines refit on L1000: `knn`, `pca`, `nmf`
+- The number that carries the rung is **rung-2 minus rung-1 per baseline** — the transfer
+  penalty — not the rung-2 score alone.
+- **Stack does not face this rung's shift, and the table must say so.** The shift is "your
+  training data came from a different platform", which only applies to a predictor that gets
+  fitted. Stack takes a query baseline plus a drug and generates from frozen pretrained
+  weights: same input, same weights, same output at rung 1 and rung 2. Its rung-2 score is
+  therefore *numerically identical* to its rung-1 score. If Stack is tabulated beside baselines
+  that just paid a transfer penalty and appears to win, that is a category error, not a result.
+  Report it as a fixed reference line labelled "unchanged from rung 1 by construction".
+- Optional companion measurement, scored and labelled SEPARATELY: give Stack the L1000 DMSO
+  profile of line X as its query baseline instead of Tahoe's untreated profile, still scored
+  against the Tahoe delta. That is a genuine platform shift for Stack — but of its INPUT, not
+  of where a map was learned, so it answers a different question than the baselines' penalty
+  and must never be placed in the same column. The inputs exist: L1000 has DMSO wells for all
+  7 shared lines.
+- Worth stating in the writeup: needing no refit for a new platform is a real deployment
+  advantage of a pretrained model. It is simply not a score on the same task.
 
 **Rung 3** (viability, GDSC2 AUC, 5-fold over lines)
 - Floor: `prior` · Representations: `expr`, `base`, `aligned`
-- Baselines: `knn`, `pca`, `nmf`, `additive` (degenerate)
+- Baselines: `knn`, `pca`, `nmf`
 - Models: `stack_cytokine`, `stack_drug_aligned`
 - Reference: `measured_delta` · Controls: `planted`, `*_random`
 - Model class: penalized regression (L1 / L2 / elastic net) per the representation-controlled
