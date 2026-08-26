@@ -181,7 +181,17 @@ case "$sub" in
       fi
     fi
     submit_cmd="sbatch"
-    for arg in "$@"; do submit_cmd+=" $(printf '%q' "$arg")"; done
+    # %q escapes commas, which breaks sbatch's own --export=ALL,VAR=value syntax: the job then
+    # either fails outright or, worse, runs WITHOUT the variable and silently falls back to a
+    # default path. reject_metacharacters has already blocked everything that could escape the
+    # command, so arguments made only of safe characters are passed through verbatim.
+    for arg in "$@"; do
+      if [[ "$arg" =~ ^[A-Za-z0-9_,=./:%+-]+$ ]]; then
+        submit_cmd+=" $arg"
+      else
+        submit_cmd+=" $(printf '%q' "$arg")"
+      fi
+    done
     echo "ralpine: submitting from $REMOTE_ROOT" >&2
     echo "ralpine: $submit_cmd" >&2
     # `bash -lc`, not a bare command: ssh runs a NON-login shell, so the submitting

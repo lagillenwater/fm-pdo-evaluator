@@ -2,7 +2,6 @@
 #SBATCH --job-name=stack-score
 #SBATCH --partition=acpu      # was amilan; CURC retired that partition (2026-08-24)
 #SBATCH --qos=cpu-normal      # acpu accepts only cpu-normal / cpu-long, not normal
-#SBATCH --account=CHANGE_ME          # <-- your Alpine allocation
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
