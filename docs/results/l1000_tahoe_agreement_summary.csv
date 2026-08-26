@@ -1,0 +1,10 @@
+metric,label,mean,sd,n_pairs,p
+splithalf_rho_l1000,L1000 split-half (NOISE CEILING),0.5721,0.2319,32,
+cross_platform_rho,cross-platform rho,0.041,0.0986,32,
+sign_agree_all,"sign agreement, all landmarks",0.5126,0.0351,32,
+sign_agree_top,"sign agreement, top-100 moved",0.5334,0.1045,32,
+median_abs_l1000,median |delta| L1000,0.5753,0.246,32,
+median_abs_tahoe,median |delta| Tahoe,0.1972,0.085,32,
+magnitude_ratio,magnitude ratio L1000/Tahoe,3.3145,1.9407,32,
+sign_agree_all_vs_chance,one-sample t vs 0.5,2.0258,,32,0.0515
+sign_agree_top_vs_chance,one-sample t vs 0.5,1.8101,,32,0.08

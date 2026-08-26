@@ -111,6 +111,46 @@ SW480) x 19 shared drugs at 24 h, from 180 treated and 180 DMSO wells. Gene clas
 12,328 L1000 genes: **978 landmark, 9,196 BING, 2,154 other**; after intersecting with Tahoe,
 946 / 8,833 / 2,069 [job 31661570].
 
+### Why the positive control fails: measured separately [job 31661769]
+
+The fidelity test's landmark class is the positive control, and it failed. A follow-up job
+measured why, over the same 32 pairs and 978 landmark genes
+[`docs/results/l1000_tahoe_agreement_summary.csv`]:
+
+| quantity | value (95% CI) |
+|---|---|
+| **L1000 split-half reproducibility (noise ceiling)** | **+0.5721 [+0.4885, +0.6557]** |
+| cross-platform rho | +0.0410 [+0.0054, +0.0766] |
+| sign concordance, all 978 landmarks | 0.5126 [0.4999, 0.5252] -- p = 0.0515 vs 0.5 |
+| sign concordance, top-100 genes Tahoe moved | 0.5334 [0.4958, 0.5711] -- p = 0.0800 vs 0.5 |
+| median abs delta, L1000 | 0.5753 [0.4866, 0.6640] |
+| median abs delta, Tahoe | 0.1972 [0.1665, 0.2279] |
+
+**The failure is not noise.** Splitting each pair's treated and DMSO wells into disjoint halves
+and correlating the two independent deltas gives **0.572** -- L1000's own delta reproduces
+itself well. So the achievable ceiling was 0.57 and the cross-platform result reached 0.041,
+about 7% of it. The platforms genuinely disagree; L1000 is not simply measuring nothing.
+
+**The perturbations are not in the same direction.** Sign concordance is 51.3%, against a 50%
+chance rate (p = 0.0515). Restricting to the 100 genes Tahoe says moved most -- where signs
+should be most reliable -- it is 53.3% (p = 0.0800). Neither is distinguishable from chance.
+
+**Magnitudes are not comparable, and the ratio should not be read as effect size.** L1000's
+median absolute delta is 3.3x Tahoe's, but the two are in different units: L1000 Level 3
+normalized expression versus Tahoe logCPM log-fold-change. What the number rules out is the
+possibility that L1000's deltas are flat or absent. It says nothing about which platform sees
+a larger biological effect, and no unit conversion was performed.
+
+**Agreement appears only where the effect is very large.** Bortezomib, a proteasome inhibitor
+with a massive transcriptional response, reaches cross-platform rho 0.399 in HT29 and 0.218 in
+A549, with top-gene sign concordance 0.84 and 0.71. It is the only drug that clearly separates
+from the rest. That is consistent with agreement requiring an effect large relative to the
+between-experiment differences, but it rests on two pairs and is an observation, not a result.
+
+Most pairs have 3-8 treated wells against 60 DMSO wells, so the split-half is often 1-vs-2
+treated wells and the 0.572 ceiling is if anything an underestimate of what more replication
+would give.
+
 ### The positive control fails
 
 | gene class | genes | mean rho | null mean | lift | p vs null |

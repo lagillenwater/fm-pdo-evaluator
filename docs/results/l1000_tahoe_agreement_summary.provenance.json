@@ -1,0 +1,25 @@
+{
+  "name": "l1000_tahoe_agreement_summary",
+  "claim": "Noise ceiling, direction and magnitude for L1000 vs Tahoe deltas on 32 shared (cell line, drug) pairs, 978 landmark genes. L1000 split-half reproducibility 0.5721 [95% CI 0.4885, 0.6557] -- L1000's own delta IS reproducible, so the near-zero cross-platform agreement (0.0410 [0.0054, 0.0766]) is genuine platform disagreement and NOT L1000 measurement noise. Sign concordance 0.5126 [0.4999, 0.5252], p=0.0515 against the 50 percent chance rate, and 0.5334 p=0.0800 restricted to the top-100 genes Tahoe says moved: direction agreement is indistinguishable from chance. Median absolute delta 0.5753 L1000 vs 0.1972 Tahoe, ratio 3.31, but the two are in DIFFERENT UNITS (L1000 Level 3 normalized vs Tahoe logCPM log-fold-change) so this rules out flat L1000 deltas and is not a like-for-like effect size comparison.",
+  "script": "scripts/l1000_tahoe_agreement_diagnosis.py",
+  "git_sha": "0b7a32f6c85bad8d97472446efe20a1908d0e6fe",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_tahoe_agreement_summary.csv",
+    "sha256": "4156be4ea103b517c92dcfbb85793f3a3836730f04d5b32f5ca09e86244b4c17",
+    "bytes": 583
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/agree/l1000_tahoe_agreement.params.json",
+      "sha256": "e49f5b38404ae807bb2a687c7baea732ce59e8cff71bd58913c527858ddb9d51",
+      "bytes": 1219
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31661769",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/agree/run.log",
+    "sha256": "2d4df24a1c60d72e6ba109b826eb60e7177374305e4955a1ea31169a3f12a88b",
+    "bytes": 6451
+  }
+}
