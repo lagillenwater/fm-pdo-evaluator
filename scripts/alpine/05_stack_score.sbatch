@@ -35,6 +35,7 @@ export PYTHONUNBUFFERED=1   # else stdout block-buffers to the log file and a mu
 # reader open the exact script that ran. Without it a job log says which stage ran and nothing
 # about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
 # logs and most published numbers cannot be traced to their inputs.
+echo "Resolved: OUT_DIR=$OUT_DIR SOURCES=$SOURCES"
 echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} "
 
                            # "wedged" indistinguishable (job 31655278, 2026-08-25).
@@ -52,6 +53,10 @@ echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || ec
 # --dump-sources writes the panel-restricted (delta, key) pairs the DE-null array consumes, so
 # rung 1's null can be chained straight off this job instead of rebuilding the sources.
 SOURCES="${SOURCES:-promote/sources_rung1_panel}"
+# Named explicitly rather than left to default to results/<job id>: the rung-0 ceiling is pinned
+# to the panel this job writes, and a path that changes with every job id cannot be referenced
+# by the job that needs it.
+OUT_DIR="${OUT_DIR:-results/rung1_panel}"
 python scripts/score_generation_eval.py \
     --deltas-bundle tahoe_deltas \
     --generated-dir stack_cytokine=generated_agg \
@@ -60,5 +65,6 @@ python scripts/score_generation_eval.py \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --panel-source "sciplex=/scratch/alpine/$USER/sciplex/SrivatsanTrapnell2020_sciplex3.h5ad" \
     --dump-sources "$SOURCES" \
+    --out-dir "$OUT_DIR" \
     --k 10 \
     --n-permutations 1000
