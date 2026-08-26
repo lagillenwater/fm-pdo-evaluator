@@ -58,7 +58,12 @@ def main() -> None:
     if name not in names:
         raise SystemExit(f"{name!r} is not in the plan: {names}")
 
-    design_target = pd.read_parquet(args.plan_dir / "design_target.parquet")
+    # The positive control carries SYNTHETIC labels -- a known line x drug interaction planted
+    # into the baseline's PCA subspace -- so it is scored against its own design, not the real
+    # one. Everything else about the fit is identical, which is the point: the same folds, the
+    # same penalties and the same metric must recover a signal that is guaranteed to be there.
+    design_file = "planted_design.parquet" if name == "planted" else "design_target.parquet"
+    design_target = pd.read_parquet(args.plan_dir / design_file)
     fold_of = plan["fold_of"]
     n_folds = int(plan["n_folds"])
     uniq_lines = list(plan["uniq_lines"])
@@ -69,7 +74,7 @@ def main() -> None:
     # The noise null for this representation. Drawn from the same seeds the serial version uses,
     # so an array run and a serial run are comparable rather than merely similar.
     draws: dict[str, list[float]] = {}
-    if not name.endswith("_random") and name != "prior":
+    if not name.endswith("_random") and name not in ("prior", "planted"):
         for d in range(int(plan["random_draws"])):
             drawn = random_control_representation(
                 feat, sorted(feat), seed=(seed_for_name(name) + 7919 * d) & 0xFFFFFFFF

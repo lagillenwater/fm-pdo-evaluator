@@ -44,6 +44,11 @@ from fmharness.check2 import (
     restrict_representation_support,
     seed_for_name,
 )
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+from fmharness.controls import plant_interaction
 from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     assert_common_genes,
@@ -163,6 +168,14 @@ def main() -> None:
         "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel),
         "measured_delta": (real_delta[panel].copy(), real_key.copy()),
     }
+    # loo_baseline_source's genes= reaches only build_learned_deltas (pca/nmf); additive and
+    # knn are built over every gene by construction, so the panel must be applied to their
+    # OUTPUT. assert_common_genes below is what surfaced this -- passing genes= to them looked
+    # like it worked and silently did nothing.
+    for _n, (_d, _k) in list(sources.items()):
+        if list(_d.columns) != list(panel):
+            sources[_n] = (_d.reindex(columns=panel), _k)
+
     for label, (gd, gk) in generated.items():
         sources[label] = (gd[[g for g in panel if g in gd.columns]].copy(), gk)
 
@@ -189,9 +202,52 @@ def main() -> None:
         label, _, path = spec.partition("=")
         representations[label.strip()] = (lambda e: lambda _d: e)(load_line_matrix(Path(path)))
 
+    # POSITIVE CONTROL. Plant a KNOWN line x drug interaction into the untreated baseline's PCA
+    # subspace and require the same penalized grid to recover it. Without it a null row cannot be
+    # told apart from a broken pipeline. The serial score_check2 has always had this; converting
+    # Check 2 to plan/scatter/gather dropped it, and `planted` appeared nowhere in the array path
+    # until now -- so every array-produced grid has been missing its positive control.
+    #
+    # Plant AND score in the same small PCA subspace: n_components is capped well below the
+    # smallest per-fold training-line count so the fit is well-posed.
+    plant_k = max(1, min(5, len(uniq_lines) // (n_folds + 2), base_hvg.shape[1], len(uniq_lines) - 1))
+    plant_sc = StandardScaler().fit(base_hvg.to_numpy())
+    plant_z = PCA(n_components=plant_k, random_state=0).fit_transform(
+        plant_sc.transform(base_hvg.to_numpy())
+    )
+    plant_z_df = pd.DataFrame(plant_z, index=base_hvg.index)
+    representations["planted"] = (lambda z: lambda _d: z)(plant_z_df)
+
+    # design_target is filtered by drug only, so it can carry lines base_hvg does not; reindexing
+    # against those would put NaN rows into the embedding.
+    design_planted = design_target[
+        design_target["patient"].astype(str).isin(set(base_hvg.index.astype(str)))
+    ]
+    emb_per_row = plant_z_df.reindex(design_planted["patient"]).to_numpy()
+    within_drug_sd = float(
+        np.std(
+            design_planted["y"].to_numpy()
+            - design_planted.groupby("drug")["y"].transform("mean").to_numpy()
+        )
+    )
+    plant_scale = within_drug_sd if within_drug_sd > 0 else 1.0
+    planted_design = design_planted.assign(
+        y=plant_interaction(
+            design_planted["drug"],
+            design_planted["y"],
+            emb_per_row,
+            effect=2 * plant_scale,
+            noise_sd=plant_scale,
+            rng=np.random.default_rng(0),
+            n_components=plant_k,
+        )
+    )
+    print(f"  positive control: planted interaction, k={plant_k}, effect={2 * plant_scale:.3f}")
+
     # The displayed noise row per representation, so the scatter stage does not have to know
-    # which seeds the serial version used.
-    for name in [n for n in representations if n != "prior"]:
+    # which seeds the serial version used. `planted` is excluded: it is already a control, and a
+    # noise draw against a synthetic label answers nothing.
+    for name in [n for n in representations if n not in ("prior", "planted")]:
         representations[f"{name}_random"] = random_control_representation(
             representations[name], target_drugs, seed=seed_for_name(name)
         )
@@ -206,6 +262,7 @@ def main() -> None:
         for drug, frame in per_drug.items():
             frame.to_parquet(rdir / f"{_safe(drug)}.parquet")
     design_target.to_parquet(out / "design_target.parquet")
+    planted_design.to_parquet(out / "planted_design.parquet")
 
     plan = {
         "git_sha": git_sha(),

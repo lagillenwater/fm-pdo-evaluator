@@ -294,6 +294,14 @@ def main() -> None:
         # (trivially r=1), restricted to the panel like everything else.
         "measured_delta": (real_delta[panel].copy(), real_key.copy()),
     }
+    # loo_baseline_source's genes= reaches only build_learned_deltas (pca/nmf); additive and
+    # knn are built over every gene by construction, so the panel must be applied to their
+    # OUTPUT. assert_common_genes below is what surfaced this -- passing genes= to them looked
+    # like it worked and silently did nothing.
+    for _n, (_d, _k) in list(sources.items()):
+        if list(_d.columns) != list(panel):
+            sources[_n] = (_d.reindex(columns=panel), _k)
+
     for _label, (_gd, _gk) in generated.items():
         _cols = [g for g in panel if g in _gd.columns]
         sources[_label] = (_gd[_cols].copy(), _gk)

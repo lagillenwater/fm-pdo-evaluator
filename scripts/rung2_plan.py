@@ -33,7 +33,13 @@ import pandas as pd
 
 from fmharness.deltas import common_gene_panel, load_panel_constraint
 
-SOURCES = ("knn", "pca", "nmf", "measured_delta")
+# Controls are part of the grid, not an afterthought. `prior` is the line-independent floor:
+# it predicts each drug's mean and nothing line-specific, so any source failing to beat it has
+# learned nothing about lines. `shuffled` is the negative control: the same fitted map applied
+# to a line-permuted baseline, which must collapse to the null. Without a floor and a noise row
+# a transfer penalty is uninterpretable -- a source could "transfer well" simply by predicting
+# the drug mean on both platforms, which is exactly what `additive`/`measured_delta` does.
+SOURCES = ("prior", "knn", "pca", "nmf", "measured_delta", "shuffled")
 ARMS = ("in_platform", "cross_platform")
 
 

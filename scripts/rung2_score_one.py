@@ -76,17 +76,37 @@ def main() -> None:
     genes = pd.Index(t_delta.columns)
     targets = sorted({str(x) for x in t_key["line"]})
 
+    # ---- controls ---------------------------------------------------------------------
+    # prior: predict each drug's mean over the TRAINING platform and nothing line-specific.
+    # This is the floor every source must beat to have learned anything about lines, and it is
+    # the row that reveals a source "transferring well" by only carrying drug identity.
+    # shuffled: the real fitted map applied to a line-permuted target baseline, so the model
+    # keeps all its capacity but loses the line correspondence. It must collapse to the null.
+    if source in ("prior", "shuffled"):
+        src_for_fit = "measured_delta" if source == "prior" else "pca"
+    else:
+        src_for_fit = source
+
     if arm == "cross_platform":
         tr_delta = pd.read_parquet(d / "l1000_delta.parquet")
         tr_key = pd.read_parquet(d / "l1000_key.parquet")
         tr_base = pd.read_parquet(d / "l1000_base.parquet")
-        if source == "measured_delta":
+        if source == "prior":
+            pred, pkey = build_additive_deltas(tr_delta, tr_key, targets)
+        elif source == "shuffled":
+            rng0 = np.random.default_rng(args.seed + 7)
+            shuffled_base = t_base.copy()
+            shuffled_base.index = pd.Index(rng0.permutation(list(t_base.index)))
+            pred, pkey = build_learned_deltas(
+                tr_base, tr_delta, tr_key, shuffled_base.loc[targets], targets, reducer="pca", k=args.k
+            )
+        elif source == "measured_delta":
             pred, pkey = build_additive_deltas(tr_delta, tr_key, targets)
         elif source == "knn":
             pred, pkey = build_knn_deltas(tr_base, tr_delta, tr_key, t_base, targets, k=args.k)
         else:
             pred, pkey = build_learned_deltas(
-                tr_base, tr_delta, tr_key, t_base, targets, reducer=source, k=args.k
+                tr_base, tr_delta, tr_key, t_base, targets, reducer=src_for_fit, k=args.k
             )
     else:
         # Leave-one-line-out on Tahoe: for each target line, fit on the others only.
@@ -99,13 +119,21 @@ def main() -> None:
             tgt_base = t_base.loc[[line]] if line in t_base.index else None
             if tgt_base is None or tr_key.empty:
                 continue
-            if source == "measured_delta":
+            if source in ("prior", "measured_delta"):
                 p, kk = build_additive_deltas(tr_delta, tr_key, [line])
+            elif source == "shuffled":
+                rng0 = np.random.default_rng(args.seed + 7)
+                sb = tgt_base.copy()
+                sb.index = pd.Index([str(rng0.choice(list(t_base.index)))])
+                p, kk = build_learned_deltas(
+                    tr_base, tr_delta, tr_key, sb, [line], reducer="pca", k=args.k
+                )
+                kk = kk.assign(patient=line)
             elif source == "knn":
                 p, kk = build_knn_deltas(tr_base, tr_delta, tr_key, tgt_base, [line], k=args.k)
             else:
                 p, kk = build_learned_deltas(
-                    tr_base, tr_delta, tr_key, tgt_base, [line], reducer=source, k=args.k
+                    tr_base, tr_delta, tr_key, tgt_base, [line], reducer=src_for_fit, k=args.k
                 )
             frames.append(p)
             keys.append(kk)
