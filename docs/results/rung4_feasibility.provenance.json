@@ -1,0 +1,25 @@
+{
+  "name": "rung4_feasibility",
+  "claim": "Rung-4 feasibility on the embargoed sarcoma organoid cohort. 94 organoids are drug-screened and 17 carry an expression profile; all 17 also have screen rows, so rung-4 n = 17, with a median of 17 of the 34 drugs screened per organoid rather than a full grid. No table in data/raw/soragni/tables carries a dose or replicate column -- every (organoid, drug) pair appears exactly once -- so rung 4 has NO ceiling of its own and can only be read against rung 3. Organoid drug coverage: L1000 25/34, GDSC2 21/34, both 19, either 27.",
+  "script": "scripts/organoid_rung4_feasibility.py",
+  "git_sha": "f265cebfc46a59c7c0d016e244b5dd93303ce619",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung4_feasibility.csv",
+    "sha256": "14053513fcb4ec82e9bcd8abaf1c84e0cce1eeada7bacae8424d2afb779d9783",
+    "bytes": 189
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r4/rung4_feasibility.json",
+      "sha256": "041d99b58007fad0e00eaff43c78b1e2a1662cbb55d168f913bc275ab4f8fc6f",
+      "bytes": 1885
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31663218",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r4/run.log",
+    "sha256": "d5a353d293f5563300a3a067f6bc753813cec6ef8fa667a09daa8fd3fc91c8cf",
+    "bytes": 1035
+  }
+}

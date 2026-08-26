@@ -1,0 +1,8 @@
+table,rows,columns,dose_or_replicate_columns,max_rows_per_pair,pairs_with_replicates
+cnv.parquet,969,Sample_ID;Gene;CNV_Description;Chromosome;GBand;Pathologist_Call;Amplification_Count;Tier,,,
+drug_screen.parquet,1350,Sample_ID;Diagnosis;Tumor_Type;Age_Category;Drug_Name;Viability_Score,,1.0,0.0
+metadata_rnaseq.parquet,64,File_Synapse_ID;Sample_Name;Component;species;age_at_dx;sex;diagnosis;assay;dataSubtype;dataType;specimenID;experimentalCondition;fileFormat;individualID,runType,,
+normalized_gene_counts.parquet,39342,Chromosome;Start;Stop;Length;Strand;Gene_Symbol;gene_biotype;gene_id;gene_name;gene_source;gene_version;SARC0128_Tumor;SARC0129_Tumor;SARC0120_Organoids,,,
+sample_info.parquet,15,Sample_ID;Diagnosis;Gender;Age_at_Diagnosis;Tumor_Purity_Percent;Tumor_Mutational_Burden;MMR_Status;QC_Result;Total_Reads;PF_Reads;Unique_PF_Reads;Uniquely_aligned_PF_Reads;Percent_PF_Reads;Percent_Selected_Bases,,,
+snv.parquet,97,Sample_ID;Gene;Name;Tier;Tumor_Fraction;Coverage;Chromosome;Position;Reference_Allele;Alternate_Allele;BestEffect_Variant_Classification;BestEffect_Hugo_Symbol;BestEffect_Protein_Change;BestEffect_CDNA_Change,,,
+sv.parquet,14,Sample_ID;SV_Type;Left_Partner_Gene;Left_Partner_Chromosome;Left_Partner_Position;Left_Partner_Type;Left_Partner_IntronExon_No;Left_Partner_Band;Left_Partner_Strand;Right_Partner_Gene;Right_Partner_Chromosome;Right_Partner__Position;Right_Partner__Type;Right_Partner_IntronExon_No,,,

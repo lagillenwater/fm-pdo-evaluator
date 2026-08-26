@@ -1,0 +1,25 @@
+{
+  "name": "rung4_table_granularity",
+  "claim": "Every table in the sarcoma organoid tranche scanned for dose or replicate granularity that could support a rung-4 ceiling. None has any; drug_screen.parquet holds exactly one row per (organoid, drug) across 1350 rows.",
+  "script": "scripts/organoid_rung4_feasibility.py",
+  "git_sha": "f265cebfc46a59c7c0d016e244b5dd93303ce619",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung4_table_granularity.csv",
+    "sha256": "f11beac17fa53145b51e649d9ea977a8cb085dc7d1c3228b6514aa719a334b7a",
+    "bytes": 1446
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r4/rung4_feasibility.json",
+      "sha256": "041d99b58007fad0e00eaff43c78b1e2a1662cbb55d168f913bc275ab4f8fc6f",
+      "bytes": 1885
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31663218",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r4/run.log",
+    "sha256": "d5a353d293f5563300a3a067f6bc753813cec6ef8fa667a09daa8fd3fc91c8cf",
+    "bytes": 1035
+  }
+}
