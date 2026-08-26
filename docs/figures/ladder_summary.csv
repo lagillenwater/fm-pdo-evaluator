@@ -1,2 +1,6 @@
-rung,best,ceiling,fraction_of_ceiling
-3 GDSC2,0.137,0.457,0.29978118161925604
+rung,status,reason,value,label
+0 replicate ceiling,reference,IS the ceiling (Spearman-Brown 0.197),,
+1 held-out line,blocked,"best r=0.32, but rung 0's ceiling is median-aggregated and rung 1 is mean-aggregated (open invariant-3 mismatch)",,
+2 cross-platform,value,pca: cross_platform/in_platform. Not a fraction of rung 0's ceiling -- that comparison is separately blocked (see rung 1).,0.1569767441860465,"retained (cross/in-platform, NOT vs rung 0)"
+3 GDSC2,value,"base/l2, the ONLY row clearing Bonferroni",0.29978118161925604,
+4 organoids,blocked,"frozen / embargoed holdout, not yet unfrozen this round",,
