@@ -17,8 +17,9 @@ invariants, the per-rung baseline/model/control lists — that is the standing d
 `docs/decisions/2026-08-25-ladder-round.md` (D1-D6, why each was decided that way) — both stay
 authoritative for *design intent*; this document is authoritative for *current implementation
 status* and is expected to go stale again as soon as more work lands. Update it, don't let it
-drift — that drift, repeated across a dozen documents instead of one, is the problem the
-companion process document addresses.
+drift — that drift, repeated across a dozen documents instead of one, is the problem
+`docs/PROJECT_SPEC.md` (invariants + spec index) and `docs/PROCESS.md` (how work actually gets
+done, session to session) exist to fix. Read those two first if you haven't.
 
 **Read this before trusting any number in a deck or a paper draft.** A number not listed here as
 promoted is not evidence yet, per this project's own standard.

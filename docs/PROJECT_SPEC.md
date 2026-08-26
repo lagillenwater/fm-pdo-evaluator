@@ -8,7 +8,10 @@ what happened to the documents that used to be authoritative and no longer are.*
 It changes rarely — invariants get amended deliberately, the index gets a new row when a spec
 lands, entries get reclassified when superseded. It is not where you look for "what's true right
 now" (that's `docs/PROJECT_STATE.md`) or "what's the current experimental design" (that's
-`docs/transfer_ladder_protocol.md`, itself indexed below as the current active spec). It is where
+`docs/transfer_ladder_protocol.md`, itself indexed below as the current active spec), and it is
+not "how do we actually work" (that's `docs/PROCESS.md` — lifecycle, tooling, git/collaboration
+mechanics; this file's own "Process for new specs" section below is the one piece of that which
+belongs here instead, since it's specifically about the spec index this file owns). It is where
 you look before starting new design work, to find out what's already been decided and where.
 
 ## Mission
