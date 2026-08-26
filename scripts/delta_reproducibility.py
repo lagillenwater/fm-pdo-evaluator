@@ -80,6 +80,14 @@ def main() -> None:
     ap.add_argument("--replicate-col", default=None, help="plate/replicate column (auto-detected)")
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs, matching check 1")
     ap.add_argument("--min-genes", type=int, default=50, help="min shared genes to score a pair")
+    ap.add_argument(
+        "--panel-file",
+        default=None,
+        help="one gene per line; pins the ceiling to the SAME panel it will be a denominator "
+        "for. Without it the ceiling is top-HVG and not comparable to a panel-scored rung.",
+    )
+    ap.add_argument("--n-perm", type=int, default=500, help="mismatched-pair null draws")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="results/delta_reproducibility.csv")
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
@@ -100,9 +108,18 @@ def main() -> None:
         raise SystemExit("no (line, drug, gene) had both plate halves -- too few plates per pair?")
     de["mean"] = (de["lfc0"].to_numpy() + de["lfc1"].to_numpy()) / 2.0
 
-    # HVG = top-variance genes of the mean delta across pairs (matches check 1's panel basis).
-    gene_var = de.groupby("gene_name")["mean"].var()
-    hvg = set(gene_var.sort_values(ascending=False).index[: args.n_hvg])
+    # The gene set has to match whatever this ceiling will be a DENOMINATOR for. Scoring the
+    # ceiling on top-2000 HVG while rung 1 scores on the 14,121-gene common panel makes
+    # "fraction of achievable" a ratio between two different measurements -- the same class of
+    # error as the panel bug itself. --panel-file pins it to the panel actually used.
+    if args.panel_file:
+        panel = {ln.strip() for ln in Path(args.panel_file).read_text().splitlines() if ln.strip()}
+        hvg = panel & set(de["gene_name"].unique())
+        print(f"scoring the ceiling on the supplied panel: {len(hvg)} of {len(panel)} genes present")
+    else:
+        gene_var = de.groupby("gene_name")["mean"].var()
+        hvg = set(gene_var.sort_values(ascending=False).index[: args.n_hvg])
+        print(f"scoring the ceiling on top-{args.n_hvg} HVG (no --panel-file given)")
     d = de[de["gene_name"].isin(hvg)]
 
     # per (line, drug): split-half Pearson r between the two plate halves over the HVG genes.
@@ -118,6 +135,32 @@ def main() -> None:
     if r.size == 0:
         raise SystemExit("no (line, drug) pair had enough shared HVG genes to score")
 
+    # NEGATIVE CONTROL. A split-half correlation has a nonzero floor: genes share structure
+    # (expression level, co-regulation) whether or not the two halves come from the same
+    # perturbation, so a "ceiling" that mismatched halves also reach is measuring gene
+    # structure rather than pair-specific reproducibility. This script had no null at all, and
+    # its output is the DENOMINATOR for rungs 1 and 2 -- every "fraction of achievable" rests
+    # on it. Pair half A of one (line, drug) with half B of a DIFFERENT one to measure it.
+    piv0 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc0")
+    piv1 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc1")
+    common = piv0.index.intersection(piv1.index)
+    piv0, piv1 = piv0.loc[common], piv1.loc[common]
+    rng = np.random.default_rng(args.seed)
+    null = []
+    n_rows = len(common)
+    for _ in range(args.n_perm):
+        if n_rows < 2:
+            break
+        i, j = rng.choice(n_rows, size=2, replace=False)
+        a = piv0.iloc[int(i)].to_numpy(dtype=float)
+        b = piv1.iloc[int(j)].to_numpy(dtype=float)
+        ok = np.isfinite(a) & np.isfinite(b)
+        if ok.sum() >= args.min_genes and a[ok].std() > 0 and b[ok].std() > 0:
+            null.append(float(np.corrcoef(a[ok], b[ok])[0, 1]))
+    nl = np.asarray(null, dtype=float)
+    null_med = float(np.median(nl)) if nl.size else float("nan")
+    print(f"mismatched-pair null: median r = {null_med:.3f} over {nl.size} draws")
+
     med = float(np.median(r))
     # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
     sb = 2 * med / (1 + med) if med > -1 else float("nan")
@@ -131,6 +174,12 @@ def main() -> None:
         "splithalf_q3_r": round(float(np.quantile(r, 0.75)), 3),
         "spearman_brown_full": round(sb, 3),
         "frac_pos": round(float(np.mean(r > 0)), 3),
+        "null_median_r": round(null_med, 3) if np.isfinite(null_med) else float("nan"),
+        "null_n_draws": int(nl.size),
+        "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
+        "p_vs_null": (
+            round(float((1 + np.sum(nl >= med)) / (1 + nl.size)), 4) if nl.size else float("nan")
+        ),
     }
     out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
