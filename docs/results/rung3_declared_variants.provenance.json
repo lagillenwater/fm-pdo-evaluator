@@ -1,0 +1,20 @@
+{
+  "name": "rung3_declared_variants",
+  "claim": "Every variant declared for check2 in data/model_matrix.yaml, all penalties, none omitted, with multiple-testing status. 36 tests in the grid, so Bonferroni alpha is 0.00139 and roughly 1.8 rows are expected to clear an uncorrected 0.05 by chance. Seven rows clear uncorrected; after correction only the base embedding under L2 and the three planted positive-control rows survive. The three baselines clearing uncorrected fall within the expected false-positive count. Note the permutation p floor is 0.001, only marginally below the Bonferroni threshold, so the test resolves nothing finer.",
+  "script": "scripts/report_variants.py",
+  "git_sha": "ea83192bd6fa6ba256c0db97864ee506689585c3",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung3_declared_variants.csv",
+    "sha256": "227dd242ec5b468207ce2ce8a787f1adab0c4f2a6c673eead137900d49dfcf4e",
+    "bytes": 1664
+  },
+  "inputs": [
+    {
+      "path": "docs/results/rung3_check2_grid.provenance.json",
+      "sha256": "0241d9a20b2111cf87e713cb522a46bd49ec6d421d84a94ab5025486560b3176",
+      "bytes": 1552
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31665927"
+}
