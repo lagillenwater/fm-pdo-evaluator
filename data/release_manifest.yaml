@@ -43,6 +43,12 @@ entries:
     why: Gene identifier mapping only; carries no expression or response values.
   - path: data/static/manifest.json
     release: public
+  - path: data/static/public_cell_lines.txt
+    release: public
+    why: >
+      Cell-line identifiers already published by DepMap and LINCS, used by check_release.py to
+      verify that a table's line column holds public identities rather than patient-derived
+      ones. Names only, no measurements.
   # The policy files themselves. Both are declarations ABOUT data -- which model variants
   # belong in which check, and which paths may be released -- and contain no measurements and
   # no sample identifiers. They defaulted to 'embargoed' under the unclassified rule, which

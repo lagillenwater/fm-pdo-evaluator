@@ -141,6 +141,36 @@ normalized expression versus Tahoe logCPM log-fold-change. What the number rules
 possibility that L1000's deltas are flat or absent. It says nothing about which platform sees
 a larger biological effect, and no unit conversion was performed.
 
+### Can a transformation recover it? No [job 31661918]
+
+Seven per-gene normalisations, each scored against its **own** mismatched-pair null
+[`docs/results/l1000_tahoe_transform_sweep.csv`]:
+
+| transform | mean rho | null | lift | p |
+|---|---|---|---|---|
+| none | +0.0410 | +0.0039 | +0.0371 | 0.2139 |
+| center_per_gene | +0.0499 | -0.0052 | +0.0551 | 0.1343 |
+| zscore_per_gene | +0.0453 | +0.0039 | +0.0414 | 0.1841 |
+| rank_per_gene | +0.0425 | -0.0020 | +0.0445 | 0.2090 |
+| robust_scale_per_gene | +0.0436 | +0.0020 | +0.0416 | 0.1940 |
+| drop_pc1 | +0.0358 | +0.0009 | +0.0348 | 0.2836 |
+| zscore_then_drop_pc1 | +0.0336 | +0.0032 | +0.0304 | 0.2687 |
+
+Everything lands between 0.034 and 0.050 against a reachable ceiling of **0.572**, and none
+clears its own null. The best, per-gene centering, moves the raw 0.041 to 0.050 -- noise at this
+sample size.
+
+Only per-GENE transforms were tested, and that is not an omission: rank correlation is
+invariant to any monotone transform applied within a profile, so per-profile rescaling cannot
+change the number by construction. Each transform is scored against a null recomputed under
+that same transform, because a transform that inflates every correlation -- including between
+unrelated perturbations -- would otherwise read as an improvement.
+
+**So the disagreement is not a per-gene scale or offset artifact, and is not fixable by
+representation.** A learned mapping such as L1000toRNAseq is a different and untested object;
+what this rules out is the class of normalisations that could plausibly have explained a
+platform mismatch.
+
 **Agreement appears only where the effect is very large.** Bortezomib, a proteasome inhibitor
 with a massive transcriptional response, reaches cross-platform rho 0.399 in HT29 and 0.218 in
 A549, with top-gene sign concordance 0.84 and 0.71. It is the only drug that clearly separates

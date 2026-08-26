@@ -1,0 +1,25 @@
+{
+  "name": "l1000_tahoe_transform_sweep",
+  "claim": "Seven per-gene normalisations of the L1000 and Tahoe delta matrices, each scored against its own mismatched-pair null. All land between rho 0.0336 and 0.0499 against a split-half noise ceiling of 0.5721, and none clears its null (best p=0.1343 for center_per_gene). Normalisation does NOT recover cross-platform agreement, so the disagreement is not a per-gene scale or offset artifact and is not fixable by representation.",
+  "script": "scripts/l1000_tahoe_agreement_diagnosis.py",
+  "git_sha": "574a914d1824141050f3df1d50cbca70b21f4195",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_tahoe_transform_sweep.csv",
+    "sha256": "f39558422dfbbe59093979a3a002da6b74958fbea13ace6cf9905125b1cce640",
+    "bytes": 495
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/sweep/params.json",
+      "sha256": "0515e7a2e45ce4e44b5d34eca5391e4517cee989ccbf31191acdc2768483e20d",
+      "bytes": 1240
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31661918",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/sweep/run.log",
+    "sha256": "26ab3e56eacf255f06713669f899a193d58517962bd16dac974642826a4f30fb",
+    "bytes": 7127
+  }
+}

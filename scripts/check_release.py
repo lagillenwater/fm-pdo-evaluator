@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -46,6 +47,16 @@ SAMPLE_COLUMNS = {
     "patient", "patient_id", "sample", "sample_id", "line", "cell_line",
     "cell_line_id", "organoid", "organoid_id", "donor", "donor_id", "subject",
 }
+# Of those, the ones that may hold a PUBLICLY CATALOGUED identity rather than a person. `line`
+# holding A549 is a cell line published for decades; `line` holding SARC0065 is a
+# patient-derived organoid under embargo, and the column NAME cannot tell them apart. So the
+# values are checked against data/static/public_cell_lines.txt, built by
+# scripts/build_public_cell_line_registry.py from the DepMap model table and the LINCS instance
+# table. A file passes only if every value in these columns is publicly catalogued -- a
+# verification, not a declaration, so a file that later gains an organoid row starts failing on
+# its own. Person-linked columns are never checked this way and always refuse.
+CELL_LINE_COLUMNS = {"line", "cell_line", "cell_line_id"}
+PUBLIC_LINE_REGISTRY = Path("data/static/public_cell_lines.txt")
 TABLE_SUFFIXES = {".csv", ".tsv", ".parquet"}
 
 # The gate governs DATA release, not code. Source, docs and config are publishable by nature,
@@ -116,6 +127,75 @@ def tier_for(path: str, manifest: dict) -> tuple[str, str]:
             if len(pat) > best[0]:
                 best = (len(pat), e["release"], pat)
     return best[1], best[2]
+
+
+def public_line_registry() -> set[str] | None:
+    """Publicly catalogued cell-line identifiers, or None when the registry is unavailable.
+
+    None means the gate cannot verify and must refuse. Returning an empty set here would read
+    as "no line is public" and behave identically, but None makes the missing-registry case
+    distinguishable in the message -- the difference between "this line is not public" and
+    "I could not check", which matters when the gate runs somewhere the registry was not
+    committed. This gate has already failed open once this session by silently missing a file
+    it depended on.
+    """
+    if not PUBLIC_LINE_REGISTRY.exists():
+        return None
+    return {
+        re.sub(r"[^A-Z0-9]", "", ln.strip().upper())
+        for ln in PUBLIC_LINE_REGISTRY.read_text().splitlines()
+        if ln.strip()
+    }
+
+
+def nonpublic_line_values(path: Path, cols: set[str]) -> tuple[set[str], str]:
+    """Values in cell-line columns that are NOT publicly catalogued.
+
+    Returns ``(offending_values, status)`` where status is "ok", "no-registry" or "unreadable".
+    Three outcomes rather than a boolean because the caller's message must say which happened:
+    "this line is not public", "I could not find the registry" and "I could not parse the file"
+    are different problems with different fixes, and collapsing them produced a message that
+    blamed a missing registry for a NameError.
+
+    Deliberately does NOT use pandas. This gate runs wherever a commit happens, including
+    interpreters without the project environment, which is why sample_columns_in reads headers
+    by hand and imports pyarrow only inside the parquet branch. Reaching for pandas here broke
+    that and, because the failure was swallowed by a bare except, turned into a wrong message
+    instead of a crash.
+    """
+    registry = public_line_registry()
+    if registry is None:
+        return set(), "no-registry"
+    bad: set[str] = set()
+    try:
+        if path.suffix == ".parquet":
+            import pyarrow.parquet as pq
+
+            tbl = pq.read_table(path)
+            for name in tbl.schema.names:
+                if str(name).lower() in cols:
+                    for v in tbl.column(name).to_pylist():
+                        if v is None:
+                            continue
+                        if re.sub(r"[^A-Z0-9]", "", str(v).upper()) not in registry:
+                            bad.add(str(v))
+        else:
+            import csv as _csv
+
+            with path.open(newline="", errors="ignore") as fh:
+                reader = _csv.DictReader(fh, delimiter="\t" if path.suffix == ".tsv" else ",")
+                targets = [c for c in (reader.fieldnames or []) if str(c).lower() in cols]
+                for row in reader:
+                    for c in targets:
+                        v = row.get(c)
+                        if v is None or v == "":
+                            continue
+                        if re.sub(r"[^A-Z0-9]", "", str(v).upper()) not in registry:
+                            bad.add(str(v))
+    except Exception as exc:
+        print(f"check_release: could not parse {path} to verify cell lines: {exc}", file=sys.stderr)
+        return set(), "unreadable"
+    return bad, "ok"
 
 
 def sample_columns_in(path: Path) -> set[str]:
@@ -191,6 +271,33 @@ def main() -> int:
         # A table cleared as public still cannot carry sample identifiers.
         if path.suffix in TABLE_SUFFIXES:
             cols = sample_columns_in(path)
+            line_cols = cols & CELL_LINE_COLUMNS
+            if line_cols and not (cols - CELL_LINE_COLUMNS):
+                bad, status = nonpublic_line_values(path, line_cols)
+                if status == "ok" and not bad:
+                    print(f"check_release: {rel} -- {sorted(line_cols)} verified against the "
+                          f"public cell-line registry ({len(public_line_registry() or [])} ids)")
+                    cols = set()
+                elif status == "no-registry":
+                    problems.append(
+                        f"{rel}\n    carries {sorted(line_cols)} but the public cell-line registry "
+                        f"at {PUBLIC_LINE_REGISTRY} is missing -- refusing rather than assuming. "
+                        f"Rebuild it with scripts/build_public_cell_line_registry.py."
+                    )
+                    continue
+                elif status == "unreadable":
+                    problems.append(
+                        f"{rel}\n    carries {sorted(line_cols)} but the file could not be parsed "
+                        f"to verify them (see stderr) -- refusing rather than assuming."
+                    )
+                    continue
+                else:
+                    problems.append(
+                        f"{rel}\n    carries {sorted(line_cols)} with {len(bad)} value(s) that are "
+                        f"NOT publicly catalogued, e.g. {sorted(bad)[:5]} -- treat as row-level "
+                        f"sample data. Aggregate it, or commit its hash instead."
+                    )
+                    continue
             if cols:
                 problems.append(
                     f"{rel}\n    marked '{tier}' by rule '{rule}', but carries sample column(s) "
