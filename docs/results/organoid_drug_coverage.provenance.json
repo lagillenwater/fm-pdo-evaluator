@@ -1,0 +1,25 @@
+{
+  "name": "organoid_drug_coverage",
+  "claim": "Drug overlap by normalised name across candidate delta-transfer corpora and the sarcoma organoid panel. The organoid screen carries 34 drugs; L1000 covers 25, GDSC2 covers 21, Tahoe covers 8. This refutes substituting Tahoe for L1000 as the Path B transfer corpus on drug grounds, despite Tahoe giving the wider gene panel (12597 vs 8600). The organoid_generated row uses Broad BRD-K compound ids, a separate namespace, so its zeros are artifacts and not findings.",
+  "script": "scripts/drug_overlap.py",
+  "git_sha": "02d66176714cd03209cb91ce245224fb5197f1bc",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/organoid_drug_coverage.csv",
+    "sha256": "0c0336c42ba430362398d29680391cf530b14f66837e12cbdac7aa2564cd0184",
+    "bytes": 325
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/drugs/run.log",
+      "sha256": "3121f8287969c104c427a232494029aa89b0802ac28dced716a25e9410766d46",
+      "bytes": 3613
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31660822",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/drugs/run.log",
+    "sha256": "3121f8287969c104c427a232494029aa89b0802ac28dced716a25e9410766d46",
+    "bytes": 3613
+  }
+}
