@@ -56,6 +56,7 @@ from fmharness.data.loaders import load_tranche
 from fmharness.deltas import (
     assert_common_genes,
     common_gene_panel,
+    load_panel_constraint,
     build_generated_deltas,
     build_tahoe_deltas,
     load_pert_map,
@@ -163,6 +164,14 @@ def main() -> None:
         "(e.g. 999) for true leave-one-cell-line-out",
     )
     ap.add_argument(
+        "--panel-source",
+        action="append",
+        default=None,
+        help="label=path to an extra dataset whose genes must be in the panel, repeatable. "
+        "Check 1's declared panel is tahoe n stack n sciplex = 14,121; without this it is "
+        "tahoe n stack = 14,588.",
+    )
+    ap.add_argument(
         "--generated-dir",
         action="append",
         default=None,
@@ -239,7 +248,20 @@ def main() -> None:
     # once sci-Plex is required. pca/nmf previously got learned_gene_panel's 2,647 -- a
     # top-HVG-union-Hallmark set enriched for genes that move, which inflates pr_auc because
     # average precision depends on the positive rate.
-    panel = common_gene_panel(real_delta, generated)
+    panel_inputs = {k: v[0] for k, v in generated.items()}
+    for _spec in args.panel_source or []:
+        _label, _, _path = _spec.partition("=")
+        _pp = _rel(repo, _path)
+        if not _pp.exists():
+            raise SystemExit(
+                f"--panel-source {_label}={_pp} not present. Refusing to build a panel that "
+                "silently omits a declared constraint."
+            )
+        _cols = load_panel_constraint(_pp)
+        panel_inputs[_label] = pd.DataFrame(columns=_cols)
+        print(f"  panel constraint {_label}: {len(_cols)} genes from {_pp}")
+
+    panel = common_gene_panel(real_delta, panel_inputs)
     print(f"common gene panel: {len(panel)} genes (was: additive/knn {real_delta.shape[1]}, "
           f"pca/nmf {args.n_hvg}-HVG-union-Hallmark)")
     if len(panel) < 1000:

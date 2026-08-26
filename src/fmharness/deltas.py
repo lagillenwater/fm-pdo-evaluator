@@ -667,6 +667,42 @@ def common_gene_panel(
     return panel
 
 
+def load_panel_constraint(path: Path) -> pd.Index:
+    """Gene axis of an extra cohort that must constrain the common panel.
+
+    Reads the gene axis only -- HDF5 var metadata or a parquet schema -- so naming a large
+    cohort as a constraint costs a seek rather than a load. Prefers a symbol column when the
+    index is Ensembl, because every other axis in this project is symbols and an unconverted
+    Ensembl index would intersect to nothing and look like a real (catastrophic) result.
+    """
+    if path.suffix == ".h5ad":
+        import h5py
+
+        with h5py.File(path, "r") as f:
+            var = f["var"]
+            vi = var.attrs.get("_index", "_index")
+            vi = vi.decode() if isinstance(vi, bytes) else str(vi)
+
+            def _dec(a):
+                return [x.decode() if isinstance(x, bytes) else str(x) for x in a]
+
+            cols = _dec(var[vi][:])
+            if cols and cols[0].upper().startswith("ENS"):
+                for c in ("gene_symbol", "gene_short_name", "symbol", "feature_name"):
+                    if c in var:
+                        node = var[c]
+                        if isinstance(node, h5py.Group):
+                            cats = _dec(node["categories"][:])
+                            cols = [cats[i] if i >= 0 else "" for i in node["codes"][:]]
+                        else:
+                            cols = _dec(node[:])
+                        break
+    else:
+        import pyarrow.parquet as pq
+
+        cols = [c for c in pq.ParquetFile(path).schema.names if c != "__index_level_0__"]
+    return pd.Index(sorted({c for c in cols if c and c != "nan"}))
+
 def assert_common_genes(sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]]) -> None:
     """Fail loudly if any source carries a different gene set from the others.
 

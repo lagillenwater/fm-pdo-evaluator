@@ -59,6 +59,7 @@ python scripts/score_generation_eval.py \
     --generated-dir stack_drug_aligned=generated_drug_aligned_agg \
     --query-baseline tahoe_query_baseline.h5ad \
     --pert-map context_by_drug/pert_to_cid.tsv \
+    --panel-source "sciplex=/scratch/alpine/$USER/sciplex/SrivatsanTrapnell2020_sciplex3.h5ad" \
     --dump-sources "$SOURCES" \
     --k 10 \
     --n-permutations 1000

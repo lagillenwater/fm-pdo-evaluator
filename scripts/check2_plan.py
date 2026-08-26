@@ -49,6 +49,7 @@ from fmharness.deltas import (
     assert_common_genes,
     build_generated_deltas,
     common_gene_panel,
+    load_panel_constraint,
     load_pert_map,
     loo_baseline_source,
 )
@@ -133,32 +134,9 @@ def main() -> None:
                 "silently omits a declared constraint -- that is how the panel came out at "
                 "14,588 instead of the declared 12,368."
             )
-        if pp.suffix == ".h5ad":
-            import h5py
-
-            with h5py.File(pp, "r") as f:
-                var = f["var"]
-                vi = var.attrs.get("_index", "_index")
-                vi = vi.decode() if isinstance(vi, bytes) else str(vi)
-                cols = [x.decode() if isinstance(x, bytes) else str(x) for x in var[vi][:]]
-                if cols and cols[0].upper().startswith("ENS"):
-                    for c in ("gene_symbol", "gene_short_name", "symbol", "feature_name"):
-                        if c in var:
-                            node = var[c]
-                            if isinstance(node, h5py.Group):
-                                cats = [x.decode() if isinstance(x, bytes) else str(x)
-                                        for x in node["categories"][:]]
-                                cols = [cats[i] if i >= 0 else "" for i in node["codes"][:]]
-                            else:
-                                cols = [x.decode() if isinstance(x, bytes) else str(x)
-                                        for x in node[:]]
-                            break
-        else:
-            import pyarrow.parquet as pq
-
-            cols = [c for c in pq.ParquetFile(pp).schema.names if c != "__index_level_0__"]
-        panel_inputs[label] = pd.DataFrame(columns=pd.Index(sorted(set(cols))))
-        print(f"  panel constraint {label}: {len(set(cols))} genes from {pp}")
+        cols = load_panel_constraint(pp)
+        panel_inputs[label] = pd.DataFrame(columns=cols)
+        print(f"  panel constraint {label}: {len(cols)} genes from {pp}")
 
     panel = common_gene_panel(real_delta, panel_inputs)
     print(f"common gene panel: {len(panel)} genes "
