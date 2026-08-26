@@ -328,11 +328,54 @@ def main() -> None:
               f"  null={summary_rows[-1]['null_mean']}  lift={summary_rows[-1]['lift_over_null']}"
               f"  p={summary_rows[-1]['p_vs_null']}")
 
+    # ---- the PAIRED test, which is what the design actually calls for -------------------
+    # The summary above compares each class's MEAN against a null of mismatched pairs. That
+    # answers "is there cross-platform agreement at all", and it is swamped by pair-level noise:
+    # dose, replicate count and effect size vary enormously between pairs and none of that is
+    # about imputation. The stated design is a WITHIN-PAIR comparison, and its correct
+    # aggregation is a paired signed-rank test over pairs, where each pair is its own control.
+    # Added after the marginal aggregation proved uninformative; the within-pair design was
+    # fixed in advance, the choice of paired statistic was not.
+    paired_rows = []
+    for a, b in (("landmark", "bing"), ("landmark", "other"), ("bing", "other")):
+        d = (obs[a] - obs[b]).dropna()
+        if len(d) < 6 or not np.any(d != 0):
+            continue
+        w = stats.wilcoxon(d)
+        paired_rows.append({
+            "comparison": f"{a} - {b}", "n_pairs": int(len(d)),
+            "n_favoring_first": int((d > 0).sum()),
+            "median_delta_rho": round(float(d.median()), 4),
+            "wilcoxon_p": round(float(w.pvalue), 4),
+        })
+    if paired_rows:
+        print("\n  paired within-pair comparison (each pair is its own control):")
+        for r in paired_rows:
+            print(f"    {r['comparison']:<20} {r['n_favoring_first']}/{r['n_pairs']} pairs"
+                  f"  median drho={r['median_delta_rho']:+.4f}  Wilcoxon p={r['wilcoxon_p']}")
+        pd.DataFrame(paired_rows).to_csv(args.out_dir / "l1000_imputation_fidelity_paired.csv", index=False)
+
     vm = pd.DataFrame([r for r in rows if r.get("matched") in ("landmark", "imputed_varmatched")])
     if not vm.empty:
         print("\n  variance-matched comparison (equal gene counts, matched variance profile):")
         for name, grp in vm.groupby("matched"):
             print(f"    {name:<22} mean rho={grp['spearman'].mean():+.4f}  n={len(grp)} pairs")
+        piv = vm.pivot_table(index=["line", "drug"], columns="matched", values="spearman")
+        if {"landmark", "imputed_varmatched"} <= set(piv.columns):
+            dv = (piv["landmark"] - piv["imputed_varmatched"]).dropna()
+            if len(dv) >= 6 and np.any(dv != 0):
+                wv = stats.wilcoxon(dv)
+                print(f"    paired, variance-matched: landmark higher in {int((dv > 0).sum())}/{len(dv)}"
+                      f" pairs, median drho={float(dv.median()):+.4f}, Wilcoxon p={float(wv.pvalue):.4f}")
+                paired_rows.append({
+                    "comparison": "landmark - imputed_varmatched", "n_pairs": int(len(dv)),
+                    "n_favoring_first": int((dv > 0).sum()),
+                    "median_delta_rho": round(float(dv.median()), 4),
+                    "wilcoxon_p": round(float(wv.pvalue), 4),
+                })
+                pd.DataFrame(paired_rows).to_csv(
+                    args.out_dir / "l1000_imputation_fidelity_paired.csv", index=False
+                )
         summary_rows.extend(
             {"gene_class": f"varmatched::{name}", "n_genes": int(grp["n_genes"].iloc[0]),
              "n_pairs": int(len(grp)), "mean_spearman": round(float(grp["spearman"].mean()), 4),
