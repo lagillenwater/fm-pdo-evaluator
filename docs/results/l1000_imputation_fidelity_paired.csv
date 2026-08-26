@@ -1,0 +1,5 @@
+comparison,n_pairs,n_favoring_first,median_delta_rho,wilcoxon_p
+landmark - bing,32,22,0.0136,0.0034
+landmark - other,32,21,0.0184,0.0156
+bing - other,32,20,0.0183,0.0595
+landmark - imputed_varmatched,32,19,0.0183,0.2699

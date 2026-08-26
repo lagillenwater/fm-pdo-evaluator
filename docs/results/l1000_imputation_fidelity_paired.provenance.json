@@ -1,0 +1,25 @@
+{
+  "name": "l1000_imputation_fidelity_paired",
+  "claim": "Paired within-pair signed-rank comparison of gene classes, each (line, drug) pair its own control. Raw: landmark beats bing 22/32 pairs p=0.0034 and other 21/32 p=0.0156, monotone degradation. But variance-matched at equal gene count the gap is 19/32, p=0.2699 -- NOT significant. The raw landmark advantage is therefore substantially attributable to landmark gene SELECTION (chosen high-variance and informative) rather than to imputation, and this test does NOT establish that imputed genes are less faithful on deltas.",
+  "script": "scripts/l1000_imputation_fidelity.py",
+  "git_sha": "304459f3f01956dd0b3c9609d5b66926c03265b3",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_imputation_fidelity_paired.csv",
+    "sha256": "0ee8d7260a1a8d2dad8a53acd579ab17cf156a37c45de010c1cac3fc76717bc9",
+    "bytes": 220
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/l1000_imputation_fidelity.params.json",
+      "sha256": "99785d3dc43bf0a7260c12c5e1d4a753a1f9c7cc7357d63437c4fac1665e0e99",
+      "bytes": 2255
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31661570",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/run.log",
+    "sha256": "b77fc4bb8d74cd97e426367685359c4a162464b83c2c1b66d40016adfda8eee9",
+    "bytes": 5549
+  }
+}
