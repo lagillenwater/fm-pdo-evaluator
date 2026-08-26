@@ -102,12 +102,22 @@ each half aggregated to a delta, halves correlated, Spearman-Brown to full data.
   therefore *numerically identical* to its rung-1 score. If Stack is tabulated beside baselines
   that just paid a transfer penalty and appears to win, that is a category error, not a result.
   Report it as a fixed reference line labelled "unchanged from rung 1 by construction".
-- Optional companion measurement, scored and labelled SEPARATELY: give Stack the L1000 DMSO
-  profile of line X as its query baseline instead of Tahoe's untreated profile, still scored
-  against the Tahoe delta. That is a genuine platform shift for Stack — but of its INPUT, not
-  of where a map was learned, so it answers a different question than the baselines' penalty
-  and must never be placed in the same column. The inputs exist: L1000 has DMSO wells for all
-  7 shared lines.
+- **Stack's actual rung-2 arm, per decision D3 (`docs/decisions/2026-08-25-ladder-round.md`):**
+  rebuild Stack's CONTEXT — its in-context learning corpus — from L1000 instead of Tahoe, query
+  baseline held at Tahoe throughout. D3 explicitly rejected swapping the query baseline (below)
+  as "wrong in a subtler way: it shifts what the model is conditioned on, while the baselines'
+  arm shifts where their map was learned." Built by `scripts/alpine/31_l1000_context_tahoe.sbatch`
+  + `32_shard_l1000_context.sbatch` (`l1000_context_by_drug`), scored SEPARATELY from the fitted
+  baselines' grid — it answers "does Stack's generation change when its examples come from a
+  different platform", which is the platform-shift analogue for a model that is never fitted.
+  Known limitation: only 15 of Tahoe's 33 drugs matched L1000 by PubChem CID, so this is a
+  14-drug comparison (one CID collision) against the baselines' wider one.
+- A DIFFERENT, narrower measurement — give Stack the L1000 DMSO profile of line X as its query
+  baseline instead of Tahoe's untreated profile, still scored against the Tahoe delta — shifts
+  Stack's INPUT rather than its context, and answers a different question again. D3 considered
+  and rejected this as Stack's PRIMARY rung-2 arm; if run at all it must be labelled separately
+  from both the context-swap arm above and the baselines' penalty, never placed in the same
+  column as either. The inputs exist: L1000 has DMSO wells for all 7 shared lines.
 - Worth stating in the writeup: needing no refit for a new platform is a real deployment
   advantage of a pretrained model. It is simply not a score on the same task.
 

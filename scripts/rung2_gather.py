@@ -57,8 +57,10 @@ def main() -> None:
     )
     print("\n=== rung 2: transfer penalty (cross_platform - in_platform) ===")
     print(piv.to_string())
-    print("\nStack is absent by construction: it is not fitted here, so its penalty is exactly")
-    print("zero and it would be a constant sitting beside numbers that measure something.")
+    print("\nStack is absent from this grid by construction: it is not fitted, so it has no")
+    print("transfer penalty of the kind this table computes. Its rung-2 arm (D3: rebuild its")
+    print("context from L1000, query baseline held at Tahoe) is scored separately -- see")
+    print("docs/transfer_ladder_protocol.md's rung-2 section.")
 
 
 if __name__ == "__main__":

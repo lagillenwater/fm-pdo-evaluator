@@ -131,11 +131,25 @@ def main() -> None:
     inst["line"] = [norm_line(c) for c in inst["cell_id"]]
     inst["dname"] = [norm_name(n) for n in inst["pert_iname"]]
 
-    # Train on EVERY L1000 line carrying the target drugs, not only the 7 that overlap Tahoe.
-    # The map is baseline -> delta residual, so more training lines is strictly better, and
-    # restricting to the overlap would confound the transfer question with a sample-size drop.
+    # Train on EVERY L1000 line carrying the target drugs EXCEPT the ones that also appear in
+    # Tahoe's 50 evaluation lines, not only the 7 that overlap. The map is baseline -> delta
+    # residual, so more training lines is strictly better, and restricting to JUST the overlap
+    # would confound the transfer question with a sample-size drop -- that comment always
+    # meant "don't restrict TO the overlap", never "it's fine to train on it too". Training on
+    # a line and then scoring cross_platform's prediction FOR that same line means up to
+    # dataset_cell_line_overlap.csv's 7 lines (14% of the 50 evaluation lines) had their own
+    # response, on the other platform, inside the fit -- biasing cross_platform upward relative
+    # to in_platform, which never sees a held-out line, so the transfer penalty (cross_platform
+    # minus in_platform) understated the true platform cost by an unknown amount bounded by
+    # this project's own measured L1000/Tahoe agreement (rho=0.041, docs/results/
+    # l1000_tahoe_agreement_summary.csv).
+    tahoe_eval_lines = set(t_key["line"])
     drugs = sorted({d for d in t_key["dname"] if d} & set(inst["dname"]))
-    tw = inst[inst["dname"].isin(drugs) & (inst["pert_time"] == args.time)]
+    tw = inst[
+        inst["dname"].isin(drugs)
+        & (inst["pert_time"] == args.time)
+        & ~inst["line"].isin(tahoe_eval_lines)
+    ]
     tw = tw.sort_values("inst_id").groupby(["line", "dname"], sort=False).head(args.treated_cap)
     lines_with_treated = set(tw["line"])
     cw = inst[
