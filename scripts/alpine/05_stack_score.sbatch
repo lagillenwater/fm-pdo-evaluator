@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
@@ -47,10 +47,18 @@ echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || ec
 # as far as Check 1 and then died in restrict_common_support with "no (patient, drug) pairs
 # shared across every source and design" (job 31631592, 2026-08-24). Run
 # fmharness.stack_aggregate.aggregate_generated_replicates + collapse_query_baseline first.
+# BOTH checkpoints. This passed only generated_agg, the fourth site of the same single-
+# checkpoint gap after check2_plan.py, the Check-1b null and score_generation_eval's own
+# argparse -- and the published table reports both arms.
+# --dump-sources writes the panel-restricted (delta, key) pairs the DE-null array consumes, so
+# rung 1's null can be chained straight off this job instead of rebuilding the sources.
+SOURCES="${SOURCES:-promote/sources_rung1_panel}"
 python scripts/score_generation_eval.py \
     --deltas-bundle tahoe_deltas \
-    --generated-dir generated_agg \
+    --generated-dir stack_cytokine=generated_agg \
+    --generated-dir stack_drug_aligned=generated_drug_aligned_agg \
     --query-baseline tahoe_query_baseline.h5ad \
     --pert-map context_by_drug/pert_to_cid.tsv \
+    --dump-sources "$SOURCES" \
     --k 10 \
     --n-permutations 1000
