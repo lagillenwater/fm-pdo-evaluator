@@ -20,6 +20,7 @@ export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
+SCRATCH="/scratch/alpine/$USER"
 PLAN_DIR="${PLAN_DIR:-results/plan_${SLURM_JOB_ID:-local}}"
 echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} PLAN_DIR=$PLAN_DIR"
 
@@ -30,6 +31,8 @@ python scripts/check2_plan.py \
     --query-baseline tahoe_query_baseline.h5ad \
     --pert-map context_by_drug/pert_to_cid.tsv \
     --stack-emb base=emb_base.h5ad aligned=emb_aligned.h5ad \
+    --panel-source "sciplex=$SCRATCH/sciplex/SrivatsanTrapnell2020_sciplex3.h5ad" \
+    --panel-source "gdsc2=data/reference/stack_input_gdscv2.h5ad" \
     --out-dir "$PLAN_DIR"
 echo
 echo "NEXT: sbatch --array=0-<N-1>%12 --export=PLAN_DIR=$PLAN_DIR scripts/alpine/18_check2_array.sbatch"
