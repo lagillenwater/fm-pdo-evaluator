@@ -28,5 +28,13 @@ if not parts:
 df = pd.concat([pd.read_csv(p) for p in parts]).sort_values(["source", "metric", "null_kind"])
 df.to_csv(sys.argv[2], index=False)
 print(f"{len(parts)} parts -> {len(df)} rows -> {sys.argv[2]}")
+print("sources present:", sorted(df["source"].unique()))
 print(df.pivot_table(index=["source","metric"], columns="null_kind", values="p").to_string())
 PY
+
+# The Check-2 gather validates against the declared model matrix and this one did not, which is
+# how the published Check-1b null covered one of the two Stack checkpoints -- the weaker one --
+# without anything flagging it. A concat cannot tell a missing variant from a deliberate choice.
+echo
+echo "=============== model matrix coverage ==============="
+python scripts/check_matrix.py --check check1b --result "$OUT"
