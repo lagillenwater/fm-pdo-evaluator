@@ -26,3 +26,12 @@ echo "before:"; ls -d *soragni* 2>/dev/null || echo "  (none)"
 
 echo; echo "after:"; ls -d *sarcoma_organoids_2024* 2>/dev/null | head -20
 echo; echo "any soragni left?"; ls -d *soragni* 2>/dev/null || echo "  none - migration complete"
+
+# data/raw/soragni was missed by the pass above (repo-root artifacts only). The loader hardcodes
+# repo_root/data/raw/sarcoma_organoids_2024/tables (src/fmharness/data/loaders/sarcoma_organoids_2024.py:141)
+# with no override, so without this rename load_sarcoma_organoids_2024() fails closed with
+# "raw manifest missing" -- caught running rung 4 (job 31679380, 2026-08-26). Same mv -vn
+# safety: never overwrites, guarded, no rm.
+echo; echo "data/raw:"; ls -d data/raw/soragni data/raw/sarcoma_organoids_2024 2>/dev/null || true
+[ -e data/raw/soragni ] && mv -vn data/raw/soragni data/raw/sarcoma_organoids_2024   # referenced by the code (loader)
+echo; echo "after:"; ls -d data/raw/sarcoma_organoids_2024 2>/dev/null || echo "  (still missing)"
