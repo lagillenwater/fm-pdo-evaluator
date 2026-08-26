@@ -63,6 +63,12 @@ entries:
     why: Hashes of the above, which is the point of a manifest.
 
   # ---------------------------------------------------------------- derived results
+  - path: docs/figures/**
+    release: public
+    why: >
+      Rendered figures and the small summary tables behind them, derived from already-promoted
+      results. The sample-identifier check still applies to any table here, so a figure summary
+      that gained a row-level column would still be refused.
   - path: docs/results/**
     release: public
     why: >

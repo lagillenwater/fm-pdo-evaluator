@@ -164,19 +164,31 @@ def fig_rung3(results: Path, out: Path, ceiling: float | None) -> str:
     if df is None or df.empty or "interaction" not in df.columns:
         _unavailable(ax, "Rung 3 — GDSC2 viability", job or "grid not promoted")
     else:
-        best = (df.sort_values("interaction", ascending=False)
-                  .drop_duplicates("source").sort_values("interaction"))
-        ax.barh(best["source"], best["interaction"],
-                color=[PALETTE[kind_of(s)] for s in best["source"]])
-        if "null_p95" in best.columns:
-            ax.scatter(best["null_p95"], np.arange(len(best)), marker="|", s=90,
-                       color="#333333", label="null p95", zorder=3)
+        # Show EVERY penalty, never the best one per source. Taking a max over three penalties
+        # is a selection, and it inflates whatever has no signal: on the first draw of this
+        # figure nmf_random -- a noise control -- outranked a real baseline purely because the
+        # max of three noise draws is higher than any one of them. A control made to look
+        # competitive by the plotter's own choice is worse than no figure.
+        order = (df.groupby("source")["interaction"].median().sort_values().index.tolist())
+        ypos = {s: i for i, s in enumerate(order)}
+        markers = {"l2": "o", "l1": "s", "en": "^"}
+        for meth, grp in df.groupby("method"):
+            ax.scatter(grp["interaction"], [ypos[s] for s in grp["source"]],
+                       marker=markers.get(str(meth), "o"), s=46,
+                       color=[PALETTE[kind_of(s)] for s in grp["source"]],
+                       edgecolor="white", linewidth=0.5, label=str(meth), zorder=3)
+        if "null_p95" in df.columns:
+            nl = df.groupby("source")["null_p95"].max()
+            ax.scatter([nl[s] for s in order], range(len(order)), marker="|", s=110,
+                       color="#333333", label="null p95", zorder=2)
+        ax.set_yticks(range(len(order)))
+        ax.set_yticklabels(order, fontsize=8)
         if ceiling and np.isfinite(ceiling):
             ax.axvline(ceiling, color=PALETTE["ceiling"], ls="--", lw=1.2,
                        label=f"screen-agreement ceiling {ceiling:.3f}")
         ax.axvline(0, color="#cccccc", lw=0.8)
         ax.set_xlabel("interaction rho (cell-line-specific drug response)")
-        ax.set_title("Rung 3 — GDSC2 viability; grey = controls, red = Stack",
+        ax.set_title("Rung 3 - GDSC2 viability, every penalty shown; grey = controls, red = Stack",
                      fontsize=11, loc="left")
         ax.legend(fontsize=8, loc="lower right")
     fig.tight_layout()

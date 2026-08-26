@@ -1,0 +1,25 @@
+{
+  "name": "rung3_check2_grid",
+  "claim": "Rung 3, GDSC2 viability, on the declared 12,368-gene Check-2 panel with 5-fold CV from the shared fold partition. All 12 declared model-matrix variants present. Controls behave: the planted positive control is recovered at p_label 0.0010, prior sits at exactly 0.000, and per-representation noise rows sit near zero. The base embedding under L2 is the only non-control row clearing its label permutation at p_label 0.0010 with z_random 2.66. Supersedes check2_grid_5fold_corrected.csv (job 31655278), which predates the gene panel and the restoration of the positive control to the array path.",
+  "script": "scripts/check2_gather.py",
+  "git_sha": "0410cb9ddebcb6ce610b54786493beaa1751fd84",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung3_check2_grid.csv",
+    "sha256": "7af22db417d5cce85ae542159ac3e634148c6add23fa3fde8eb91d8359ef6ef0",
+    "bytes": 5677
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r3/check2_grid.params.json",
+      "sha256": "e832a0744412e8d69b281671837a84461e771747bb7f2aa0db6865fa816362e3",
+      "bytes": 1373
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31665927",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r3/run.log",
+    "sha256": "75c9d1ee22633fd66a981d4ed1693b004701edd388cff4edab6d597dcd3528dc",
+    "bytes": 11404
+  }
+}
