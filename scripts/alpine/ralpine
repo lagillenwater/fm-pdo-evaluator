@@ -180,11 +180,17 @@ case "$sub" in
         echo "$dirty" | sed 's/^/ralpine:              /' >&2
       fi
     fi
+    # OPTIONS BEFORE THE SCRIPT. sbatch parses its own flags only up to the script name;
+    # anything after it is passed to the batch script as positional arguments, which every
+    # script here ignores. Building "sbatch <script> <args>" therefore DISCARDED every
+    # --dependency, --array and --export silently -- jobs submitted as a chained DAG ran
+    # immediately and out of order, with scontrol reporting Dependency=(null).
+    script="$1"; shift
     submit_cmd="sbatch"
     # %q escapes commas, which breaks sbatch's own --export=ALL,VAR=value syntax: the job then
-    # either fails outright or, worse, runs WITHOUT the variable and silently falls back to a
-    # default path. reject_metacharacters has already blocked everything that could escape the
-    # command, so arguments made only of safe characters are passed through verbatim.
+    # either fails outright or, worse, runs WITHOUT the variable and falls back to a default
+    # path. reject_metacharacters has already blocked everything that could escape the command,
+    # so arguments made only of safe characters are passed through verbatim.
     for arg in "$@"; do
       if [[ "$arg" =~ ^[A-Za-z0-9_,=./:%+-]+$ ]]; then
         submit_cmd+=" $arg"
@@ -192,6 +198,7 @@ case "$sub" in
         submit_cmd+=" $(printf '%q' "$arg")"
       fi
     done
+    submit_cmd+=" $(printf '%q' "$script")"
     echo "ralpine: submitting from $REMOTE_ROOT" >&2
     echo "ralpine: $submit_cmd" >&2
     # `bash -lc`, not a bare command: ssh runs a NON-login shell, so the submitting
