@@ -36,6 +36,12 @@ def main() -> None:
         help="write the table even when array tasks are missing. Off by default: a short table "
         "that looks whole is worse than no table.",
     )
+    ap.add_argument(
+        "--allow-missing-variants",
+        default="",
+        help="comma-separated declared variants that may be absent from this grid. Naming one "
+        "makes its absence a decision on the record rather than an oversight.",
+    )
     args = ap.parse_args()
 
     plan = json.loads((args.plan_dir / "plan.json").read_text())
@@ -74,6 +80,35 @@ def main() -> None:
         twins.setdefault(b, a)
     if twins:
         table["same_as"] = table["source"].map(twins)
+
+    # A second completeness question, distinct from missing parts: were all the declared model
+    # variants in the run to begin with? Job 31655278 had every array part it expected and was
+    # still missing stack_drug_aligned, because the flags never included it.
+    matrix_path = Path("data/model_matrix.yaml")
+    if matrix_path.exists():
+        import subprocess as _sp
+
+        chk = _sp.run(
+            [
+                "python",
+                "scripts/check_matrix.py",
+                "--check",
+                "check2",
+                "--result",
+                "/dev/stdin",
+                "--allow-missing",
+                args.allow_missing_variants,
+            ],
+            input=table.to_csv(index=False),
+            capture_output=True,
+            text=True,
+        )
+        print(chk.stdout.strip())
+        if chk.returncode != 0 and not args.allow_incomplete:
+            raise SystemExit(
+                "refusing to write a grid that does not cover data/model_matrix.yaml. "
+                "Score the missing variants, or waive them by name with --allow-missing-variants."
+            )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     dest = args.out_dir / "check2_grid.csv"

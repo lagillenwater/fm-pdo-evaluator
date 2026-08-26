@@ -64,7 +64,13 @@ def main() -> None:
     """Build every representation, fix the shared support, and persist it."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--deltas-bundle", default="tahoe_deltas")
-    ap.add_argument("--generated-dir", default="generated_agg")
+    ap.add_argument(
+        "--generated-dir",
+        action="append",
+        default=None,
+        help="label=dir, repeatable. Defaults to BOTH published checkpoints. A single hardcoded "
+        "dir is what left stack_drug_aligned out of every run.",
+    )
     ap.add_argument("--query-baseline", default="tahoe_query_baseline.h5ad")
     ap.add_argument("--pert-map", default="context_by_drug/pert_to_cid.tsv")
     ap.add_argument("--stack-emb", nargs="*", default=[], help="label=path pairs")
@@ -94,10 +100,20 @@ def main() -> None:
         "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k),
         "measured_delta": (real_delta.copy(), real_key.copy()),
     }
-    if args.generated_dir:
-        sources["stack"] = build_generated_deltas(
-            Path(args.generated_dir), Path(args.query_baseline), load_pert_map(Path(args.pert_map))
-        )
+    gen_specs = args.generated_dir or [
+        "stack_cytokine=generated_agg",
+        "stack_drug_aligned=generated_drug_aligned_agg",
+    ]
+    pert = load_pert_map(Path(args.pert_map))
+    for spec in gen_specs:
+        label, _, gdir = spec.partition("=")
+        if not gdir:
+            label, gdir = "stack", label
+        if not Path(gdir).exists():
+            print(f"  SKIP {label}: {gdir} not present")
+            continue
+        sources[label] = build_generated_deltas(Path(gdir), Path(args.query_baseline), pert)
+        print(f"  built {label} from {gdir}")
 
     uniq_lines = sorted(set(real_key["patient"].astype(str)))
     n_folds = max(1, min(args.folds, len(uniq_lines)))
