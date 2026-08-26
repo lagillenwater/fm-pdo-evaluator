@@ -67,6 +67,25 @@ def sarcoma_organoids_2024_pert_ids(repo: Path, pert_info: pd.DataFrame) -> dict
     return out
 
 
+def pert_ids_from_cid_map(pert_map: Path, pert_info: pd.DataFrame) -> dict[str, str]:
+    """Map drug name -> L1000 pert_id from a name/PubChem-CID table.
+
+    The Soragni path resolves drugs through the sarcoma tranche, which hardcodes that cohort.
+    Rung 2 needs Tahoe's drugs instead, and Tahoe's pert map is already a name/CID table, so
+    the CID is the join key. Same namespace either way -- PubChem CIDs -- so this is a
+    different source for the same mapping, not a different mapping.
+    """
+    pm = pd.read_csv(pert_map, sep="\t", header=None, names=["drug_name", "pubchem_cid"])
+    cp = pert_info[pert_info["pert_type"] == "trt_cp"]
+    by_cid = {_ncid(c): p for c, p in zip(cp["pubchem_cid"], cp["pert_id"], strict=True)}
+    out: dict[str, str] = {}
+    for name, cid in zip(pm["drug_name"], pm["pubchem_cid"], strict=True):
+        pid = by_cid.get(_ncid(cid))
+        if pid:
+            out[str(name)] = pid
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--l1000-dir", default=".", help="dir with GSE92742 *_info.txt.gz files")
@@ -76,6 +95,14 @@ def main() -> None:
         nargs="*",
         default=CORE_LINES,
         help="L1000 cell lines to use as context, or 'all' for every line",
+    )
+    ap.add_argument(
+        "--pert-map",
+        type=Path,
+        default=None,
+        help="name/PubChem-CID TSV selecting the drugs, e.g. context_by_drug/pert_to_cid.tsv. "
+        "Without it the drug set comes from the sarcoma tranche, which is the Soragni cohort "
+        "and wrong for a Tahoe-targeted context.",
     )
     ap.add_argument("--out", default="l1000_context.h5ad")
     ap.add_argument(
@@ -93,8 +120,14 @@ def main() -> None:
     inst = pd.read_csv(d / "GSE92742_Broad_LINCS_inst_info.txt.gz", sep="\t", low_memory=False)
     gene = pd.read_csv(d / "GSE92742_Broad_LINCS_gene_info.txt.gz", sep="\t")
 
-    pids = sarcoma_organoids_2024_pert_ids(repo, pert)
-    print(f"matched {len(pids)} Soragni drugs to L1000 pert_ids")
+    if args.pert_map:
+        pids = pert_ids_from_cid_map(args.pert_map, pert)
+        print(f"matched {len(pids)} drugs from {args.pert_map} to L1000 pert_ids")
+    else:
+        pids = sarcoma_organoids_2024_pert_ids(repo, pert)
+        print(f"matched {len(pids)} Soragni drugs to L1000 pert_ids")
+    if not pids:
+        raise SystemExit("no drugs matched to L1000 pert_ids -- refusing to build an empty context")
 
     in_lines = (
         pd.Series(True, index=inst.index)
