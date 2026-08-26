@@ -1,9 +1,33 @@
 # Do L1000's imputed genes carry real delta signal?
 
-**Result: not established.** The raw comparison shows imputed genes degrading monotonically
-away from measured ones, but that gap does **not** survive the variance-matching control, so
-this test does not demonstrate that L1000's imputed genes are less faithful on deltas.
-Evidence: `docs/results/l1000_imputation_fidelity{,_paired,_per_pair}.csv` [job 31661570].
+**Correction, 2026-08-26 [job 31676844/31676845, supersedes 31661570/31661918].** Every
+`p_vs_null` below was computed by comparing a reported AGGREGATE (a mean over ~32 pairs)
+against the spread of INDIVIDUAL mismatched-pair draws, instead of against the bootstrapped
+sampling distribution of that aggregate at the same pair count -- the same class of bug fixed
+for the rung-0 replicate ceiling (commit 6a7a7cf), independently reintroduced here. It
+inflated every p in this document by one to two orders of magnitude. With the fix
+(`fmharness.statistics.bootstrap_aggregate_pvalue`): **landmark genes DO clear their null**
+(p = 0.0005, not 0.2438) and so do **bing** genes (p = 0.0035, not 0.3234); fully-imputed
+**other** genes still do not (p = 0.1219). Every transform in the normalisation sweep now
+clears its null too (p = 0.0005-0.0055, none at 0.13-0.28). The rest of this document below the
+next line is the ORIGINAL, now-superseded writeup; read the correction above first.
+
+**Result (corrected): real but weak.** Cross-platform L1000/Tahoe delta agreement on directly
+measured genes (landmark) and the Broad's own best-inferred subset (bing) is statistically real
+-- not a mismatched-pair artifact -- but small: mean rho 0.041, about **7% of the L1000
+split-half noise ceiling (0.572)**. Fully-imputed genes outside the bing subset show no such
+signal. Separately and unaffected by the bug (already a paired, like-for-like test): once
+imputed genes are variance-matched to the landmarks, there is no significant fidelity GAP
+between measured and imputed genes (Wilcoxon p = 0.27) -- so imputation itself does not look
+like the source of the landmark/imputed difference seen in the raw, unmatched comparison; gene
+selection (landmarks are chosen to be high-variance) explains most of it. Put together: the
+platforms agree weakly but really on genes with real information content (measured + bing), and
+imputed genes lose no clearly-measurable fidelity once that's accounted for -- but 7% of ceiling
+is still a weak floor to build a common gene panel on. Evidence:
+`docs/results/l1000_imputation_fidelity{,_paired,_per_pair}.csv` [job 31676844],
+`docs/results/l1000_tahoe_transform_sweep.csv` [job 31676845].
+
+---
 
 ## Why this was measured
 
@@ -146,19 +170,20 @@ a larger biological effect, and no unit conversion was performed.
 Seven per-gene normalisations, each scored against its **own** mismatched-pair null
 [`docs/results/l1000_tahoe_transform_sweep.csv`]:
 
-| transform | mean rho | null | lift | p |
+| transform | mean rho | null | lift | p (corrected) |
 |---|---|---|---|---|
-| none | +0.0410 | +0.0039 | +0.0371 | 0.2139 |
-| center_per_gene | +0.0499 | -0.0052 | +0.0551 | 0.1343 |
-| zscore_per_gene | +0.0453 | +0.0039 | +0.0414 | 0.1841 |
-| rank_per_gene | +0.0425 | -0.0020 | +0.0445 | 0.2090 |
-| robust_scale_per_gene | +0.0436 | +0.0020 | +0.0416 | 0.1940 |
-| drop_pc1 | +0.0358 | +0.0009 | +0.0348 | 0.2836 |
-| zscore_then_drop_pc1 | +0.0336 | +0.0032 | +0.0304 | 0.2687 |
+| none | +0.0410 | +0.0039 | +0.0371 | 0.0005 |
+| center_per_gene | +0.0499 | -0.0052 | +0.0551 | 0.0005 |
+| zscore_per_gene | +0.0453 | +0.0039 | +0.0414 | 0.0005 |
+| rank_per_gene | +0.0425 | -0.0020 | +0.0445 | 0.0005 |
+| robust_scale_per_gene | +0.0436 | +0.0020 | +0.0416 | 0.0005 |
+| drop_pc1 | +0.0358 | +0.0009 | +0.0348 | 0.0055 |
+| zscore_then_drop_pc1 | +0.0336 | +0.0032 | +0.0304 | 0.0030 |
 
-Everything lands between 0.034 and 0.050 against a reachable ceiling of **0.572**, and none
-clears its own null. The best, per-gene centering, moves the raw 0.041 to 0.050 -- noise at this
-sample size.
+[job 31676845, p corrected -- see the banner above]. Everything lands between 0.034 and 0.050
+against a reachable ceiling of **0.572**, and now every transform clears its own null. Even the
+best, per-gene centering, only moves the raw 0.041 to 0.050 -- statistically real but still far
+below the ceiling.
 
 Only per-GENE transforms were tested, and that is not an omission: rank correlation is
 invariant to any monotone transform applied within a profile, so per-profile rescaling cannot
@@ -166,10 +191,11 @@ change the number by construction. Each transform is scored against a null recom
 that same transform, because a transform that inflates every correlation -- including between
 unrelated perturbations -- would otherwise read as an improvement.
 
-**So the disagreement is not a per-gene scale or offset artifact, and is not fixable by
-representation.** A learned mapping such as L1000toRNAseq is a different and untested object;
-what this rules out is the class of normalisations that could plausibly have explained a
-platform mismatch.
+**So the disagreement is not closed by a per-gene scale or offset transform.** [Corrected: it
+IS real and clears its null in every transform tried, but no transform lifts it from ~7% of
+ceiling to anywhere near 0.572.] A learned mapping such as L1000toRNAseq is a different and
+untested object; what this rules out is the class of normalisations that could plausibly have
+closed most of the gap.
 
 **Agreement appears only where the effect is very large.** Bortezomib, a proteasome inhibitor
 with a massive transcriptional response, reaches cross-platform rho 0.399 in HT29 and 0.218 in
@@ -181,18 +207,19 @@ Most pairs have 3-8 treated wells against 60 DMSO wells, so the split-half is of
 treated wells and the 0.572 ceiling is if anything an underestimate of what more replication
 would give.
 
-### The positive control fails
+### The positive control [corrected: it passes]
 
-| gene class | genes | mean rho | null mean | lift | p vs null |
+| gene class | genes | mean rho | null mean | lift | p vs null (corrected) |
 |---|---|---|---|---|---|
-| landmark | 946 | 0.0410 | 0.0018 | +0.0392 | 0.2438 |
-| bing | 8,833 | 0.0193 | -0.0025 | +0.0218 | 0.3234 |
-| other | 2,069 | -0.0003 | -0.0059 | +0.0057 | 0.4378 |
+| landmark | 946 | 0.0410 | 0.0018 | +0.0392 | 0.0005 |
+| bing | 8,833 | 0.0193 | -0.0025 | +0.0218 | 0.0035 |
+| other | 2,069 | -0.0003 | -0.0059 | +0.0057 | 0.1219 |
 
-**Landmark genes are measured on both platforms, and they do not clear their own null**
-(p = 0.2438). Absolute agreement between L1000 and Tahoe deltas is therefore **not
-established**, and no absolute claim about any gene class can rest on this comparison. Read the
-0.041 as "indistinguishable from mismatched pairs", not as "weak agreement".
+[job 31676844, p corrected -- see the banner above]. **Landmark genes are measured on both
+platforms, and they DO clear their own null** (p = 0.0005), as do bing genes (p = 0.0035).
+Absolute agreement between L1000 and Tahoe deltas on genes with real information content is
+therefore established, if weak -- 0.041 against a 0.572 ceiling. Fully-imputed "other" genes do
+not clear their null (p = 0.1219), consistent with them carrying markedly less signal.
 
 Why this aggregation fails is worth recording: it compares each class's *mean* against a null
 of mismatched pairs, and pair-level noise -- dose, replicate count, effect size -- varies
@@ -247,8 +274,9 @@ being equivalent -- but it is a post-hoc observation on 4 pairs and is **not** e
 
 ## What this does and does not change
 
-**It does not justify dropping L1000 on fidelity grounds.** That argument is not supported by
-this measurement.
+**It does not justify dropping L1000 on fidelity grounds** -- if anything less so now that
+agreement on measured + bing genes is confirmed real, just weak. That argument is not supported
+by this measurement.
 
 **The a priori argument is untouched and does not depend on this test.** L1000's imputed genes
 are a deterministic linear function of the 978 landmarks. Whatever their fidelity, they add no

@@ -1,25 +1,25 @@
 {
   "name": "l1000_imputation_fidelity_per_pair",
-  "claim": "Per-(line, drug) Spearman by gene class. Strongest-effect perturbations show the clearest degradation: bortezomib in HT29 gives landmark 0.399, bing 0.260, other 0.063.",
+  "claim": "CORRECTED (job 31676844): per-(line,drug)-pair Spearman by gene class, feeding the corrected summary and paired tables.",
   "script": "scripts/l1000_imputation_fidelity.py",
-  "git_sha": "304459f3f01956dd0b3c9609d5b66926c03265b3",
+  "git_sha": "c1fa798aabe1db0d1ed556c62d47396d9adb97f1",
   "result": {
-    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_imputation_fidelity_per_pair.csv",
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/l1000_imputation_fidelity_per_pair.csv",
     "sha256": "5a8e33a4b60980a007b351e674d6a1baf96eafd429d254442e6fe2da712ee5db",
     "bytes": 5899
   },
   "inputs": [
     {
-      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/l1000_imputation_fidelity.params.json",
-      "sha256": "99785d3dc43bf0a7260c12c5e1d4a753a1f9c7cc7357d63437c4fac1665e0e99",
+      "path": "/tmp/pull_l1000_fid/l1000_imputation_fidelity_31676844/l1000_imputation_fidelity.params.json",
+      "sha256": "b6b334737547ec20d7b0261a24ca77e850fe80ccfad38d9f7d4e386d9c3627ed",
       "bytes": 2255
     }
   ],
   "missing_inputs": [],
-  "job_id": "31661570",
+  "job_id": "31676844",
   "log": {
-    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/run.log",
-    "sha256": "b77fc4bb8d74cd97e426367685359c4a162464b83c2c1b66d40016adfda8eee9",
-    "bytes": 5549
+    "path": "/tmp/pull_l1000_fid/l1000_imputation_fidelity_31676844/l1000_imputation_fidelity.params.json",
+    "sha256": "b6b334737547ec20d7b0261a24ca77e850fe80ccfad38d9f7d4e386d9c3627ed",
+    "bytes": 2255
   }
 }

@@ -1,25 +1,25 @@
 {
   "name": "l1000_tahoe_agreement_per_pair",
-  "claim": "Per-(cell line, drug) noise ceiling, cross-platform rho, sign concordance and magnitudes. Agreement concentrates in the largest-effect perturbations: bortezomib reaches cross-platform rho 0.399 in HT29 and 0.218 in A549 with top-gene sign concordance 0.84 and 0.71.",
+  "claim": "Unchanged by the p-value fix; per-(line,drug) values feeding the summary table.",
   "script": "scripts/l1000_tahoe_agreement_diagnosis.py",
-  "git_sha": "0b7a32f6c85bad8d97472446efe20a1908d0e6fe",
+  "git_sha": "c1fa798aabe1db0d1ed556c62d47396d9adb97f1",
   "result": {
-    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_tahoe_agreement_per_pair.csv",
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/l1000_tahoe_agreement_per_pair.csv",
     "sha256": "ed955ad413098b78d3289dfced691e2b18704a35b6de3e7adc549e75d2158b2c",
     "bytes": 2447
   },
   "inputs": [
     {
-      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/agree/l1000_tahoe_agreement.params.json",
-      "sha256": "e49f5b38404ae807bb2a687c7baea732ce59e8cff71bd58913c527858ddb9d51",
-      "bytes": 1219
+      "path": "/tmp/pull_l1000_agree/l1000_tahoe_agreement_31676845/l1000_tahoe_agreement.params.json",
+      "sha256": "d986ac015d1c714a4a00ea7614f262cc7b6f9f55327d16ddfc0b9ec5732a6dfb",
+      "bytes": 1240
     }
   ],
   "missing_inputs": [],
-  "job_id": "31661769",
+  "job_id": "31676845",
   "log": {
-    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/agree/run.log",
-    "sha256": "2d4df24a1c60d72e6ba109b826eb60e7177374305e4955a1ea31169a3f12a88b",
-    "bytes": 6451
+    "path": "/tmp/pull_l1000_agree/l1000_tahoe_agreement_31676845/l1000_tahoe_agreement.params.json",
+    "sha256": "d986ac015d1c714a4a00ea7614f262cc7b6f9f55327d16ddfc0b9ec5732a6dfb",
+    "bytes": 1240
   }
 }

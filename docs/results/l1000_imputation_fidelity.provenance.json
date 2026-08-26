@@ -1,25 +1,30 @@
 {
   "name": "l1000_imputation_fidelity",
-  "claim": "Per-gene-class Spearman agreement between L1000 and Tahoe deltas on 32 shared (cell line, drug) pairs, 7 lines x 19 drugs at 24h. Landmark genes -- measured on both platforms and therefore the positive control -- reach mean rho 0.041 against a mismatched-pair null at p=0.2438, so absolute cross-platform agreement is NOT established and the test is underpowered for absolute claims.",
+  "claim": "CORRECTED (job 31676844, supersedes job 31661570): with the aggregate-vs-per-item p-value bug fixed, landmark genes clear their mismatched-pair null (mean rho 0.041, p=0.0005) and bing genes do too (p=0.0035); the remaining fully-imputed 'other' genes do not (p=0.1219, mean rho ~0). Cross-platform L1000/Tahoe delta agreement on directly-measured and best-inferred genes is real but weak (7% of the L1000 split-half ceiling of 0.572), not 'not established' as the superseded job concluded under the defective statistic.",
   "script": "scripts/l1000_imputation_fidelity.py",
-  "git_sha": "304459f3f01956dd0b3c9609d5b66926c03265b3",
+  "git_sha": "c1fa798aabe1db0d1ed556c62d47396d9adb97f1",
   "result": {
-    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/l1000_imputation_fidelity.csv",
-    "sha256": "7cfd9b51ee9fc87ff29b6793556192348f9562ac2ea39d1a3cd7465ea42476ee",
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/l1000_imputation_fidelity.csv",
+    "sha256": "bc7341876d0c02ff03c1fc6742546c29017b09d0ade754f0ab97211c84048109",
     "bytes": 367
   },
   "inputs": [
     {
-      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/l1000_imputation_fidelity.params.json",
-      "sha256": "99785d3dc43bf0a7260c12c5e1d4a753a1f9c7cc7357d63437c4fac1665e0e99",
-      "bytes": 2255
+      "path": "/tmp/pull_l1000_fid/l1000_imputation_fidelity_31676844/l1000_imputation_fidelity_per_pair.csv",
+      "sha256": "5a8e33a4b60980a007b351e674d6a1baf96eafd429d254442e6fe2da712ee5db",
+      "bytes": 5899
+    },
+    {
+      "path": "/tmp/pull_l1000_fid/l1000_imputation_fidelity_31676844/l1000_imputation_fidelity_paired.csv",
+      "sha256": "0ee8d7260a1a8d2dad8a53acd579ab17cf156a37c45de010c1cac3fc76717bc9",
+      "bytes": 220
     }
   ],
   "missing_inputs": [],
-  "job_id": "31661570",
+  "job_id": "31676844",
   "log": {
-    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/fid/run.log",
-    "sha256": "b77fc4bb8d74cd97e426367685359c4a162464b83c2c1b66d40016adfda8eee9",
-    "bytes": 5549
+    "path": "/tmp/pull_l1000_fid/l1000_imputation_fidelity_31676844/l1000_imputation_fidelity.params.json",
+    "sha256": "b6b334737547ec20d7b0261a24ca77e850fe80ccfad38d9f7d4e386d9c3627ed",
+    "bytes": 2255
   }
 }

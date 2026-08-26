@@ -6,11 +6,15 @@ attributed to that shift rather than to the accumulated difference between cell 
 patient organoids.
 
 The design exists because of a measured result: L1000 and Tahoe deltas for the SAME
-(cell line, drug) agree at Spearman **0.041** against a split-half ceiling of **0.572**, with
-sign concordance at chance and no normalisation recovering it [job 31661918,
-`docs/results/l1000_tahoe_transform_sweep.csv`]. If two cell-line drug-perturbation datasets
-disagree that badly, a single Path B number has no interpretable scale. The ladder supplies the
-scale.
+(cell line, drug) agree at Spearman **0.041** against a split-half ceiling of **0.572** -- 7% of
+achievable. That 0.041 is real, not noise: corrected for an aggregate-vs-per-item p-value bug
+found 2026-08-26, it clears its mismatched-pair null (p = 0.0005) and so does every
+normalisation tried, though none closes the gap to ceiling [job 31676845,
+`docs/results/l1000_tahoe_transform_sweep.csv`]. Sign concordance sits at 51.3%, not
+distinguishable from the 50% chance rate (p = 0.0515). If two cell-line drug-perturbation
+datasets collapse to 7% of their own reproducibility on the SAME perturbations, a single Path B
+number built by transferring across that gap has no interpretable scale. The ladder supplies
+the scale.
 
 ## The rungs
 
