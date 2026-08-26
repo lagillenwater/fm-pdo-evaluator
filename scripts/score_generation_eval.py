@@ -132,6 +132,14 @@ def main() -> None:
         "results/<job id or 'local'>. Output is always written; this only chooses where.",
     )
     ap.add_argument(
+        "--skip-check2",
+        action="store_true",
+        help="run Check 1, the readout gate and the source dump, then stop. Check 2 is done "
+        "properly by the plan/scatter/gather array (18a/18/18b), so running it again serially "
+        "here is redundant -- and on the full common panel it is what exhausted the walltime, "
+        "discarding a completed Check-1 table with it.",
+    )
+    ap.add_argument(
         "--dump-only",
         action="store_true",
         help="write the delta sources and exit, without scoring. Dumping is a distinct job from "
@@ -399,6 +407,10 @@ def main() -> None:
     fixed_methods = tuple(m.strip() for m in args.methods.split(",") if m.strip())
     penalties = tuple(p.strip() for p in args.penalties.split(",") if p.strip())
     sources_check2 = {k: v for k, v in sources.items() if k != "measured_delta"}
+    if args.skip_check2:
+        print("\n--skip-check2: Check 1 and the gate are written; the array does Check 2")
+        return
+
     out_df = score_check2(
         sources_check2,
         real_key,

@@ -90,8 +90,32 @@ def main() -> None:
     # keeps all its capacity but loses the line correspondence. It must collapse to the null.
     if source in ("prior", "shuffled"):
         src_for_fit = "observed_delta" if source == "prior" else "pca"
+    elif source == "planted":
+        src_for_fit = "pca"
     else:
         src_for_fit = source
+
+    # POSITIVE CONTROL. Replace the truth with a delta that is a known linear function of the
+    # target baseline, so a working pipeline must recover it under EVERY arm. Rung 2 is where
+    # this matters most: every arm is expected to score low, so without something that must
+    # succeed a grid of small numbers cannot separate "transfer is hard" from "this pipeline
+    # cannot fit anything".
+    #
+    # Initialised unconditionally. The previous edit assigned it only inside the planted branch
+    # and every other cell died on NameError at the point of use -- the whole array failed in 18
+    # seconds because a control was bolted on rather than threaded through.
+    planted_truth = None
+    if source == "planted":
+        rngp = np.random.default_rng(args.seed + 11)
+        W = rngp.normal(size=(t_base.shape[1], 1))
+        signal = (t_base.to_numpy(dtype=float) @ W).ravel()
+        signal = (signal - signal.mean()) / (signal.std() or 1.0)
+        by_line = dict(zip(t_base.index.astype(str), signal, strict=True))
+        gene_load = rngp.normal(size=t_delta.shape[1])
+        planted_truth = pd.DataFrame(
+            np.outer([by_line.get(str(x), 0.0) for x in t_key["line"]], gene_load),
+            columns=t_delta.columns,
+        )
 
     if arm == "bulk_target":
         # Fit in-platform on Tahoe, then predict from the GDSC2 BULK profile of the same line.

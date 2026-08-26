@@ -66,5 +66,6 @@ python scripts/score_generation_eval.py \
     --panel-source "sciplex=/scratch/alpine/$USER/sciplex/SrivatsanTrapnell2020_sciplex3.h5ad" \
     --dump-sources "$SOURCES" \
     --out-dir "$OUT_DIR" \
+    ${SKIP_CHECK2:+--skip-check2} \
     --k 10 \
     --n-permutations 1000
