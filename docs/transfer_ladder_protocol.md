@@ -45,8 +45,16 @@ side by side would be meaningless.
    variant. Global and interaction behave completely differently here and both are reported.
 3. **Unit** — one value per (line, drug), then mean over pairs. Never a pooled correlation.
 4. **Reliability correction** — Spearman-Brown everywhere or nowhere, stated per rung.
-5. **Null** — mismatched-pair permutation, recomputed *within* each rung and each transform.
-6. **Reporting** — fraction of that rung's own ceiling. Raw numbers only alongside the fraction.
+5. **CV scheme** — **5-fold over cell lines everywhere**, from the single shared partition in
+   `fmharness.deltas.fold_assignment`. This was missing from the invariants and the rungs had
+   drifted: rung 1 and rung 2's in-platform arm ran leave-one-line-out while rung 3 ran 5-fold,
+   so a cross-rung ratio mixed a bias/variance difference into what was meant to be a transfer
+   effect. The folds must be the same PARTITION, not merely the same count — two rungs each
+   writing `i % n_folds` agree only until one iterates its lines in a different order, so the
+   helper sorts first. LOO is the eventual target and needs no second code path: `n_folds >=`
+   the line count degenerates to it.
+6. **Null** — mismatched-pair permutation, recomputed *within* each rung and each transform.
+7. **Reporting** — fraction of that rung's own ceiling. Raw numbers only alongside the fraction.
 
 ## Baselines, models and controls per rung
 

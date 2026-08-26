@@ -25,7 +25,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from fmharness.deltas import build_additive_deltas, build_knn_deltas, build_learned_deltas
+from fmharness.deltas import (
+    build_additive_deltas,
+    build_knn_deltas,
+    build_learned_deltas,
+    fold_assignment,
+)
 
 
 def score_pairs(pred: pd.DataFrame, pred_key: pd.DataFrame, truth: pd.DataFrame,
@@ -54,6 +59,7 @@ def main() -> None:
     ap.add_argument("--task-id", type=int, default=None)
     ap.add_argument("--cell", default=None, help="source|arm, overrides --task-id")
     ap.add_argument("--k", type=int, default=None)
+    ap.add_argument("--folds", type=int, default=5, help="shared with every rung; 5 is the invariant")
     ap.add_argument("--n-perm", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-dir", required=True, type=Path)
@@ -131,18 +137,28 @@ def main() -> None:
                 tr_base, tr_delta, tr_key, t_base, targets, reducer=src_for_fit, k=args.k
             )
     else:
-        # Leave-one-line-out on Tahoe: for each target line, fit on the others only.
+        # 5-fold on Tahoe, using the SHARED partition. This was leave-one-line-out while rung 3
+        # ran 5-fold, so the transfer penalty -- cross_platform minus in_platform -- mixed a
+        # bias/variance difference into what is meant to be a pure platform effect. Holding the
+        # fold map identical across rungs is what makes the subtraction mean one thing.
         frames, keys = [], []
         tk = t_key.assign(patient=t_key["line"].astype(str), drug=t_key["dname"].astype(str))
-        for line in targets:
-            hold = tk["patient"] == line
+        fmap = fold_assignment(targets, args.folds)
+        by_fold: dict[int, list[str]] = {}
+        for ln in targets:
+            by_fold.setdefault(fmap[ln], []).append(ln)
+        print(f"in_platform: {len(by_fold)} folds over {len(targets)} lines (shared partition)")
+        for _f in sorted(by_fold):
+            group = by_fold[_f]
+            line = group[0]
+            hold = tk["patient"].isin(group)
             tr_delta, tr_key = t_delta[~hold.to_numpy()], tk[~hold]
-            tr_base = t_base.drop(index=[line], errors="ignore")
-            tgt_base = t_base.loc[[line]] if line in t_base.index else None
-            if tgt_base is None or tr_key.empty:
+            tr_base = t_base.drop(index=group, errors="ignore")
+            tgt_base = t_base.loc[[ln for ln in group if ln in t_base.index]]
+            if tgt_base.empty or tr_key.empty:
                 continue
             if source in ("prior", "observed_delta"):
-                p, kk = build_additive_deltas(tr_delta, tr_key, [line])
+                p, kk = build_additive_deltas(tr_delta, tr_key, list(tgt_base.index))
             elif source == "shuffled":
                 rng0 = np.random.default_rng(args.seed + 7)
                 sb = tgt_base.copy()
@@ -152,10 +168,13 @@ def main() -> None:
                 )
                 kk = kk.assign(patient=line)
             elif source == "knn":
-                p, kk = build_knn_deltas(tr_base, tr_delta, tr_key, tgt_base, [line], k=args.k)
+                p, kk = build_knn_deltas(
+                    tr_base, tr_delta, tr_key, tgt_base, list(tgt_base.index), k=args.k
+                )
             else:
                 p, kk = build_learned_deltas(
-                    tr_base, tr_delta, tr_key, tgt_base, [line], reducer=src_for_fit, k=args.k
+                    tr_base, tr_delta, tr_key, tgt_base, list(tgt_base.index),
+                    reducer=src_for_fit, k=args.k
                 )
             frames.append(p)
             keys.append(kk)

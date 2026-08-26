@@ -551,6 +551,26 @@ def build_knn_deltas(
     return delta, key
 
 
+def fold_assignment(lines: "list[str] | pd.Index", n_folds: int) -> dict[str, int]:
+    """Deterministic line -> fold map, THE single source of truth for every rung's CV.
+
+    Comparing rungs means dividing one rung's score by another's, and that is only valid if the
+    two were evaluated the same way. Rung 1 ran leave-one-line-out while rung 3 ran 5-fold, so
+    their ratios mixed a bias/variance difference into what was meant to be a transfer effect --
+    the same class of error as the gene-panel and Spearman-Brown mismatches.
+
+    Every rung now calls this, so the folds are not merely the same SIZE but literally the same
+    partition: line i of the sorted unique lines goes to fold i % n_folds. Two rungs
+    independently writing `i % n_folds` would agree only until one of them sorted differently.
+
+    n_folds <= 1 or >= len(lines) degenerates to leave-one-line-out, which is the intended
+    behaviour once the ladder moves to LOO.
+    """
+    uniq = sorted({str(x) for x in lines})
+    if n_folds <= 1 or n_folds >= len(uniq):
+        return {ln: i for i, ln in enumerate(uniq)}  # leave-one-out
+    return {ln: i % n_folds for i, ln in enumerate(uniq)}
+
 def loo_baseline_source(
     kind: str,
     real_delta: pd.DataFrame,
@@ -559,6 +579,7 @@ def loo_baseline_source(
     *,
     k: int | None,
     genes: pd.Index | None = None,
+    n_folds: int | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Leave-one-cell-line-out baseline deltas: for each line, rebuild the source from the
     OTHER lines and predict the held-out line, so it never sees its own treated cells.
@@ -582,25 +603,44 @@ def loo_baseline_source(
         if genes is None
         else cast("pd.DataFrame", base[[str(g) for g in rdl.columns if g in base.columns]])
     )
+    # Held-out GROUPS, not necessarily single lines. n_folds=None keeps leave-one-line-out;
+    # an int holds out a whole fold at a time using fold_assignment's shared partition, so this
+    # rung's folds are literally the same ones every other rung uses.
+    all_lines = [str(i) for i in base.index]
+    if n_folds is None:
+        held_out = [[ln] for ln in all_lines]
+    else:
+        fmap = fold_assignment(all_lines, n_folds)
+        by_fold: dict[int, list[str]] = {}
+        for ln in all_lines:
+            by_fold.setdefault(fmap[ln], []).append(ln)
+        held_out = [by_fold[f] for f in sorted(by_fold)]
+
     d_blocks: list[pd.DataFrame] = []
     k_blocks: list[pd.DataFrame] = []
-    for line in [str(i) for i in base.index]:
-        tr = pats != line
+    for group in held_out:
+        tr = ~pd.Series(pats).isin(group).to_numpy()
         if not tr.any():
             continue
         rd = real_delta.loc[tr].reset_index(drop=True)
         rk = real_key.loc[tr].reset_index(drop=True)
         if kind in ("observed_delta", "additive"):  # "additive" is the historical name
-            d, kk = build_additive_deltas(rd, rk, [line])
+            d, kk = build_additive_deltas(rd, rk, group)
         elif kind == "knn":
-            d, kk = build_knn_deltas(base.drop(index=line), rd, rk, base.loc[[line]], [line], k=k)
+            d, kk = build_knn_deltas(
+                base.drop(index=group), rd, rk, base.loc[group], group, k=k
+            )
         elif kind in ("pca", "nmf"):
+            # `group`, not a single line: under n_folds the held-out set is a whole fold, and
+            # dropping only one of its lines would leave the rest in TRAINING while predicting
+            # just that one -- leakage on one side and lost coverage on the other, from a loop
+            # that still produces a full-looking table.
             d, kk = build_learned_deltas(
-                bl.drop(index=line),
+                bl.drop(index=group),
                 rdl.loc[tr].reset_index(drop=True),
                 rk,
-                bl.loc[[line]],
-                [line],
+                bl.loc[group],
+                group,
                 reducer=kind,
                 k=k,
             )

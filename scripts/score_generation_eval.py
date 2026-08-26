@@ -283,11 +283,12 @@ def main() -> None:
     # reduction. The cost is compute (5.3x more ridge targets), not identifiability.
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
         "observed_delta": loo_baseline_source(
-            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel
+            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel,
+            n_folds=args.folds,
         ),
-        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
-        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),
-        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel),
+        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
+        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
+        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
         # measured-delta reference (not a positive control -- see fmharness.controls'
         # plant_interaction, wired into score_check2's part b below as the "planted" row): the
         # REAL measured delta as its own "prediction", a Check-1 pipeline sanity check

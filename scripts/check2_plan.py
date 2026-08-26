@@ -54,6 +54,7 @@ from fmharness.deltas import (
     assert_common_genes,
     build_generated_deltas,
     common_gene_panel,
+    fold_assignment,
     load_panel_constraint,
     load_pert_map,
     loo_baseline_source,
@@ -161,11 +162,12 @@ def main() -> None:
 
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
         "observed_delta": loo_baseline_source(
-            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel
+            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel,
+            n_folds=args.folds,
         ),
-        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
-        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),
-        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel),
+        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
+        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
+        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel, n_folds=args.folds),
         "measured_delta": (real_delta[panel].copy(), real_key.copy()),
     }
     # loo_baseline_source's genes= reaches only build_learned_deltas (pca/nmf); additive and
@@ -187,7 +189,9 @@ def main() -> None:
 
     uniq_lines = sorted(set(real_key["patient"].astype(str)))
     n_folds = max(1, min(args.folds, len(uniq_lines)))
-    fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+    # the shared partition, so this rung's folds are literally the same ones rung 1 and rung 2
+    # hold out -- not merely the same count arrived at by an independent `i % n_folds`
+    fold_of = fold_assignment(uniq_lines, n_folds)
     target_drugs = sorted({str(d) for d in real_key["drug"]})
     design_target = design[design["drug"].astype(str).isin(target_drugs)]
 

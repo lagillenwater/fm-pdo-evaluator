@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import collections
+
 from pathlib import Path
 from typing import cast
 
@@ -490,3 +492,21 @@ def test_restrict_common_support_raises_when_no_shared_pairs() -> None:
     design = pd.DataFrame({"patient": ["p1", "p2"], "drug": ["d1", "d2"]})
     with pytest.raises(ValueError, match="no .* shared"):
         restrict_common_support({"a": a, "b": b}, design)
+
+
+def test_fold_assignment_is_the_same_partition_regardless_of_input_order() -> None:
+    # Every rung divides its score by another rung's, which is only valid if both were evaluated
+    # on the SAME folds. Two rungs each writing `i % n_folds` would agree only until one of them
+    # iterated its lines in a different order, so the shared helper sorts first and this pins it.
+    from fmharness.deltas import fold_assignment
+
+    lines = [f"L{i}" for i in range(12)]
+    assert fold_assignment(lines, 5) == fold_assignment(list(reversed(lines)), 5)
+
+    sizes = sorted(collections.Counter(fold_assignment(lines, 5).values()).values())
+    assert sizes == [2, 2, 2, 3, 3], "folds must be balanced to within one line"
+
+    # n_folds >= line count degenerates to leave-one-out, which is how the ladder will switch
+    # over later without a second code path.
+    loo = fold_assignment(lines, 99)
+    assert len(set(loo.values())) == len(lines)
