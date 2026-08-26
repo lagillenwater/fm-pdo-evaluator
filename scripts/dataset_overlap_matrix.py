@@ -30,6 +30,31 @@ from pathlib import Path
 import pandas as pd
 
 
+def load_ach_map(model_csv: Path) -> dict[str, str]:
+    """DepMap ACH id -> normalised stripped cell-line name.
+
+    Without this the cell-line matrix is nonsense in a way that reads as a result. Tahoe,
+    Stack and GDSC2 key on ACH ids; L1000 and sci-Plex key on names; the organoids key on
+    SARC ids. Intersecting them raw yields zeros that look like "these cohorts share no cell
+    lines" when they only mean "these cohorts spell cell lines differently". Everything is
+    mapped to the name namespace before any intersection is taken.
+    """
+    if not model_csv.exists():
+        return {}
+    m = pd.read_csv(model_csv, low_memory=False)
+    name_col = next(
+        (c for c in ("StrippedCellLineName", "CellLineName", "cell_line_name") if c in m.columns),
+        None,
+    )
+    if name_col is None or "ModelID" not in m.columns:
+        return {}
+    out: dict[str, str] = {}
+    for mid, nm in zip(m["ModelID"], m[name_col], strict=True):
+        if isinstance(nm, str) and nm:
+            out[norm_line(mid)] = norm_line(nm)
+    return out
+
+
 def norm_line(s: object) -> str:
     """Uppercase-alphanumeric, matching fmharness.deltas._norm so joins agree with the harness."""
     return re.sub(r"[^A-Z0-9]", "", str(s).upper())
@@ -167,9 +192,10 @@ def main() -> None:
         "gdsc2_all": {"kind": "h5ad", "path": "data/reference/stack_input_gdscv2.h5ad"},
         "gdsc2_sarcoma": {"kind": "h5ad", "path": "data/reference/stack_input_gdscv2_sarcoma.h5ad"},
         "sarcoma_organoids": {"kind": "h5ad", "path": "data/reference/stack_input_sarcoma.h5ad"},
-        "sarcoma_organoids_raw": {"kind": "counts",
-                                  "path": "data/raw/soragni/tables/normalized_gene_counts.parquet"},
     }
+
+    ach_map = load_ach_map(Path("data/raw/gdsc2_sarcoma/depmap/Model.csv"))
+    print(f"ACH -> name map: {len(ach_map)} DepMap models\n")
 
     genes: dict[str, set[str]] = {}
     lines: dict[str, set[str]] = {}
@@ -188,11 +214,18 @@ def main() -> None:
         else:
             g, ln = axes_sarcoma_counts(p)
         gs = {x.split(".", 1)[0] if x.upper().startswith("ENSG") else x for x in g} - {"", "nan"}
-        ls = {norm_line(x) for x in ln} - {""}
+        raw_ls = {norm_line(x) for x in ln} - {""}
+        n_ach = sum(1 for x in raw_ls if x.startswith("ACH"))
+        ls = {ach_map.get(x, x) for x in raw_ls}
+        unmapped = sorted(x for x in raw_ls if x.startswith("ACH") and x not in ach_map)
         genes[label], lines[label] = gs, ls
+        namespace = "ACH->name" if n_ach else ("SARC" if any(x.startswith("SARC") for x in raw_ls) else "name")
         meta[label] = {"path": str(p), "n_genes": len(gs), "n_lines": len(ls),
+                       "line_namespace": namespace, "n_ach_ids": n_ach,
+                       "n_ach_unmapped": len(unmapped),
                        "gene_examples": sorted(gs)[:4], "line_examples": sorted(ls)[:6]}
-        print(f"  {label:<24} {len(gs):>7} genes  {len(ls):>5} lines/samples  {sorted(ls)[:4]}")
+        note = f"  [{n_ach} ACH mapped, {len(unmapped)} unmapped]" if n_ach else ""
+        print(f"  {label:<24} {len(gs):>7} genes  {len(ls):>5} lines  {sorted(ls)[:4]}{note}")
 
     labels = list(genes)
     gm, lm = matrix(genes, labels), matrix(lines, labels)
