@@ -157,6 +157,15 @@ def main() -> None:
         help="penalized regressions for the representation grid (subset of l2, l1, en)",
     )
     ap.add_argument(
+        "--score-on-panel",
+        action="store_true",
+        default=True,
+        help="score Check 1 on the full common panel rather than a top-HVG subset of it. The "
+        "panel fixed CONSTRUCTION so sources share a gene universe; the metric was still "
+        "reducing to 2,000 HVG while rung 0's ceiling reduced to a different 2,000, so the two "
+        "could not be divided.",
+    )
+    ap.add_argument(
         "--folds",
         type=int,
         default=5,
@@ -261,7 +270,21 @@ def main() -> None:
         panel_inputs[_label] = pd.DataFrame(columns=_cols)
         print(f"  panel constraint {_label}: {len(_cols)} genes from {_pp}")
 
+    import os as _os
+
+    out_dir = Path(
+        args.out_dir or (repo / "results" / _os.environ.get("SLURM_JOB_ID", "local"))
+    )
+    run_params: dict[str, object] = {k: str(v) for k, v in vars(args).items()}
+    run_params["slurm_job_id"] = _os.environ.get("SLURM_JOB_ID", "local")
+
     panel = common_gene_panel(real_delta, panel_inputs)
+    run_params["panel_size"] = int(len(panel))
+    # Written so rung 0's ceiling can be pinned to exactly these genes via --panel-file. A
+    # ceiling and the score it denominates have to be on one gene set, not two of equal size.
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "common_panel.txt").write_text("\n".join(map(str, panel)) + "\n")
+    print(f"  panel written to {out_dir}/common_panel.txt for the rung-0 ceiling")
     print(f"common gene panel: {len(panel)} genes (was: additive/knn {real_delta.shape[1]}, "
           f"pca/nmf {args.n_hvg}-HVG-union-Hallmark)")
     if len(panel) < 1000:
@@ -329,7 +352,9 @@ def main() -> None:
         print("--dump-only: sources written, exiting before scoring")
         return
 
-    fid_table = score_delta_sources(sources, real_delta, real_key, n_hvg=args.n_hvg)
+    fid_table = score_delta_sources(
+        sources, real_delta[panel], real_key, n_hvg=None if args.score_on_panel else args.n_hvg
+    )
     print("\n=== check 1: generation quality (delta-Pearson vs real Tahoe) ===")
     print(fid_table.to_string(index=False))
     emit(fid_table, "check1_delta_fidelity", out_dir, run_params)
