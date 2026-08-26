@@ -165,31 +165,56 @@ def main() -> None:
     if r.size == 0:
         raise SystemExit("no (line, drug) pair had enough shared HVG genes to score")
 
-    # NEGATIVE CONTROL. A split-half correlation has a nonzero floor: genes share structure
-    # (expression level, co-regulation) whether or not the two halves come from the same
-    # perturbation, so a "ceiling" that mismatched halves also reach is measuring gene
-    # structure rather than pair-specific reproducibility. This script had no null at all, and
-    # its output is the DENOMINATOR for rungs 1 and 2 -- every "fraction of achievable" rests
-    # on it. Pair half A of one (line, drug) with half B of a DIFFERENT one to measure it.
+    # NEGATIVE CONTROL, STRATIFIED. A split-half correlation has a nonzero floor because genes
+    # share structure whether or not two halves come from the same perturbation. But a single
+    # "mismatched pair" null conflates two very different floors, and the first run showed why:
+    # it drew two random pairs, so whenever they happened to share a DRUG the correlation was
+    # high -- drug effects dominate the delta -- and the null came back at median 0.139 with 23%
+    # of draws exceeding the observed 0.299. That null is inflated by same-drug matches and
+    # cannot be read as a floor for reproducibility.
+    #
+    # Three strata, the same distinction Check 1b draws between shuffle_all and within_drug:
+    #   any_pair      two random pairs. Mixed; reported only for continuity with the first run.
+    #   diff_drug     different line AND different drug -- the floor from generic gene structure.
+    #                 This is the one the CEILING must clear to be a ceiling at all.
+    #   same_drug     same drug, different line -- the floor for LINE specificity. A split-half
+    #                 above this says the pair's delta is reproducible beyond its drug's effect.
     piv0 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc0")
     piv1 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc1")
     common = piv0.index.intersection(piv1.index)
     piv0, piv1 = piv0.loc[common], piv1.loc[common]
+    idx_pairs = list(common)
+    drugs_of = [str(x[1]) for x in idx_pairs]
+    lines_of = [str(x[0]) for x in idx_pairs]
     rng = np.random.default_rng(args.seed)
-    null = []
-    n_rows = len(common)
-    for _ in range(args.n_perm):
-        if n_rows < 2:
-            break
-        i, j = rng.choice(n_rows, size=2, replace=False)
-        a = piv0.iloc[int(i)].to_numpy(dtype=float)
-        b = piv1.iloc[int(j)].to_numpy(dtype=float)
-        ok = np.isfinite(a) & np.isfinite(b)
-        if ok.sum() >= args.min_genes and a[ok].std() > 0 and b[ok].std() > 0:
-            null.append(float(np.corrcoef(a[ok], b[ok])[0, 1]))
-    nl = np.asarray(null, dtype=float)
+    n_rows = len(idx_pairs)
+
+    def _draw(kind: str) -> list[float]:
+        """Null correlations under one stratum."""
+        out: list[float] = []
+        tries = 0
+        while len(out) < args.n_perm and tries < args.n_perm * 60 and n_rows >= 2:
+            tries += 1
+            i, j = rng.choice(n_rows, size=2, replace=False)
+            same_drug = drugs_of[i] == drugs_of[j]
+            same_line = lines_of[i] == lines_of[j]
+            if kind == "diff_drug" and (same_drug or same_line):
+                continue
+            if kind == "same_drug" and (not same_drug or same_line):
+                continue
+            a = piv0.iloc[int(i)].to_numpy(dtype=float)
+            b = piv1.iloc[int(j)].to_numpy(dtype=float)
+            ok = np.isfinite(a) & np.isfinite(b)
+            if ok.sum() >= args.min_genes and a[ok].std() > 0 and b[ok].std() > 0:
+                out.append(float(np.corrcoef(a[ok], b[ok])[0, 1]))
+        return out
+
+    nulls = {k: np.asarray(_draw(k), dtype=float) for k in ("any_pair", "diff_drug", "same_drug")}
+    for k, v in nulls.items():
+        med_k = float(np.median(v)) if v.size else float("nan")
+        print(f"null[{k:<10}] median r = {med_k:+.3f} over {v.size} draws")
+    nl = nulls["diff_drug"] if nulls["diff_drug"].size else nulls["any_pair"]
     null_med = float(np.median(nl)) if nl.size else float("nan")
-    print(f"mismatched-pair null: median r = {null_med:.3f} over {nl.size} draws")
 
     med = float(np.median(r))
     # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
@@ -206,6 +231,13 @@ def main() -> None:
         "frac_pos": round(float(np.mean(r > 0)), 3),
         "null_median_r": round(null_med, 3) if np.isfinite(null_med) else float("nan"),
         "null_n_draws": int(nl.size),
+        "null_any_pair_r": round(float(np.median(nulls["any_pair"])), 3) if nulls["any_pair"].size else float("nan"),
+        "null_diff_drug_r": round(float(np.median(nulls["diff_drug"])), 3) if nulls["diff_drug"].size else float("nan"),
+        "null_same_drug_r": round(float(np.median(nulls["same_drug"])), 3) if nulls["same_drug"].size else float("nan"),
+        "p_vs_same_drug": (
+            round(float((1 + np.sum(nulls["same_drug"] >= float(np.median(r)))) / (1 + nulls["same_drug"].size)), 4)
+            if nulls["same_drug"].size else float("nan")
+        ),
         "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
         "p_vs_null": (
             round(float((1 + np.sum(nl >= med)) / (1 + nl.size)), 4) if nl.size else float("nan")
