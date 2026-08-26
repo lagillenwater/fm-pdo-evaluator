@@ -85,6 +85,15 @@ def main() -> None:
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--random-draws", type=int, default=RANDOM_DRAWS)
+    ap.add_argument(
+        "--panel-source",
+        action="append",
+        default=None,
+        help="label=path to an EXTRA dataset whose genes must be in the panel, repeatable. "
+        "Without these the panel is only tahoe n stack (14,588). Check 2's declared panel is "
+        "tahoe n stack n sciplex n gdsc2 = 12,368, so the constraining cohorts have to be named "
+        "rather than implied by which sources happen to be built here.",
+    )
     ap.add_argument("--out-dir", required=True, type=Path)
     args = ap.parse_args()
 
@@ -114,8 +123,46 @@ def main() -> None:
         generated[label] = build_generated_deltas(Path(gdir), Path(args.query_baseline), pert)
         print(f"  built {label} from {gdir}: {generated[label][0].shape[1]} genes")
 
-    panel = common_gene_panel(real_delta, {k: v[0] for k, v in generated.items()})
-    print(f"common gene panel: {len(panel)} genes")
+    panel_inputs = {k: v[0] for k, v in generated.items()}
+    for spec in args.panel_source or []:
+        label, _, path = spec.partition("=")
+        pp = Path(path)
+        if not pp.exists():
+            raise SystemExit(
+                f"--panel-source {label}={pp} not present. Refusing to build a panel that "
+                "silently omits a declared constraint -- that is how the panel came out at "
+                "14,588 instead of the declared 12,368."
+            )
+        if pp.suffix == ".h5ad":
+            import h5py
+
+            with h5py.File(pp, "r") as f:
+                var = f["var"]
+                vi = var.attrs.get("_index", "_index")
+                vi = vi.decode() if isinstance(vi, bytes) else str(vi)
+                cols = [x.decode() if isinstance(x, bytes) else str(x) for x in var[vi][:]]
+                if cols and cols[0].upper().startswith("ENS"):
+                    for c in ("gene_symbol", "gene_short_name", "symbol", "feature_name"):
+                        if c in var:
+                            node = var[c]
+                            if isinstance(node, h5py.Group):
+                                cats = [x.decode() if isinstance(x, bytes) else str(x)
+                                        for x in node["categories"][:]]
+                                cols = [cats[i] if i >= 0 else "" for i in node["codes"][:]]
+                            else:
+                                cols = [x.decode() if isinstance(x, bytes) else str(x)
+                                        for x in node[:]]
+                            break
+        else:
+            import pyarrow.parquet as pq
+
+            cols = [c for c in pq.ParquetFile(pp).schema.names if c != "__index_level_0__"]
+        panel_inputs[label] = pd.DataFrame(columns=pd.Index(sorted(set(cols))))
+        print(f"  panel constraint {label}: {len(set(cols))} genes from {pp}")
+
+    panel = common_gene_panel(real_delta, panel_inputs)
+    print(f"common gene panel: {len(panel)} genes "
+          f"(constraints: {sorted(panel_inputs)})")
     if len(panel) < 1000:
         raise SystemExit(
             f"common panel collapsed to {len(panel)} genes -- almost certainly a gene-identifier "
