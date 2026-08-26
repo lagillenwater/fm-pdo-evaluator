@@ -48,11 +48,15 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"  # GLIBCXX_3.4.2
 export HF_HOME="/scratch/alpine/$USER/hf"
 
 TASK="${SLURM_ARRAY_TASK_ID:-0}"
-SHARD=$(printf "context_by_drug/%04d.h5ad" "$TASK")
+# CONTEXT_DIR selects which perturbation corpus Stack reads a drug's effect from. Overriding it
+# is what gives rung 2 a real cross-platform arm for Stack: the same query line, the same
+# checkpoint, a context built from L1000 instead of Tahoe.
+CONTEXT_DIR="${CONTEXT_DIR:-context_by_drug}"
+SHARD=$(printf "$CONTEXT_DIR/%04d.h5ad" "$TASK")
 if [[ ! -f "$SHARD" ]]; then
   echo "no shard for task $TASK ($SHARD) -- past the drug count, nothing to do"; exit 0
 fi
-PERT=$(awk -F'\t' -v i="$TASK" '$1==i{print $2}' context_by_drug/manifest.tsv)
+PERT=$(awk -F'\t' -v i="$TASK" '$1==i{print $2}' "$CONTEXT_DIR/manifest.tsv")
 echo "task $TASK -> pert '$PERT' ($SHARD)"
 
 QUERY="tahoe_query.h5ad"              # 400 real control cells, 8/line (written by 03)
@@ -72,7 +76,7 @@ QUERY="tahoe_query.h5ad"              # 400 real control cells, 8/line (written 
 CKPT="${CKPT:-stack-aligned/bc_large_aligned.ckpt}"
 GENELIST="${GENELIST:-stack-aligned/basecount_1000per_15000max.pkl}"
 OUTDIR="${OUTDIR:-generated}"
-echo "Resolved: CKPT=$CKPT GENELIST=$GENELIST OUTDIR=$OUTDIR"
+echo "Resolved: CKPT=$CKPT GENELIST=$GENELIST OUTDIR=$OUTDIR CONTEXT_DIR=$CONTEXT_DIR"
 mkdir -p "$OUTDIR"
 
 # Stack's true in-context generative procedure (the CLI's own default, --mode mdm, NOT --mode
