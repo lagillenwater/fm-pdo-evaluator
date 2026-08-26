@@ -98,7 +98,11 @@ case "$sub" in
       exit 1
     fi
     ;;
-  sq)      remote squeue -u "$(whoami)" -o '%.10i %.24j %.8T %.10M %.6D %R' ;;
+  # --me, not -u "$(whoami)": the command substitution ran LOCALLY, so this asked Alpine for
+  # jobs belonging to the local macOS username and always answered "Invalid user: lucas".
+  # Passing $USER through remote() cannot work either -- it printf '%q'-quotes every argument,
+  # so the remote shell sees a literal $USER. Slurm's own --me needs no username at all.
+  sq)      remote squeue --me -o '%.10i %.24j %.8T %.10M %.6D %R' ;;
   sacct)
     if [[ $# -gt 0 ]]; then
       remote sacct -j "$1" --format=JobID,JobName%24,State,Elapsed,MaxRSS,ExitCode
