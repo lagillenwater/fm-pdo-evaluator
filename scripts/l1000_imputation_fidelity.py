@@ -172,6 +172,10 @@ def main() -> None:
 
     from cmapPy.pandasGEXpress.parse_gctx import parse  # Alpine-only dep
 
+    # Created up front: the paired-test artifacts are written before the summary, and doing
+    # this only at the end cost job 31661545 on a non-existent-directory error after all the
+    # compute had finished.
+    args.out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(args.seed)
     cls = gene_class_map(args.l1000_dir / "GSE92742_Broad_LINCS_gene_info.txt.gz")
     print(f"gene classes: {pd.Series(list(cls.values())).value_counts().to_dict()}")
@@ -385,7 +389,6 @@ def main() -> None:
             for name, grp in vm.groupby("matched")
         )
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
     summary = pd.DataFrame(summary_rows)
     summary.to_csv(args.out_dir / "l1000_imputation_fidelity.csv", index=False)
     pd.DataFrame(rows).to_csv(args.out_dir / "l1000_imputation_fidelity_per_pair.csv", index=False)
