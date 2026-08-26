@@ -1,0 +1,25 @@
+{
+  "name": "de_permutation_null_both_checkpoints",
+  "claim": "Check-1b permutation null over 7 sources x 2 null kinds x 4 DE metrics, 200 shuffles, both Stack checkpoints. Under shuffle_all (the published null) every source clears at the p floor 0.00498 = 1/201, including line-independent baselines, so that null does not test line specificity. Under within_drug only measured_delta, stack_cytokine and stack_drug_aligned clear on all four metrics; additive, knn, pca and nmf do not. Arrays 31657587 and 31658411; gathered at 31660552.",
+  "script": "scripts/de_permutation_null.py",
+  "git_sha": "992cc34a9f580cce5fae8ce42c41a26a9453c814",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/de_permutation_null_both_checkpoints.csv",
+    "sha256": "8031a9b05d2566a10a8d7a94001bae2f73a8850020132046025c9b7d1bc4df17",
+    "bytes": 4817
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/denull/run.log",
+      "sha256": "87d70d393a4e65c52ac1d8d5b3104bd168402c93a8aadbce11362cb3a1af7a8a",
+      "bytes": 2325
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31660552",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/denull/run.log",
+    "sha256": "87d70d393a4e65c52ac1d8d5b3104bd168402c93a8aadbce11362cb3a1af7a8a",
+    "bytes": 2325
+  }
+}
