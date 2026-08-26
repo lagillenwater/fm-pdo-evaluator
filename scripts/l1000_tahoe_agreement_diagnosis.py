@@ -40,6 +40,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from fmharness.statistics import bootstrap_aggregate_pvalue
+
 
 def norm_name(s: object) -> str:
     """Lowercase alphanumeric, for joining drug names across cohorts."""
@@ -136,13 +138,17 @@ def sweep_transforms(L: np.ndarray, T: np.ndarray, n_perm: int, rng) -> list[dic
         o, nl = np.asarray(obs), np.asarray(null)
         o, nl = o[np.isfinite(o)], nl[np.isfinite(nl)]
         sign = float(np.mean(np.sign(Lt) == np.sign(Tt))) if name != "rank_per_gene" else float("nan")
+        # p compares the observed MEAN over o.size matched pairs against the bootstrapped
+        # sampling distribution of the null MEAN at that pair count -- not the spread of
+        # individual mismatched draws (fmharness.statistics.bootstrap_aggregate_pvalue).
+        p_boot, _, _ = bootstrap_aggregate_pvalue(float(o.mean()), nl, o.size)
         out.append({
             "transform": name,
             "mean_rho": round(float(o.mean()), 4),
             "sd_rho": round(float(o.std(ddof=1)), 4),
             "null_mean": round(float(nl.mean()), 4),
             "lift_over_null": round(float(o.mean() - nl.mean()), 4),
-            "p_vs_null": round(float((1 + np.sum(nl >= o.mean())) / (1 + nl.size)), 4),
+            "p_vs_null": round(p_boot, 4),
             "sign_concordance": round(sign, 4) if np.isfinite(sign) else "",
             "n_pairs": int(o.size),
         })

@@ -571,6 +571,46 @@ def fold_assignment(lines: "list[str] | pd.Index", n_folds: int) -> dict[str, in
         return {ln: i for i, ln in enumerate(uniq)}  # leave-one-out
     return {ln: i % n_folds for i, ln in enumerate(uniq)}
 
+
+def shuffled_target_base(
+    base: pd.DataFrame, group: "list[str]", donor_pool: "list[str]", rng: np.random.Generator,
+) -> pd.DataFrame:
+    """Real baseline values, re-labelled onto the WRONG line -- the negative-control frame.
+
+    Returns a frame indexed by ``group`` whose row for line ``x`` holds some OTHER line's
+    baseline, so a predictor fit normally and scored against ``x``'s truth loses the line
+    correspondence while keeping everything else (fit, capacity) untouched. It must collapse
+    toward the null.
+
+    Every line in ``group`` gets a distinct donor and no line is its own donor (a derangement
+    within ``group`` when ``len(group) > 1``; a donor drawn from outside ``group`` for the
+    degenerate singleton case, since a set of size 1 has no derangement). This replaced a
+    version that relabelled the FULL donor pool onto a same-sized subset of it and then looked
+    up a single held-out line inside that relabelled subset -- correct at leave-one-out (where
+    the subset was the whole pool), but at 5-fold the held-out line matched its new random label
+    only with probability |group| / |pool|, so the fitted model almost always found no row for
+    the line it was supposed to score and the whole cell raised ``ValueError``.
+    """
+    group = [str(x) for x in group]
+    if len(group) > 1:
+        donors = list(group)
+        for _ in range(1000):
+            rng.shuffle(donors)
+            if all(a != b for a, b in zip(donors, group, strict=True)):
+                break
+        else:
+            # Astronomically unlikely at any real fold size, but never loop forever.
+            donors = donors[1:] + donors[:1]
+    else:
+        pool = [str(x) for x in donor_pool if str(x) not in group]
+        if not pool:
+            raise ValueError("no donor line available outside the singleton group")
+        donors = [str(rng.choice(pool))]
+    sb = base.loc[donors].copy()
+    sb.index = pd.Index(group)
+    return sb
+
+
 def loo_baseline_source(
     kind: str,
     real_delta: pd.DataFrame,

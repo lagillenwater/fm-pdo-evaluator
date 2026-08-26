@@ -41,4 +41,5 @@ python -c "import duckdb" 2>/dev/null || pip install -q duckdb
 
 python scripts/delta_reproducibility.py \
     --local-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de" \
-    --drugs-cid-file data/static/tahoe_target_cids.txt
+    --drugs-cid-file data/static/tahoe_target_cids.txt \
+    --panel-file "${PANEL_FILE:-results/rung1_panel/common_panel.txt}"

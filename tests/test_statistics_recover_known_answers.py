@@ -17,50 +17,85 @@ import numpy as np
 import pytest
 from scipy import stats
 
-
-def _median_pvalue(observed_values: np.ndarray, null_draws: np.ndarray, n_boot: int = 2000,
-                   seed: int = 0) -> float:
-    """p for an observed MEDIAN against the bootstrapped sampling distribution of the null median.
-
-    This is the corrected form. The wrong form -- ``mean(null_draws >= median(observed))`` --
-    compares an aggregate to single draws and is inflated by roughly sqrt(n).
-    """
-    rng = np.random.default_rng(seed)
-    med = float(np.median(observed_values))
-    n = observed_values.size
-    boot = np.array([np.median(rng.choice(null_draws, size=n, replace=True)) for _ in range(n_boot)])
-    return float((1 + np.sum(boot >= med)) / (1 + boot.size))
+from fmharness.deltas import shuffled_target_base
+from fmharness.statistics import bootstrap_aggregate_pvalue
 
 
-def test_median_pvalue_returns_null_when_there_is_no_signal() -> None:
+def test_bootstrap_aggregate_pvalue_returns_null_when_there_is_no_signal() -> None:
     # Observed and null drawn from the SAME distribution: the test must not find a difference.
     rng = np.random.default_rng(1)
     observed = rng.normal(0.14, 0.13, 1336)
     null = rng.normal(0.14, 0.13, 500)
-    p = _median_pvalue(observed, null)
+    p, _, _ = bootstrap_aggregate_pvalue(float(np.median(observed)), null, observed.size, agg=np.median)
     assert p > 0.05, f"no-signal case must not be significant, got p={p}"
 
 
-def test_median_pvalue_recovers_a_planted_difference() -> None:
+def test_bootstrap_aggregate_pvalue_recovers_a_planted_difference() -> None:
     # Observed median planted well above the null median, at the real pair count.
     rng = np.random.default_rng(2)
     observed = rng.normal(0.30, 0.13, 1336)
     null = rng.normal(0.14, 0.13, 500)
-    p = _median_pvalue(observed, null)
+    p, _, _ = bootstrap_aggregate_pvalue(float(np.median(observed)), null, observed.size, agg=np.median)
     assert p < 0.01, f"planted difference must be recovered, got p={p}"
+
+
+def test_bootstrap_aggregate_pvalue_recovers_the_real_l1000_landmark_case() -> None:
+    # docs/results/l1000_imputation_fidelity.csv reported p_vs_null=0.2438 for landmark genes
+    # via the defective aggregate-vs-per-item form; this is the same case through the real,
+    # shipped function, pinning that it comes out significant instead.
+    rng = np.random.default_rng(0)
+    null = rng.normal(0.0018, 0.052, 500)  # null_mean, null_sd, n_perm from the promoted CSV
+    p, _, _ = bootstrap_aggregate_pvalue(0.041, null, 32)  # mean_spearman, n_pairs
+    assert p < 0.01, f"the real L1000 landmark case must clear its null once corrected, got p={p}"
 
 
 def test_the_wrong_form_is_the_one_that_fails_to_recover_it() -> None:
     # Pins the actual defect so it cannot come back unnoticed: with the SAME planted data, the
-    # aggregate-vs-per-item comparison returns a non-significant number.
+    # aggregate-vs-per-item comparison returns a non-significant number that the real function
+    # does not.
     rng = np.random.default_rng(2)
     observed = rng.normal(0.30, 0.13, 1336)
     null = rng.normal(0.14, 0.13, 500)
     wrong = float(np.mean(null >= np.median(observed)))
-    correct = _median_pvalue(observed, null)
+    correct, _, _ = bootstrap_aggregate_pvalue(float(np.median(observed)), null, observed.size, agg=np.median)
     assert wrong > 0.05, "the defective form should look non-significant on planted signal"
     assert correct < 0.01
     assert wrong > correct * 10, "the defect inflates p by orders of magnitude"
+
+
+def test_shuffled_target_base_never_returns_a_lines_own_baseline() -> None:
+    # rung 2's negative control must relabel EVERY held-out line onto a DIFFERENT line's real
+    # baseline values. The version this replaced relabelled a same-sized subset of the FULL
+    # donor pool and then looked up one held-out line inside it, which raised ValueError at
+    # 5-fold (the held-out line matched its new random label with probability
+    # len(group)/len(pool), not 1) -- exactly the shape that killed array cell 15 on the
+    # cluster. This is the real, shipped function, not a reimplementation of it.
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    all_lines = [f"L{i}" for i in range(20)]
+    base = pd.DataFrame(
+        np.arange(20 * 3, dtype=float).reshape(20, 3), index=pd.Index(all_lines)
+    )
+    group = all_lines[:7]
+    sb = shuffled_target_base(base, group, all_lines, rng)
+    assert list(sb.index) == group, "must return one row per held-out line, in order"
+    for ln in group:
+        assert not (sb.loc[ln].to_numpy() == base.loc[ln].to_numpy()).all(), (
+            f"{ln} was handed its own baseline -- the control does not shuffle anything"
+        )
+
+
+def test_shuffled_target_base_handles_the_singleton_fold() -> None:
+    # A group of size 1 has no derangement of itself; the donor must come from outside it.
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    all_lines = [f"L{i}" for i in range(5)]
+    base = pd.DataFrame(np.arange(5 * 2, dtype=float).reshape(5, 2), index=pd.Index(all_lines))
+    sb = shuffled_target_base(base, ["L0"], all_lines, rng)
+    assert list(sb.index) == ["L0"]
+    assert not (sb.loc["L0"].to_numpy() == base.loc["L0"].to_numpy()).all()
 
 
 def test_paired_signed_rank_recovers_a_planted_within_pair_gap() -> None:

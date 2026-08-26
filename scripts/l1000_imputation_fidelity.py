@@ -56,6 +56,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from fmharness.statistics import bootstrap_aggregate_pvalue
+
 GENE_CLASSES = ("landmark", "bing", "other")
 
 
@@ -318,7 +320,11 @@ def main() -> None:
         o = obs[c].dropna()
         nl = np.asarray(null[c], dtype=float)
         n_cls = int(sum(1 for g in genes if cls.get(g, "other") == c))
-        p = float((1 + np.sum(nl >= o.mean())) / (1 + nl.size)) if nl.size else float("nan")
+        # p compares the observed MEAN over len(o) pairs against the bootstrapped sampling
+        # distribution of the null MEAN at that same pair count -- not against the spread of
+        # individual mismatched-pair draws, which is a different, much wider quantity and
+        # inflates p by roughly sqrt(len(o)). See fmharness.statistics for why.
+        p, _, _ = bootstrap_aggregate_pvalue(float(o.mean()), nl, len(o)) if len(o) else (float("nan"),) * 3
         summary_rows.append({
             "gene_class": c, "n_genes": n_cls, "n_pairs": int(len(o)),
             "mean_spearman": round(float(o.mean()), 4) if len(o) else float("nan"),

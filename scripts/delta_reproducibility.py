@@ -24,6 +24,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fmharness.statistics import bootstrap_aggregate_pvalue
+
 TAHOE = "tahoebio/Tahoe-100M"
 DE = "pseudobulk_differential_expression"
 REPL_CANDIDATES = ("plate", "Plate", "plate_barcode", "plate_id", "replicate", "batch")
@@ -219,16 +221,9 @@ def main() -> None:
     med = float(np.median(r))
 
     # Bootstrap the null MEDIAN at the observed pair count, so the comparison is like-for-like.
-    if nl.size >= 10:
-        n_pairs_obs = int(r.size)
-        boot = np.array([
-            np.median(rng.choice(nl, size=n_pairs_obs, replace=True))
-            for _ in range(2000)
-        ])
-        p_boot = float((1 + np.sum(boot >= med)) / (1 + boot.size))
-        boot_lo, boot_hi = (float(np.quantile(boot, 0.025)), float(np.quantile(boot, 0.975)))
-    else:
-        p_boot = boot_lo = boot_hi = float("nan")
+    p_boot, boot_lo, boot_hi = bootstrap_aggregate_pvalue(
+        med, nl, int(r.size), agg=np.median, seed=args.seed,
+    )
     # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
     sb = 2 * med / (1 + med) if med > -1 else float("nan")
     summary = {
@@ -246,9 +241,14 @@ def main() -> None:
         "null_any_pair_r": round(float(np.median(nulls["any_pair"])), 3) if nulls["any_pair"].size else float("nan"),
         "null_diff_drug_r": round(float(np.median(nulls["diff_drug"])), 3) if nulls["diff_drug"].size else float("nan"),
         "null_same_drug_r": round(float(np.median(nulls["same_drug"])), 3) if nulls["same_drug"].size else float("nan"),
-        "p_vs_same_drug": (
-            round(float((1 + np.sum(nulls["same_drug"] >= float(np.median(r)))) / (1 + nulls["same_drug"].size)), 4)
-            if nulls["same_drug"].size else float("nan")
+        # Same fix as p_vs_null below: the observed MEDIAN against the bootstrapped sampling
+        # distribution of the same_drug null's MEDIAN, not against individual same_drug draws.
+        # The two forms previously disagreed within this same summary -- p_vs_null used the
+        # corrected form while this one used the defective one two lines away.
+        "p_vs_same_drug": round(
+            bootstrap_aggregate_pvalue(
+                float(np.median(r)), nulls["same_drug"], int(r.size), agg=np.median, seed=args.seed,
+            )[0], 4,
         ),
         "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
         # p compares the observed MEDIAN against the bootstrapped sampling distribution of the
