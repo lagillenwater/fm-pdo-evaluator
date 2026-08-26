@@ -48,6 +48,12 @@ def main() -> None:
 
     plan = json.loads((args.plan_dir / "plan.json").read_text())
     names = plan["representations"]
+    # An array sized ahead of the plan will have tasks past the end of the grid. Exit cleanly
+    # rather than raising IndexError, so over-provisioning the array is safe: the alternative is
+    # a wall of FAILED tasks that hides a real failure among them. Matches de_permutation_null.
+    if args.name is None and args.task_id is not None and args.task_id >= len(names):
+        print(f"task {args.task_id} is past the grid ({len(names)} representations); nothing to do")
+        return
     name = args.name if args.name else names[args.task_id]
     if name not in names:
         raise SystemExit(f"{name!r} is not in the plan: {names}")
