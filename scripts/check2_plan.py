@@ -93,24 +93,17 @@ def main() -> None:
     real_delta = pd.read_parquet(bdir / "real_delta.parquet")
     real_key = pd.read_parquet(bdir / "real_key.parquet")
     base = pd.read_parquet(bdir / "base.parquet")
-    hvg = pd.Index(real_delta.var(axis=0).sort_values(ascending=False).index[: args.n_hvg])
-    _, design = build_sample_design(
-        load_tranche(args.auc_tranche, repo), "all", "auc", drug_key="pubchem_cid"
-    )
-    load_hallmark(repo / "data/static/hallmark_signatures.gmt")  # fail early if absent
-
-    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
-        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
-        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k),
-        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k),
-        "measured_delta": (real_delta.copy(), real_key.copy()),
-    }
+    # The generated deltas are built first because they set the gene-panel ceiling, and the HVG
+    # axis every representation is projected onto is then drawn from INSIDE that panel. Before
+    # this, hvg came from real_delta's full 53,393 genes, so a top-HVG gene absent from a Stack
+    # checkpoint became a fill value for that source and a measured value for the baselines --
+    # the same gene axis on paper, different information per source in fact.
+    pert = load_pert_map(Path(args.pert_map))
     gen_specs = args.generated_dir or [
         "stack_cytokine=generated_agg",
         "stack_drug_aligned=generated_drug_aligned_agg",
     ]
-    pert = load_pert_map(Path(args.pert_map))
+    generated: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
     for spec in gen_specs:
         label, _, gdir = spec.partition("=")
         if not gdir:
@@ -118,8 +111,41 @@ def main() -> None:
         if not Path(gdir).exists():
             print(f"  SKIP {label}: {gdir} not present")
             continue
-        sources[label] = build_generated_deltas(Path(gdir), Path(args.query_baseline), pert)
-        print(f"  built {label} from {gdir}")
+        generated[label] = build_generated_deltas(Path(gdir), Path(args.query_baseline), pert)
+        print(f"  built {label} from {gdir}: {generated[label][0].shape[1]} genes")
+
+    panel = common_gene_panel(real_delta, {k: v[0] for k, v in generated.items()})
+    print(f"common gene panel: {len(panel)} genes")
+    if len(panel) < 1000:
+        raise SystemExit(
+            f"common panel collapsed to {len(panel)} genes -- almost certainly a gene-identifier "
+            "mismatch, not a real intersection. Refusing to build a plan on it."
+        )
+    hvg = pd.Index(
+        real_delta[panel].var(axis=0).sort_values(ascending=False).index[: args.n_hvg]
+    )
+    _, design = build_sample_design(
+        load_tranche(args.auc_tranche, repo), "all", "auc", drug_key="pubchem_cid"
+    )
+    load_hallmark(repo / "data/static/hallmark_signatures.gmt")  # fail early if absent
+
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
+        "additive": loo_baseline_source(
+            "additive", real_delta, real_key, base, k=args.k, genes=panel
+        ),
+        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
+        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),
+        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel),
+        "measured_delta": (real_delta[panel].copy(), real_key.copy()),
+    }
+    for label, (gd, gk) in generated.items():
+        sources[label] = (gd[[g for g in panel if g in gd.columns]].copy(), gk)
+
+    # Guard, not a fix: the panel is applied at construction. This catches a source that slipped
+    # past it, because sources on different genes yield a well-formed table comparing different
+    # things.
+    assert_common_genes(sources)
+    print(f"  all {len(sources)} sources on {len(panel)} genes -- verified")
 
     uniq_lines = sorted(set(real_key["patient"].astype(str)))
     n_folds = max(1, min(args.folds, len(uniq_lines)))

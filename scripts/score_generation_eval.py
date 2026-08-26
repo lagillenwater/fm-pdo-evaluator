@@ -58,7 +58,6 @@ from fmharness.deltas import (
     common_gene_panel,
     build_generated_deltas,
     build_tahoe_deltas,
-    learned_gene_panel,
     load_pert_map,
     loo_baseline_source,
 )
@@ -165,8 +164,11 @@ def main() -> None:
     )
     ap.add_argument(
         "--generated-dir",
+        action="append",
         default=None,
-        help="dir of Stack-generated <pert_id>.h5ad treated files; adds the 'stack' source",
+        help="label=dir, repeatable. A bare dir keeps the historical 'stack' label. This was "
+        "single-valued, which meant Check 1/1b could only ever score ONE checkpoint -- the "
+        "third place the same gap appeared, after check2_plan.py and the Check-1b null.",
     )
     ap.add_argument(
         "--query-baseline",
@@ -207,40 +209,11 @@ def main() -> None:
         f"{real_delta.shape[1]} genes"
     )
 
-    # top-HVG panel: the supervised readouts fit on it and the learned (pca/nmf) sources reduce on
-    # it, keeping the per-line PCA/NMF and readout fits fast and out of the hopeless p>>n regime.
-    # The learned sources ALSO emit the fixed-signature genes: pca/nmf output a delta only over the
-    # genes they are built on, so without the Hallmark genes a fixed readout would see an empty set
-    # on those sources and score them zero (the bug that NaN'd pca/nmf x proliferation).
-    hallmark = load_hallmark(repo / "data/static/hallmark_signatures.gmt")
-    hvg = pd.Index(real_delta.var(axis=0).sort_values(ascending=False).index[: args.n_hvg])
-    learned_genes = learned_gene_panel(
-        real_delta, repo / "data/static/hallmark_signatures.gmt", n_hvg=args.n_hvg
-    )
-
-    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": loo_baseline_source("additive", real_delta, real_key, base, k=args.k),
-        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k),
-        "pca": loo_baseline_source(
-            "pca", real_delta, real_key, base, k=args.k, genes=learned_genes
-        ),
-        "nmf": loo_baseline_source(
-            "nmf", real_delta, real_key, base, k=args.k, genes=learned_genes
-        ),
-        # measured-delta reference (not a positive control -- see fmharness.controls'
-        # plant_interaction, wired into score_check2's part b below as the "planted" row, the
-        # flowchart's real "planted interaction, recovered"): the REAL measured delta as its
-        # own "prediction", a Check-1 pipeline sanity check (trivially r=1). Passed to Check
-        # 2's penalized grid
-        # separately below (score_check2's own measured_delta= param), NOT included here in `sources`
-        # for the score_check2 call -- Check 2's part (a) real-delta-vs-real-AUC validation is
-        # already the Gate print below (Hallmark + a random-gene-set null, richer than a plain
-        # measured_delta row there would be); see score_check2's measured_delta= docstring.
-        "measured_delta": (real_delta.copy(), real_key.copy()),
-    }
-    # Stack's generated delta joins the same ladder when a generation run is supplied:
-    # delta = logcpm(generated) - logcpm(query baseline), keyed (query line, drug CID). It
-    # then flows through both checks exactly like the baselines, on equal footing.
+    # GENERATED DELTAS FIRST. They set the gene-panel ceiling: a generator cannot emit a gene
+    # its generation list never had, while every baseline here is derived from real_delta and
+    # can be restricted to any subset. Building them after the baselines is what allowed each
+    # source to be scored on its own gene universe.
+    generated: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
     if args.generated_dir:
         if not (args.query_baseline and args.pert_map):
             ap.error("--generated-dir requires --query-baseline and --pert-map")
@@ -249,14 +222,65 @@ def main() -> None:
         # checkpoint could enter a run, which silently halved the Check-1b null: the published
         # table reports both cytokine-aligned and drug-aligned, and the drug-aligned row carries
         # the stronger claim (de_spearman_lfc 0.466 vs 0.357).
-        _label, _, _dir = str(args.generated_dir).partition("=")
-        if not _dir:
-            _label, _dir = "stack", _label
-        sources[_label] = build_generated_deltas(
-            _rel(repo, _dir),
-            _rel(repo, args.query_baseline),
-            load_pert_map(_rel(repo, args.pert_map)),
+        for _spec in (args.generated_dir if isinstance(args.generated_dir, list) else [args.generated_dir]):
+            _label, _, _dir = str(_spec).partition("=")
+            if not _dir:
+                _label, _dir = "stack", _label
+            generated[_label] = build_generated_deltas(
+                _rel(repo, _dir),
+                _rel(repo, args.query_baseline),
+                load_pert_map(_rel(repo, args.pert_map)),
+            )
+            print(f"  built {_label} from {_dir}: {generated[_label][0].shape[1]} genes")
+
+    # THE COMMON PANEL. Every source is built on it, so de_fidelity's "drop genes this source
+    # lacks" rule can no longer give each source a different gene universe. Measured 2026-08-25:
+    # real_delta 53,393 genes, both Stack checkpoints 15,012, intersection 14,588, and 14,121
+    # once sci-Plex is required. pca/nmf previously got learned_gene_panel's 2,647 -- a
+    # top-HVG-union-Hallmark set enriched for genes that move, which inflates pr_auc because
+    # average precision depends on the positive rate.
+    panel = common_gene_panel(real_delta, generated)
+    print(f"common gene panel: {len(panel)} genes (was: additive/knn {real_delta.shape[1]}, "
+          f"pca/nmf {args.n_hvg}-HVG-union-Hallmark)")
+    if len(panel) < 1000:
+        raise SystemExit(
+            f"common panel collapsed to {len(panel)} genes -- almost certainly a gene-identifier "
+            "mismatch between real_delta and a generated source, not a real intersection. "
+            "Refusing to score on it."
         )
+
+    hallmark = load_hallmark(repo / "data/static/hallmark_signatures.gmt")
+    hvg = pd.Index(
+        real_delta[panel].var(axis=0).sort_values(ascending=False).index[: args.n_hvg]
+    )
+
+    # pca/nmf reduce on the panel now, not on a narrower hand-built one. The old docstring
+    # warned that 49 lines vs ~50k genes is hopelessly p>>n, but that reasoning does not apply
+    # to the reducer: PCA/NMF on a (49 x G) baseline has rank at most 49 regardless of G, so
+    # widening G changes the number of OUTPUT genes to predict, not the conditioning of the
+    # reduction. The cost is compute (5.3x more ridge targets), not identifiability.
+    sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
+        "additive": loo_baseline_source(
+            "additive", real_delta, real_key, base, k=args.k, genes=panel
+        ),
+        "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
+        "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),
+        "nmf": loo_baseline_source("nmf", real_delta, real_key, base, k=args.k, genes=panel),
+        # measured-delta reference (not a positive control -- see fmharness.controls'
+        # plant_interaction, wired into score_check2's part b below as the "planted" row): the
+        # REAL measured delta as its own "prediction", a Check-1 pipeline sanity check
+        # (trivially r=1), restricted to the panel like everything else.
+        "measured_delta": (real_delta[panel].copy(), real_key.copy()),
+    }
+    for _label, (_gd, _gk) in generated.items():
+        _cols = [g for g in panel if g in _gd.columns]
+        sources[_label] = (_gd[_cols].copy(), _gk)
+
+    # A guard, not a fix: the panel is applied at construction above, and this catches a source
+    # that slipped past it. Sources scored on different genes produce a table that looks
+    # well-formed and compares different things.
+    assert_common_genes(sources)
+    print(f"  all {len(sources)} sources on {len(panel)} genes -- verified")
 
     # Check 1 -- generation quality vs the real Tahoe delta.
     if args.dump_sources:

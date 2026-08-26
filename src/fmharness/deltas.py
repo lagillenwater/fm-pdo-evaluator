@@ -107,7 +107,10 @@ def logcpm(df: pd.DataFrame) -> pd.DataFrame:
     """Library-size normalize (per 10k) and log1p, so a treated-minus-baseline
     difference is a log fold-change rather than a raw-count difference dominated by
     per-sample sequencing depth (which would inflate the random-gene-set baseline)."""
-    lib = df.sum(axis=1).to_numpy(dtype=np.float64)
+    # copy=True because .to_numpy() may hand back a read-only view -- newer numpy does, and the
+    # in-place zero-guard below then raises "assignment destination is read-only". Pre-existing;
+    # it does not fire under Alpine's pinned pandas/numpy, so it only ever failed locally.
+    lib = df.sum(axis=1).to_numpy(dtype=np.float64, copy=True)
     lib[lib == 0] = 1.0
     return pd.DataFrame(
         np.log1p(df.to_numpy(dtype=np.float64) / lib[:, None] * 1e4),
