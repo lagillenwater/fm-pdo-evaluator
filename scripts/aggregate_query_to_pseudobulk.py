@@ -35,8 +35,10 @@ def main() -> None:
     ap.add_argument(
         "--group-col",
         default=None,
-        help="obs column to collapse within (e.g. cell_id). Defaults to the obs index, which "
-        "for a query built 8-cells-per-line means collapsing to one profile per line.",
+        help="comma-separated obs columns to collapse within, e.g. 'cell_line_id,pert_id'. "
+        "MULTIPLE columns matter for a context shard: grouping on cell line alone would merge "
+        "a line's treated cells with its controls, destroying the very contrast Stack reads a "
+        "drug's effect from and producing a context that looks fine and teaches nothing.",
     )
     ap.add_argument(
         "--strip-suffix",
@@ -49,8 +51,12 @@ def main() -> None:
 
     adata = ad.read_h5ad(args.input)
     obs = adata.obs.copy()
-    if args.group_col and args.group_col in obs.columns:
-        groups = obs[args.group_col].astype(str).to_numpy()
+    if args.group_col:
+        cols = [c.strip() for c in args.group_col.split(",") if c.strip()]
+        missing = [c for c in cols if c not in obs.columns]
+        if missing:
+            raise SystemExit(f"--group-col names {missing}, not in obs: {list(obs.columns)}")
+        groups = obs[cols].astype(str).agg("|".join, axis=1).to_numpy()
     elif args.strip_suffix:
         groups = np.array([str(n).rsplit("-", 1)[0] for n in adata.obs_names])
     else:
