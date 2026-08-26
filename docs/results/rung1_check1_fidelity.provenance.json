@@ -1,0 +1,25 @@
+{
+  "name": "rung1_check1_fidelity",
+  "claim": "Rung 1, held-out-line delta fidelity, on the declared 14,121-gene Check-1 panel with 5-fold CV from the shared fold partition. All seven sources verified on the same panel before scoring. measured_delta returns exactly 1.000 as the pipeline sanity check. Both Stack generated-delta variants sit near zero while every baseline is an order of magnitude higher. Scores are NOT comparable to the earlier 2,000-HVG run: scoring on the full panel changes the scale, which is why the rung-0 ceiling must be pinned to this same panel before any fraction-of-ceiling is computed.",
+  "script": "scripts/rung1_gather.py",
+  "git_sha": "31fecdaab718164d13e1fcc87b616b87c3fdc4c7",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/rung1_check1_fidelity.csv",
+    "sha256": "407ff10a6bd7f5ecf6b8b6bcce5f2fe14b57ba1d3e748ae922927c3c2b205203",
+    "bytes": 310
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r1/rung1_check1_fidelity.params.json",
+      "sha256": "657ee91d7c28fd0261bc23aeaafceb2ea0acca080da39af2b69e20d3438d189d",
+      "bytes": 862
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31675161",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/r1/run.log",
+    "sha256": "162c08e9426b1f8aa92b8018518f5df24cde52480bd1144518ddedb09be2b8e0",
+    "bytes": 769
+  }
+}

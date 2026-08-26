@@ -96,3 +96,21 @@ def test_transfer_penalty_is_a_difference_of_like_quantities() -> None:
         "mean-of-differences and difference-of-means agree only for paired, equal-length arms; "
         "if they diverge the arms are not paired and the penalty is not a like-for-like subtraction"
     )
+
+
+def test_shuffled_control_relabels_every_held_out_line_not_just_one() -> None:
+    # rung 2's negative control permutes the target baseline's line labels. When rung 2 moved
+    # from leave-one-out to 5-fold the held-out set became a fold, and a control that assigns a
+    # single label to a multi-row frame dies on a shape error -- which is what killed one array
+    # cell. Pins the invariant: one new label per row, all distinct.
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    all_lines = [f"L{i}" for i in range(20)]
+    held_out = pd.DataFrame(np.zeros((4, 3)), index=pd.Index(all_lines[:4]))
+    relabelled = pd.Index(
+        [str(x) for x in rng.choice(all_lines, size=len(held_out), replace=False)]
+    )
+    assert len(relabelled) == len(held_out)
+    assert len(set(relabelled)) == len(held_out), "labels must stay distinct"

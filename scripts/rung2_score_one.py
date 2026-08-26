@@ -185,8 +185,14 @@ def main() -> None:
                 p, kk = build_additive_deltas(tr_delta, tr_key, list(tgt_base.index))
             elif source == "shuffled":
                 rng0 = np.random.default_rng(args.seed + 7)
+                # One label per held-out line. This assigned a single label to a frame that
+                # holds a whole FOLD once rung 2 moved from leave-one-out to 5-fold, so the
+                # index length stopped matching the row count and the cell died on a shape
+                # error -- a control written for one CV scheme and left behind by the other.
                 sb = tgt_base.copy()
-                sb.index = pd.Index([str(rng0.choice(list(t_base.index)))])
+                sb.index = pd.Index(
+                    [str(x) for x in rng0.choice(list(t_base.index), size=len(sb), replace=False)]
+                )
                 p, kk = build_learned_deltas(
                     tr_base, tr_delta, tr_key, sb, [line], reducer="pca", k=args.k
                 )
