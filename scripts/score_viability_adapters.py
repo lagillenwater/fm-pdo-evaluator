@@ -82,6 +82,7 @@ from fmharness.deltas import (
     build_generated_deltas,
     build_l1000_gdsc_pairs,
     build_learned_deltas,
+    fold_assignment,
     restrict_common_support,
     sarcoma_organoids_2024_pert_map,
 )
@@ -227,6 +228,30 @@ def main() -> None:
     ok = ~np.isnan(tr_via_all)
     tr_delta_fit, tr_via = tr_delta[ok], tr_via_all[ok]
 
+    # Decision D1 (docs/decisions/2026-08-25-ladder-round.md): GDSC2 supplies rung 4's drug
+    # axis, because rung 3 is rung 4's ONLY reference frame (no ceiling of its own) and rung 3
+    # is scored on GDSC2's drugs. Restricting the organoid target to GDSC2's own screened
+    # compounds (dg's drug set -- already loaded above for the training-label join, so this
+    # adds no new dependency) is what makes rung 4 a ratio against rung 3 on a shared axis,
+    # rather than on whatever L1000 happens to cover -- which is what this script did before
+    # this restriction existed, the option D1 explicitly rejected. The 19 drugs covered by
+    # BOTH GDSC2 and L1000 remain available as a controlled sub-analysis (D1's "either
+    # representation source" note) by further restricting design/dg to tr_key's own drug set;
+    # not implemented here, since nothing downstream needs it yet.
+    _n_before = int(design["drug"].nunique())
+    gdsc2_drugs = set(dg["drug"].astype(str))
+    design = design[design["drug"].astype(str).isin(gdsc2_drugs)].reset_index(drop=True)
+    print(
+        f"rung-4 drug axis restricted to GDSC2 (decision D1): "
+        f"{design['drug'].nunique()} of {_n_before} organoid-screened drugs remain, "
+        f"{int(design['patient'].nunique())} patients"
+    )
+    if design.empty:
+        raise SystemExit(
+            "GDSC2 drug-axis restriction left no organoid rows -- check drug_key='pubchem_cid' "
+            "normalization matches between the organoid loader and gdscv2's own design"
+        )
+
     # delta sources, fed through the SAME readout adapters:
     #   additive  -- drug-mean L1000 delta (organoid-independent floor)
     #   pca / nmf -- learned organoid-specific delta predictors (need the Soragni baseline)
@@ -360,8 +385,12 @@ def main() -> None:
     # folds against the same design_target the same way Check 2 does).
     if args.stack_emb:
         uniq_lines = patients
+        # invariant 5: the shared partition, not a hand-rolled i % n_folds (which degenerates
+        # to a single fold at --folds 1 instead of leave-one-out; fold_assignment sorts first
+        # too, so this is bit-identical to the old code at every --folds this script actually
+        # runs with -- default 5).
         n_folds = max(1, min(args.folds, len(uniq_lines)))
-        fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+        fold_of = fold_assignment(uniq_lines, n_folds)
         emb_methods = [m for m in methods if m in ("l1", "l2")]
         for spec in args.stack_emb:
             label, sep, path = spec.partition("=")
@@ -437,7 +466,7 @@ def main() -> None:
     if base_path.exists():
         uniq_lines = patients
         n_folds = max(1, min(args.folds, len(uniq_lines)))
-        fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+        fold_of = fold_assignment(uniq_lines, n_folds)  # invariant 5: see the comment above
         # Plant AND score in the SAME small PCA subspace of sarcoma_organoids_2024_base -- planting in the
         # raw gene space (thousands of genes) and then fitting RidgeCV directly on it with
         # only ~n/folds training patients per fold cannot recover ANY signal at any effect
