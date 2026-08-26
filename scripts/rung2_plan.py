@@ -39,7 +39,7 @@ from fmharness.deltas import common_gene_panel, load_panel_constraint
 # to a line-permuted baseline, which must collapse to the null. Without a floor and a noise row
 # a transfer penalty is uninterpretable -- a source could "transfer well" simply by predicting
 # the drug mean on both platforms, which is exactly what `additive`/`measured_delta` does.
-SOURCES = ("prior", "knn", "pca", "nmf", "measured_delta", "shuffled")
+SOURCES = ("prior", "knn", "pca", "nmf", "observed_delta", "shuffled")
 ARMS = ("in_platform", "cross_platform")
 
 

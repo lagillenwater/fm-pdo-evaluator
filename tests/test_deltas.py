@@ -388,7 +388,11 @@ def test_loo_baseline_source_additive_never_sees_its_own_held_out_line() -> None
     real_key = pd.DataFrame({"patient": ["L1", "L2", "L3"], "drug": ["d1", "d1", "d1"]})
     base = pd.DataFrame({"A": [0.0, 0.0, 0.0]}, index=pd.Index(["L1", "L2", "L3"]))
 
-    delta, key = loo_baseline_source("additive", real_delta, real_key, base, k=1)
+    delta, key = loo_baseline_source("observed_delta", real_delta, real_key, base, k=1)
+    # the historical name must still dispatch to the same builder, or an old call site would
+    # silently fall through to a different branch instead of failing loudly
+    alias_delta, _ = loo_baseline_source("additive", real_delta, real_key, base, k=1)
+    assert alias_delta.equals(delta)
 
     assert len(delta) == 3
     want = {"L1": (20.0 + 30.0) / 2, "L2": (10.0 + 30.0) / 2, "L3": (10.0 + 20.0) / 2}

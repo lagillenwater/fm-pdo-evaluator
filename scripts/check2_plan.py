@@ -160,8 +160,8 @@ def main() -> None:
     load_hallmark(repo / "data/static/hallmark_signatures.gmt")  # fail early if absent
 
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": loo_baseline_source(
-            "additive", real_delta, real_key, base, k=args.k, genes=panel
+        "observed_delta": loo_baseline_source(
+            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel
         ),
         "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
         "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),

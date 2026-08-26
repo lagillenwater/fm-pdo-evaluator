@@ -83,7 +83,7 @@ def main() -> None:
     # shuffled: the real fitted map applied to a line-permuted target baseline, so the model
     # keeps all its capacity but loses the line correspondence. It must collapse to the null.
     if source in ("prior", "shuffled"):
-        src_for_fit = "measured_delta" if source == "prior" else "pca"
+        src_for_fit = "observed_delta" if source == "prior" else "pca"
     else:
         src_for_fit = source
 
@@ -100,7 +100,7 @@ def main() -> None:
             pred, pkey = build_learned_deltas(
                 tr_base, tr_delta, tr_key, shuffled_base.loc[targets], targets, reducer="pca", k=args.k
             )
-        elif source == "measured_delta":
+        elif source == "observed_delta":
             pred, pkey = build_additive_deltas(tr_delta, tr_key, targets)
         elif source == "knn":
             pred, pkey = build_knn_deltas(tr_base, tr_delta, tr_key, t_base, targets, k=args.k)
@@ -119,7 +119,7 @@ def main() -> None:
             tgt_base = t_base.loc[[line]] if line in t_base.index else None
             if tgt_base is None or tr_key.empty:
                 continue
-            if source in ("prior", "measured_delta"):
+            if source in ("prior", "observed_delta"):
                 p, kk = build_additive_deltas(tr_delta, tr_key, [line])
             elif source == "shuffled":
                 rng0 = np.random.default_rng(args.seed + 7)

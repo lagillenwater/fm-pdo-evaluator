@@ -470,7 +470,7 @@ def score_delta_sources(
 ) -> pd.DataFrame:
     """Check-1 table: one row per delta source, scored against the same real Tahoe delta.
 
-    ``sources`` maps a source name (``"additive"``, ``"stack"``, ...) to its own
+    ``sources`` maps a source name (``"observed_delta"``, ``"stack"``, ...) to its own
     ``(delta, key)`` pair, exactly as produced by ``loo_baseline_source`` /
     ``build_generated_deltas``. Every source is first restricted to the (patient, drug)
     support they all share (``restrict_common_support``, 2026-08-21) -- a broadcast

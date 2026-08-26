@@ -234,7 +234,7 @@ def main() -> None:
     patients = sorted(str(p) for p in design["patient"].unique())
     base_path = Path(args.baseline) if Path(args.baseline).is_absolute() else repo / args.baseline
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": build_additive_deltas(tr_delta, tr_key, patients)
+        "observed_delta": build_additive_deltas(tr_delta, tr_key, patients)
     }
     if base_path.exists():
         sarcoma_organoids_2024_base = _read_baseline(base_path)

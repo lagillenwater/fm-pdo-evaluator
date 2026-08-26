@@ -69,10 +69,13 @@ variants:
     checks: [check2]
 
   # ---------------------------------------------------------------- baselines and controls
-  - id: additive
+  - id: observed_delta
     kind: baseline_delta
+    aliases: [additive]
     what: >
-      Each drug's mean real delta over the OTHER lines. Intended as the line-independent floor
+      Each drug's mean real delta over the OTHER lines -- the drug-level average of OBSERVED
+      deltas, which is what the name now says. It was called "additive", which described neither
+      what it computes nor what it is for. Intended as the line-independent floor
       and is NOT one: (S - real_i)/(n-1) is affine in real_i, so after standardisation it is the
       measured delta sign-flipped. Correlation -1.000000 across all 32 drugs.
     checks: [check1, check1b, check2]

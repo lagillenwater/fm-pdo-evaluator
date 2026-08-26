@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-SOURCES = ("additive", "pca", "nmf", "stack")
+SOURCES = ("observed_delta", "pca", "nmf", "stack")
 METHODS = ("hallmark", "l1", "l2")
 METHOD_COLOR = {"hallmark": "#2C6FAF", "l1": "#D98C29", "l2": "#7B52A8"}
 STACK_RED = "#C0392B"

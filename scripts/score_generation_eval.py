@@ -282,8 +282,8 @@ def main() -> None:
     # widening G changes the number of OUTPUT genes to predict, not the conditioning of the
     # reduction. The cost is compute (5.3x more ridge targets), not identifiability.
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": loo_baseline_source(
-            "additive", real_delta, real_key, base, k=args.k, genes=panel
+        "observed_delta": loo_baseline_source(
+            "observed_delta", real_delta, real_key, base, k=args.k, genes=panel
         ),
         "knn": loo_baseline_source("knn", real_delta, real_key, base, k=args.k, genes=panel),
         "pca": loo_baseline_source("pca", real_delta, real_key, base, k=args.k, genes=panel),

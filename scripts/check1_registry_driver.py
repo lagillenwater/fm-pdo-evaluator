@@ -119,7 +119,7 @@ def run_check1(
 
     learned_genes = learned_gene_panel(fd, hallmark_path, n_hvg=n_hvg)
     sources: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {
-        "additive": loo_baseline_source("additive", fd, fk, base, k=k),
+        "observed_delta": loo_baseline_source("observed_delta", fd, fk, base, k=k),
         "knn": loo_baseline_source("knn", fd, fk, base, k=k),
         "pca": loo_baseline_source("pca", fd, fk, base, k=k, genes=learned_genes),
         "nmf": loo_baseline_source("nmf", fd, fk, base, k=k, genes=learned_genes),

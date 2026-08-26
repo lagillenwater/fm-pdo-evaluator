@@ -22,7 +22,7 @@ import numpy as np
 # Check 1: delta-Pearson of each source against the real Tahoe delta, and the off-diagonal
 # (wrong-condition) control.
 CHECK1 = {
-    "additive": (0.225, 0.095),
+    "observed_delta": (0.225, 0.095),
     "knn": (0.178, 0.067),
     "pca": (0.207, 0.083),
     "nmf": (0.221, 0.088),
@@ -34,7 +34,7 @@ DELTA_CEILING, DELTA_SPLIT_HALF = 0.46, 0.30
 # Check 1b (2026-08-19): DE-restricted metrics (fmharness.evaluation.score_de_metrics), scored
 # against ground-truth Wilcoxon DE calls -- the sparse counterpart to CHECK1's dense Pearson-Delta.
 CHECK1B = {
-    "additive": (0.389, 0.012, 0.017, 0.009),
+    "observed_delta": (0.389, 0.012, 0.017, 0.009),
     "knn": (0.382, 0.010, 0.009, 0.005),
     "pca": (0.414, 0.034, 0.023, 0.014),
     "nmf": (0.414, 0.041, 0.029, 0.019),
@@ -57,7 +57,7 @@ INTERACTION_CEILING = 0.47  # GDSC2 vs CTRPv2 agreement on the cell-line-specifi
 # Check 2, ridge (L2): overall potency (global) and cell-line-specific response (interaction).
 CHECK2_RIDGE = {
     "expr": (0.475, -0.037),
-    "additive": (0.628, -0.095),
+    "observed_delta": (0.628, -0.095),
     "knn": (0.547, -0.068),
     "pca": (0.585, 0.007),
     "nmf": (0.550, 0.007),
@@ -70,7 +70,7 @@ CHECK2_RIDGE = {
 # Selection gap@k, lowest across the L1/L2/EN sweep (each k minimized independently).
 SEL_GAP = {
     "expr": (0.354, 0.119),
-    "additive": (0.264, 0.091),
+    "observed_delta": (0.264, 0.091),
     "knn": (0.250, 0.101),
     "pca": (0.219, 0.102),
     "nmf": (0.251, 0.082),
@@ -106,7 +106,7 @@ DISTINCT_TOP1_OBSERVED = (6.7, 2.0, 13.0)  # distinct drugs ever best, out of 26
 TOXIC_SHARE_BY_REPR = {
     # label: (broad_share_top1, distinct_top1, n_lines)
     "expr": (0.886, 7, 44),
-    "additive": (1.000, 3, 44),
+    "observed_delta": (1.000, 3, 44),
     "knn": (1.000, 3, 44),
     "pca": (0.977, 4, 44),
     "nmf": (1.000, 3, 44),

@@ -143,20 +143,20 @@ def main() -> None:
         load_tranche(args.auc_tranche, repo), "all", "auc", drug_key="pubchem_cid"
     )
 
-    add_delta, add_key = loo_baseline_source("additive", real_delta, real_key, base, k=args.k)
+    add_delta, add_key = loo_baseline_source("observed_delta", real_delta, real_key, base, k=args.k)
     reps = {
-        "additive": repr_by_drug(add_delta, add_key, hvg),
+        "observed_delta": repr_by_drug(add_delta, add_key, hvg),
         "oracle": repr_by_drug(real_delta, real_key, hvg),
     }
 
     print("\n" + "=" * 78)
     print("PART 1 -- are the two representations actually different data?")
     print("=" * 78)
-    shared = sorted(set(reps["additive"]) & set(reps["oracle"]))
+    shared = sorted(set(reps["observed_delta"]) & set(reps["oracle"]))
     print(f"  drugs in both: {len(shared)}")
     diffs = []
     for d in shared[:10]:
-        a, o = reps["additive"][d], reps["oracle"][d]
+        a, o = reps["observed_delta"][d], reps["oracle"][d]
         common = a.index.intersection(o.index)
         g = a.columns.intersection(o.columns)
         if len(common) and len(g):
@@ -167,7 +167,7 @@ def main() -> None:
     print("\n" + "=" * 78)
     print("PART 2 -- within-drug feature variance (can a per-drug fit use the features?)")
     print("=" * 78)
-    for name in ("additive", "oracle"):
+    for name in ("observed_delta", "oracle"):
         v = within_drug_variance(reps[name])
         print(f"  {name:>9}: mean per-gene sd across lines = {v.mean():.6f}  (min {v.min():.6f}, max {v.max():.6f})")
     print("  A value of ~0 means every line shares one feature vector -> intercept-only fit.")
@@ -180,11 +180,11 @@ def main() -> None:
     print("=" * 78)
     preds = {}
     alphas_used = {}
-    for name in ("additive", "oracle"):
+    for name in ("observed_delta", "oracle"):
         preds[name], alphas_used[name] = fit_and_report(
             reps[name], design, fold_of, n_folds, lines, NARROW_ALPHAS, f"{name}/narrow"
         )
-    m = preds["additive"].merge(
+    m = preds["observed_delta"].merge(
         preds["oracle"], on=["patient", "drug"], suffixes=("_add", "_orc")
     )
     d = np.abs(m["y_pred_add"].to_numpy() - m["y_pred_orc"].to_numpy())
@@ -193,7 +193,7 @@ def main() -> None:
     print("  VERDICT: predictions IDENTICAL" if d.max() < 1e-9 else "  VERDICT: predictions differ")
 
     ceiling = NARROW_ALPHAS.max()
-    for name in ("additive", "oracle"):
+    for name in ("observed_delta", "oracle"):
         a = np.array(alphas_used[name])
         at_ceiling = float(np.mean(np.isclose(a, ceiling)))
         print(f"  {name:>9}: alpha at path ceiling ({ceiling:g}) in {at_ceiling:.1%} of fits; median alpha {np.median(a):.4g}")
@@ -224,7 +224,7 @@ def main() -> None:
     print("  an independent line-independent floor.")
     cors = []
     for d in shared:
-        a, o = reps["additive"][d], reps["oracle"][d]
+        a, o = reps["observed_delta"][d], reps["oracle"][d]
         common = a.index.intersection(o.index)
         if len(common) < 5:
             continue

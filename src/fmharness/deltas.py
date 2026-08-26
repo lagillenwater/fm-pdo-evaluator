@@ -590,7 +590,7 @@ def loo_baseline_source(
             continue
         rd = real_delta.loc[tr].reset_index(drop=True)
         rk = real_key.loc[tr].reset_index(drop=True)
-        if kind == "additive":
+        if kind in ("observed_delta", "additive"):  # "additive" is the historical name
             d, kk = build_additive_deltas(rd, rk, [line])
         elif kind == "knn":
             d, kk = build_knn_deltas(base.drop(index=line), rd, rk, base.loc[[line]], [line], k=k)

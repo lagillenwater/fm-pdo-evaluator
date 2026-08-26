@@ -77,7 +77,7 @@ def test_run_check2_reports_rows_for_every_representation(tmp_path: Path) -> Non
         k=1,
         folds=2,
     )
-    assert {"additive", "knn", "pca", "nmf", "stack", "expr"} <= set(table["source"])
+    assert {"observed_delta", "knn", "pca", "nmf", "stack", "expr"} <= set(table["source"])
     assert {"global", "interaction", "perdrug", "p_label", "n"} <= set(table.columns)
 
 

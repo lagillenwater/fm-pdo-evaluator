@@ -63,7 +63,8 @@ Shared vocabulary, from `data/model_matrix.yaml`:
 | `aligned` | model | per-line embedding from the cytokine-aligned encoder |
 | `stack_cytokine` | model | generated delta, cytokine-aligned checkpoint |
 | `stack_drug_aligned` | model | generated delta, sci-Plex drug-aligned fine-tune |
-| `measured_delta` | reference | the real delta as its own prediction — best-case input, not a positive control. `additive` (each drug's mean delta over the OTHER lines) is the same quantity: `(S − real_i)/(n−1)` is affine in `real_i`, so after standardisation it is this row sign-flipped, corr −1.000000. Still computed, reported under this name |
+| `observed_delta` | baseline | each drug's mean measured delta over the OTHER lines — the drug-level average of observed deltas. Formerly `additive`, a name that described neither what it computes nor what it is for. Standardised, it is `measured_delta` sign-flipped (corr −1.000000), so the two are reported together and neither is read as an independent floor |
+| `measured_delta` | reference | the real delta as its own prediction — best-case input, not a positive control |
 | `planted` | control | a known interaction planted at controlled effect size. Must be recovered |
 | `*_random` | control | per-representation noise control, one per representation |
 
