@@ -1,5 +1,11 @@
 # Check 2, leakage-aware, for the drug-aligned Stack checkpoint — handoff
 
+**SUPERSEDED, 2026-08-26:** the "not started" status below is stale — this work was designed,
+planned, implemented, and its driver has since been orphaned by a parallel path (see
+`docs/PROJECT_SPEC.md`'s spec index and the companion `-design.md` file's banner). The
+checkpoint-provenance correction a few paragraphs down (`epoch=5/6.1078`, not `epoch=4/5.0847`)
+is still the load-bearing part of this document; the rest is historical.
+
 **Status:** not started. This document exists so a fresh session (with working transcript
 persistence) can pick this up without re-deriving the last two days of Alpine debugging and
 Check-1 results. Start a new session by reading this file, then invoke

@@ -2,6 +2,11 @@
 
 **Date:** 2026-08-07
 **Status:** approved, pending implementation plan
+**ORPHANED, 2026-08-26:** the library layer here is implemented and correct. Its acceptance
+driver, `check1_registry_driver.py`, is not invoked by any current sbatch — every promoted
+rung-1 result comes from a parallel `rung1_plan/build_one/gather.py` path that does not run
+`filter_leakage`. See `docs/PROJECT_SPEC.md`'s spec index before relying on this spec's
+leakage guarantee.
 
 ## Purpose
 

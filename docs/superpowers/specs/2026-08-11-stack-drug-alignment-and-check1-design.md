@@ -2,6 +2,9 @@
 
 **Date:** 2026-08-11
 **Status:** approved, pending implementation plan
+**ORPHANED, 2026-08-26:** `check1_registry_driver.py` correctly implements this spec but is not
+invoked by any current sbatch — the promoted rung-1 result (Check 1 in this doc's terms) comes
+from a parallel path that bypasses it. See `docs/PROJECT_SPEC.md`'s spec index.
 
 ## Purpose
 

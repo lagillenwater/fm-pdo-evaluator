@@ -45,9 +45,29 @@ side by side would be meaningless.
 
 1. **Gene panel** — the common panel (14,121 at Check 1; 12,368 with GDSC2), built by
    `common_gene_panel()` and verified by `assert_common_genes()`.
-2. **Metric** — Spearman per (line, drug) over the panel, plus the two-way-demeaned interaction
-   variant. Global and interaction behave completely differently here and both are reported.
-3. **Unit** — one value per (line, drug), then mean over pairs. Never a pooled correlation.
+2. **Metric — CORRECTED 2026-08-26, was wrong.** This line previously claimed universal
+   Spearman. That was never true and was never the intent: the two specs that predate this one
+   and describe the same delta-fidelity code (`2026-08-07-modular-harness-core-design.md`,
+   `2026-08-18-stack-faithful-generation-and-de-metrics-design.md`) both correctly and
+   consistently say Pearson for rungs 0/1 (matching `evaluation.py`'s `_row_corr` and
+   `delta_reproducibility.py`'s `np.corrcoef`, which is what actually produced every promoted
+   number at those rungs). Rung 2 alone is Spearman (`rung2_score_one.py`,
+   `stats.spearmanr` — a deliberate choice given L1000/Tahoe's heavy-tailed cross-platform
+   noise). The viability rungs (3/4) use the two-way-demeaned Spearman interaction rho via
+   `evaluation.py`'s `score_predictions`. **This means a rung-0-vs-rung-1 ratio is fine (both
+   Pearson) but a rung-0-vs-rung-2 or rung-1-vs-rung-2 ratio is not yet valid** (see
+   `docs/PROJECT_STATE.md` §1, rung 0) — the metric mismatch, not just the reliability-
+   correction one below, blocks it. Fix by explicitly stating Pearson-for-delta-rungs /
+   Spearman-for-viability-rungs as the real rule (this note), or by switching rung 0/1 to
+   Spearman to match rung 2 — not decided; either closes the gap, leaving it open is what does
+   not.
+3. **Unit** — one value per (line, drug), then **the SAME aggregation statistic** over pairs —
+   currently violated: rung 0's headline (`splithalf_median_r`, `spearman_brown_full`) is the
+   MEDIAN over pairs, while rungs 1/2/3 report the MEAN
+   (`f["r"].mean()`/`r.mean()`/`score_predictions`'s per-pair average). `splithalf_mean_r` is
+   already computed and sitting in `docs/results/rung0_delta_reproducibility.csv`, unused as the
+   headline — switching to it (or switching the other rungs to a median) is the fix. Never a
+   pooled correlation, regardless.
 4. **Reliability correction** — Spearman-Brown everywhere or nowhere, stated per rung.
 5. **CV scheme** — **5-fold over cell lines everywhere**, from the single shared partition in
    `fmharness.deltas.fold_assignment`. This was missing from the invariants and the rungs had

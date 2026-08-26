@@ -2,6 +2,13 @@
 
 **Date:** 2026-08-13
 **Status:** approved, pending implementation plan
+**ORPHANED, 2026-08-26:** `check2_registry_driver.py` correctly implements this spec but is not
+invoked by any current sbatch — the promoted rung-3 result (Check 2 in this doc's terms) comes
+from a parallel `check2_plan/score_one/gather.py` path that bypasses it. See
+`docs/PROJECT_SPEC.md`'s spec index. Also: the checkpoint this doc assumes
+(`finetuned-epoch=4-val_loss=5.0847.ckpt`) is not the one the published drug-aligned runs
+actually used (`epoch=5-val_loss=6.1078.ckpt`) — see the companion handoff doc's inline
+correction and `data/model_matrix.yaml`.
 
 ## Purpose
 
