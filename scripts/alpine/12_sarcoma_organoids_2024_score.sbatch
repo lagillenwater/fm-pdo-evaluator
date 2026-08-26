@@ -60,13 +60,6 @@ export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
 
-# Record what this run consumed. Most inputs here are literals in the invocation below rather
-# than --export variables, so the commit is what pins them: a log line naming the sha lets a
-# reader open the exact script that ran. Without it a job log says which stage ran and nothing
-# about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
-# logs and most published numbers cannot be traced to their inputs.
-echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} GCTX=$GCTX GENDIR=$GENDIR AGGDIR=$AGGDIR LABEL=$LABEL THRESHOLD=$THRESHOLD STACK_EMB=$STACK_EMB"
-
 GCTX="${GCTX:-GSE92742_Broad_LINCS_Level3_INF_mlr12k_n1319138x12328.gctx}"
 GENDIR="${GENDIR:-generated_sarcoma_organoids_2024_faithful}"
 AGGDIR="${AGGDIR:-generated_sarcoma_organoids_2024_faithful_agg}"
@@ -84,6 +77,19 @@ THRESHOLD="${THRESHOLD:-0.0}"        # gen_logit < 0 -- same confidence-filter b
                                       # delta-fidelity ground truth here to calibrate against.
 STACK_EMB="${STACK_EMB:-}"           # e.g. "base=emb_sarcoma_organoids_2024_base.h5ad aligned=emb_sarcoma_organoids_2024_
                                       # aligned.h5ad" (unset -> no embedding rows scored).
+
+# Record what this run consumed. Most inputs here are literals in the invocation below rather
+# than --export variables, so the commit is what pins them: a log line naming the sha lets a
+# reader open the exact script that ran. Without it a job log says which stage ran and nothing
+# about which version of it, which is why only 11 distinct "Resolved:" lines exist across 453
+# logs and most published numbers cannot be traced to their inputs.
+#
+# Moved to AFTER the default-value assignments above (2026-08-26): this line used to read
+# $GCTX/$GENDIR/etc. BEFORE any of them had a default assigned, so a submission with no
+# --export at all (every var meant to fall back to its default) hit `set -u` and aborted with
+# "GCTX: unbound variable" before the job did anything -- the defaults existed but the log
+# line meant to record them ran too early to ever see them.
+echo "Resolved: commit=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown) job=${SLURM_JOB_NAME:-local} GCTX=$GCTX GENDIR=$GENDIR AGGDIR=$AGGDIR LABEL=$LABEL THRESHOLD=$THRESHOLD STACK_EMB=$STACK_EMB"
 
 # ---- filename suffix: "" when LABEL is unset, "_<label>" otherwise -------------------------
 SUFFIX=""
