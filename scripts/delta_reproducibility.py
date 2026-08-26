@@ -217,6 +217,18 @@ def main() -> None:
     null_med = float(np.median(nl)) if nl.size else float("nan")
 
     med = float(np.median(r))
+
+    # Bootstrap the null MEDIAN at the observed pair count, so the comparison is like-for-like.
+    if nl.size >= 10:
+        n_pairs_obs = int(r.size)
+        boot = np.array([
+            np.median(rng.choice(nl, size=n_pairs_obs, replace=True))
+            for _ in range(2000)
+        ])
+        p_boot = float((1 + np.sum(boot >= med)) / (1 + boot.size))
+        boot_lo, boot_hi = (float(np.quantile(boot, 0.025)), float(np.quantile(boot, 0.975)))
+    else:
+        p_boot = boot_lo = boot_hi = float("nan")
     # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
     sb = 2 * med / (1 + med) if med > -1 else float("nan")
     summary = {
@@ -239,8 +251,20 @@ def main() -> None:
             if nulls["same_drug"].size else float("nan")
         ),
         "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
-        "p_vs_null": (
-            round(float((1 + np.sum(nl >= med)) / (1 + nl.size)), 4) if nl.size else float("nan")
+        # p compares the observed MEDIAN against the bootstrapped sampling distribution of the
+        # NULL MEDIAN. The first version compared the observed median against the spread of
+        # INDIVIDUAL null draws, which is a category error: a median over ~1,300 pairs has a
+        # standard error roughly sqrt(n) times tighter than a single draw, so that p was
+        # inflated by more than an order of magnitude and made a reproducible ceiling look
+        # like it had failed its own null.
+        "p_vs_null": round(p_boot, 4) if np.isfinite(p_boot) else float("nan"),
+        "null_median_ci_lo": round(boot_lo, 3) if np.isfinite(boot_lo) else float("nan"),
+        "null_median_ci_hi": round(boot_hi, 3) if np.isfinite(boot_hi) else float("nan"),
+        # Reported separately because it is a real quantity and answers a DIFFERENT question:
+        # how much the two distributions overlap, i.e. what share of mismatched pairs reach the
+        # typical matched pair. It is an effect size, never a significance test.
+        "frac_null_draws_above_observed_median": (
+            round(float(np.mean(nl >= med)), 3) if nl.size else float("nan")
         ),
     }
     out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
