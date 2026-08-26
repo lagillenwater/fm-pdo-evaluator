@@ -1,0 +1,25 @@
+{
+  "name": "rung2_grid",
+  "claim": "Rung 2, cross-platform transfer (maps fit on L1000, applied to Tahoe), FIRST WORKING RUN (job 31677383/31677384, supersedes the dead 31675222/31675223/31675224 chain -- array cell 15 crashed, the shuffled/planted/bulk_target controls were broken; all fixed in commit 4c23f60 and verified against a synthetic plan dir before this run). All 21 grid cells complete. planted positive control recovers cleanly in every arm (0.42-0.95); shuffled negative control scores close to the real baselines under cross_platform (0.034 vs pca 0.035, knn 0.027), meaning cross-platform transfer for the fitted baselines is barely distinguishable from a scrambled-line control. L1000 training now excludes Tahoe's 50 evaluation lines (previously included up to 7 overlapping lines' own responses in the fit).",
+  "script": "scripts/rung2_gather.py",
+  "git_sha": "4c23f60906c8e16870121187b0b7fe7b2304afce",
+  "result": {
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/rung2_grid.csv",
+    "sha256": "995efb21c0a2bc34774f5bd6f832230801651075a26505fb90a05d721b243020",
+    "bytes": 1654
+  },
+  "inputs": [
+    {
+      "path": "/tmp/pull_rung2/rung2_rung2_31677382/rung2_grid.params.json",
+      "sha256": "c8a9f5ab77f72bdb5c0d33126172a119862514e19b65fa8e25928b0d82fce124",
+      "bytes": 891
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31677384",
+  "log": {
+    "path": "/tmp/pull_rung2/rung2_rung2_31677382/rung2_grid.params.json",
+    "sha256": "c8a9f5ab77f72bdb5c0d33126172a119862514e19b65fa8e25928b0d82fce124",
+    "bytes": 891
+  }
+}

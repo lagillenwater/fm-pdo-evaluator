@@ -1,0 +1,25 @@
+{
+  "name": "rung2_transfer_penalty",
+  "claim": "Transfer penalty (cross_platform - in_platform) per baseline, first valid computation. Every real baseline loses 0.17-0.53 of correlation moving from Tahoe-fit to L1000-fit maps: knn -0.379, nmf -0.348, pca -0.189, observed_delta -0.379. planted (positive control) also drops sharply (-0.530), showing part of this is a genuine platform-representation gap the pipeline cannot fit around, not purely a baseline-capacity limit.",
+  "script": "scripts/rung2_gather.py",
+  "git_sha": "4c23f60906c8e16870121187b0b7fe7b2304afce",
+  "result": {
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/rung2_transfer_penalty.csv",
+    "sha256": "d14f0eb3fb2596d4ee551d686da15a3ca67567024b76182894bc497489edc6d0",
+    "bytes": 368
+  },
+  "inputs": [
+    {
+      "path": "/tmp/pull_rung2/rung2_rung2_31677382/rung2_grid.params.json",
+      "sha256": "c8a9f5ab77f72bdb5c0d33126172a119862514e19b65fa8e25928b0d82fce124",
+      "bytes": 891
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31677384",
+  "log": {
+    "path": "/tmp/pull_rung2/rung2_rung2_31677382/rung2_grid.params.json",
+    "sha256": "c8a9f5ab77f72bdb5c0d33126172a119862514e19b65fa8e25928b0d82fce124",
+    "bytes": 891
+  }
+}

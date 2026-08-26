@@ -1,0 +1,25 @@
+{
+  "name": "rung0_delta_reproducibility",
+  "claim": "Rung 0 replicate ceiling, CORRECTLY pinned to rung 1's 14,121-gene Check-1 panel (job 31676846, first correctly-panelled run -- the prior 0.299/0.461 numbers were computed on a different, unpinned top-2000-HVG panel and cannot denominate rung 1). On the real panel the ceiling is much lower: split-half median 0.109, Spearman-Brown full-data 0.197, both clearing their diff_drug and same_drug nulls (p=0.0005). NOTE for the write-up: rung 1's baselines (knn/pca/nmf, mean_rho 0.28-0.32) numerically EXCEED this ceiling -- expected because rung 0 uses median aggregation and Pearson while rung 1 uses mean aggregation, per the documented (not yet reconciled) invariant-2/invariant-3 mismatch; do not report a 'fraction of ceiling' for rung 1 until that is resolved, a raw comparison is misleading here.",
+  "script": "scripts/delta_reproducibility.py",
+  "git_sha": "4c23f60906c8e16870121187b0b7fe7b2304afce",
+  "result": {
+    "path": "/Users/gillenlu/Repositories/fm-pdo-evaluator/.claude/worktrees/modular-harness-core/docs/results/rung0_delta_reproducibility.csv",
+    "sha256": "4d8fa472df7760dd316df909f4d06399b005bc5830c5e581f35554dd7ee41fec",
+    "bytes": 435
+  },
+  "inputs": [
+    {
+      "path": "/tmp/pull_rung0/delta_reproducibility.params.json",
+      "sha256": "7b26f651024970b856e5519744dbb6fd1eaa8c9196d866c5426e63a0d7726b32",
+      "bytes": 521
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31676846",
+  "log": {
+    "path": "/tmp/pull_rung0/delta_reproducibility.params.json",
+    "sha256": "7b26f651024970b856e5519744dbb6fd1eaa8c9196d866c5426e63a0d7726b32",
+    "bytes": 521
+  }
+}
