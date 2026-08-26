@@ -29,7 +29,8 @@ python scripts/drug_overlap.py \
     --source "tahoe=tahoe_deltas/real_key.parquet" \
     --source "organoid_screen=data/raw/soragni/tables/drug_screen.parquet" \
     --source "gdsc2_compounds=data/raw/gdsc2_sarcoma/gdsc2/screened_compounds_rel_8.5.csv" \
-    --source "l1000_pertmap=context_by_drug/pert_to_cid.tsv" \
+    --source "tahoe_pertmap=context_by_drug/pert_to_cid.tsv" \
+    --source "l1000_perts=GSE92742_Broad_LINCS_pert_info.txt.gz" \
     --generated-dir "tahoe_generated=generated_agg" \
     --generated-dir "organoid_generated=generated_sarcoma_organoids_2024_drug_aligned_agg" \
     --out-dir "promote/drug_overlap_$J"

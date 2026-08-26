@@ -97,7 +97,9 @@ def main() -> None:
         if not p.exists():
             print(f"  SKIP {label}: {p} not present")
             continue
-        if p.suffix in (".tsv", ".txt"):
+        if p.suffixes[-2:] == [".txt", ".gz"] or p.suffix == ".gz":
+            df = pd.read_csv(p, sep="\t", low_memory=False)
+        elif p.suffix in (".tsv", ".txt"):
             df = pd.read_csv(p, sep="\t", low_memory=False)
             if not any(str(c).lower().replace("_", "") in
                        ("drug", "drugname", "cid", "pubchemcid", "pertiname") for c in df.columns):
