@@ -1,0 +1,25 @@
+{
+  "name": "check2_grid_5fold_corrected",
+  "claim": "Check 2 penalized grid, 5-fold, after the 2026-08-24/25 metric fixes: residual-scored interaction, 20 noise draws, prior floor at 0.000. Recovered from the job log because this run predates the always-emit change (86cdad8 vs f121cc2).",
+  "script": "scripts/score_generation_eval.py",
+  "git_sha": "a65ee3c8293e5cd8973f401b89364333bbd5219f",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/check2_grid_5fold_corrected.csv",
+    "sha256": "723cde708ff63cfa120dafdf52efe93e10fcbc2c001ce2de5d72ba595a04dd5f",
+    "bytes": 6635
+  },
+  "inputs": [
+    {
+      "path": "docs/results/alpine_resolved_ckpt.txt",
+      "sha256": "7c77abdc964cadaffc88378ce3ec641b10ef629d8f973003e132b459f8cc3e6c",
+      "bytes": 1751
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31655278",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/check2_31655278.log",
+    "sha256": "55726014cc617305707d1ab7d5264ab648d6f44c0f75d3ff432dbc1c5f4db53a",
+    "bytes": 14633
+  }
+}

@@ -242,8 +242,16 @@ def main() -> None:
     if args.generated_dir:
         if not (args.query_baseline and args.pert_map):
             ap.error("--generated-dir requires --query-baseline and --pert-map")
-        sources["stack"] = build_generated_deltas(
-            _rel(repo, args.generated_dir),
+        # label=dir, so several checkpoints can be scored side by side under distinct names.
+        # A bare dir keeps the historical "stack" label. Without this only ONE generated
+        # checkpoint could enter a run, which silently halved the Check-1b null: the published
+        # table reports both cytokine-aligned and drug-aligned, and the drug-aligned row carries
+        # the stronger claim (de_spearman_lfc 0.466 vs 0.357).
+        _label, _, _dir = str(args.generated_dir).partition("=")
+        if not _dir:
+            _label, _dir = "stack", _label
+        sources[_label] = build_generated_deltas(
+            _rel(repo, _dir),
             _rel(repo, args.query_baseline),
             load_pert_map(_rel(repo, args.pert_map)),
         )
