@@ -1,0 +1,95 @@
+# Which artifacts may be committed to this PUBLIC repository, and which may not.
+#
+# The problem this solves is a real tension, not a hypothetical one. Provenance requires that a
+# reader can tell which data produced a number. Embargo requires that patient-derived data is
+# not published before the results that use it. Committing the data satisfies the first and
+# violates the second.
+#
+# The resolution: provenance needs a HASH, not the bytes. Recording sha256 plus a location
+# proves which file was used without releasing it. Anyone with legitimate access can verify;
+# nobody without it learns anything. That is the correct standard for embargoed data, and it is
+# what scripts/promote_result.py already does for job logs.
+#
+# THREE TIERS. The default is `embargoed`, so an artifact nobody has classified fails closed.
+#
+#   public     Contents may be committed. Derived aggregates and public reference data.
+#   embargoed  Hash and location only. Never the contents. Release follows publication.
+#   restricted Nothing is committed, not even a hash, where the filename itself would leak.
+#
+# A DERIVED result inherits the strictest tier of its inputs UNLESS it aggregates away the
+# sensitive dimension. A per-(patient, drug) table stays embargoed; a per-(source, method) mean
+# over 150 pairs does not identify anyone and can be public. When unsure, leave it embargoed --
+# an under-released result costs a conversation, an over-released one cannot be undone.
+
+version: 1
+default: embargoed
+
+entries:
+  # ---------------------------------------------------------------- public reference data
+  - path: data/static/hallmark_signatures.gmt
+    release: public
+    why: MSigDB Hallmark gene sets, published reference data.
+  - path: data/static/drug_xref.parquet
+    release: public
+    why: PubChem/DrugBank identifier crosswalk built from public registries.
+  - path: data/static/gdsc2_auc_pubchem_cids.txt
+    release: public
+    why: PubChem CIDs of GDSC2-screened compounds; GDSC2 is a public release.
+  - path: data/static/stack_hvg_genes.txt
+    release: public
+    why: Gene symbol list, no sample-level information.
+  - path: data/static/stack_sarcoma_organoids_2024_gene_map.csv
+    release: public
+    why: Gene identifier mapping only; carries no expression or response values.
+  - path: data/static/manifest.json
+    release: public
+  # The policy files themselves. Both are declarations ABOUT data -- which model variants
+  # belong in which check, and which paths may be released -- and contain no measurements and
+  # no sample identifiers. They defaulted to 'embargoed' under the unclassified rule, which
+  # meant the gate refused to let its own manifest be committed, so neither file reached
+  # Alpine and both gates failed open on every cluster run.
+  - path: data/model_matrix.yaml
+    release: public
+    why: Declares which model variants belong in which check. No data.
+  - path: data/release_manifest.yaml
+    release: public
+    why: This file. Declares the release policy; contains no data it governs.
+    why: Hashes of the above, which is the point of a manifest.
+
+  # ---------------------------------------------------------------- derived results
+  - path: docs/results/**
+    release: public
+    why: >
+      Promoted evidence. Aggregates and provenance records only, never row-level data.
+      check_release.py enforces that by refusing any table here that carries a sample
+      identifier column, so the tier cannot be violated by adding a file to this directory.
+  - path: docs/sarcoma_organoids_2024_pathb_results*.csv
+    release: public
+    why: >
+      Per-(source, method) means over 150 or 25 pairs. No patient column, and no cell is
+      traceable to an individual organoid line.
+
+  # ---------------------------------------------------------------- embargoed: row-level
+  - path: results/check2_preds.parquet
+    release: embargoed
+    why: >
+      Per-(patient, drug) MEASURED response, 31,272 rows over 44 lines. Committing it would
+      publish line-level drug response. The Tahoe/GDSC2 side is already public, but the same
+      frame shape on the Soragni arm is patient-derived organoid data, so the shape is
+      embargoed regardless of which cohort filled it.
+  - path: data/raw/sarcoma_organoids_2024/**
+    release: embargoed
+    why: >
+      Soragni PDTO tranche (Synapse syn55180195 / syn64333318). Patient-derived organoid
+      expression and drug screens. Release follows the manuscript, not this repo.
+  - path: data/tranches/**
+    release: embargoed
+    why: Any assembled tranche inherits its source cohort's terms until classified otherwise.
+  - path: "**/*.h5ad"
+    release: embargoed
+    why: >
+      Single-cell and pseudobulk matrices. Expression at sample resolution; also far too large
+      for git, which is a separate reason to keep only hashes.
+  - path: "**/emb_*.h5ad"
+    release: embargoed
+    why: Per-line foundation-model embeddings are a lossy but real encoding of expression.

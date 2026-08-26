@@ -59,6 +59,8 @@ def load_matrix(path: Path) -> dict:
             out[section].append(entry)
         elif entry is not None and s.startswith("checks:"):
             entry["checks"] = [c.strip() for c in s.split("[", 1)[-1].rstrip("]").split(",") if c.strip()]
+        elif entry is not None and s.startswith("aliases:"):
+            entry["aliases"] = [c.strip() for c in s.split("[", 1)[-1].rstrip("]").split(",") if c.strip()]
     return out
 
 
@@ -67,6 +69,21 @@ def expected_for(matrix: dict, check: str) -> list[str]:
     return sorted(
         v["id"] for v in matrix.get("variants", []) if check in (v.get("checks") or [])
     )
+
+
+def alias_map(matrix: dict) -> dict[str, str]:
+    """Historical source name -> canonical variant id.
+
+    Different scripts name the same artifact differently: the Check-1b null takes its source
+    name from a parquet filename (`stack`), the Check-2 grid from a --generated-dir label
+    (`stack_cytokine`). Without this, one checkpoint under two names reads as one variant
+    missing and one undeclared -- two false findings from a naming difference.
+    """
+    out: dict[str, str] = {}
+    for v in matrix.get("variants", []):
+        for a in v.get("aliases") or []:
+            out[str(a)] = str(v["id"])
+    return out
 
 
 def main() -> int:
@@ -96,7 +113,10 @@ def main() -> int:
     df = pd.read_csv(args.result)
     col = "source" if "source" in df.columns else df.columns[0]
     # Noise-control rows are derived per representation, not declared variants.
-    present = {str(s) for s in df[col].unique() if not str(s).endswith("_random")}
+    aliases = alias_map(matrix)
+    present = {
+        aliases.get(str(s), str(s)) for s in df[col].unique() if not str(s).endswith("_random")
+    }
     allowed = {a.strip() for a in args.allow_missing.split(",") if a.strip()}
 
     missing = [e for e in expected if e not in present and e not in allowed]

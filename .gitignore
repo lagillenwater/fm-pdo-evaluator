@@ -222,6 +222,12 @@ __marimo__/
 data/*
 # except curated static assets (drug xref, gene-panel maps, etc.) — tracked
 !data/static/
+# except the POLICY files, which are declarations about data, not data. `data/*` swallowed
+# both, so neither was ever committed and neither exists on Alpine -- meaning check_matrix.py
+# and check_release.py have been no-ops on every cluster run that claimed to be gated by them.
+# Job 31660492 is where that surfaced: the matrix gate died on FileNotFoundError.
+!data/model_matrix.yaml
+!data/release_manifest.yaml
 # generated reports and analysis outputs (regenerable from scripts/)
 reports/
 /results/   # anchored to the repo root. Unanchored `results/` also matched

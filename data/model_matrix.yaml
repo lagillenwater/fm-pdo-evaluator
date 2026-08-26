@@ -1,0 +1,125 @@
+# WHAT GETS TESTED. One declaration, so a run can be checked against it.
+#
+# This exists because there was no such declaration. Every job passed whatever --generated-dir
+# and --stack-emb flags it happened to carry, written at different times: 05, 07, 17 and 19 all
+# passed only `generated_agg`, so the Check-1b null silently covered ONE of the two Stack
+# checkpoints the published table reports -- and the weaker one. Nothing was wrong with the run;
+# there was simply nothing to check it against, so an omission looked exactly like a choice.
+#
+# Every scoring run validates against this file (scripts/check_matrix.py) and FAILS when a
+# variant declared for that check is absent. Adding a model means adding an entry here, not
+# remembering to edit four sbatch scripts.
+#
+# `checks` says where a variant can be scored AT ALL, which is a property of what the artifact
+# is, not a preference:
+#   check1  / check1b  score a predicted expression DELTA against the real one. Only generated
+#                      deltas qualify. An embedding has no per-(line, drug) change in it.
+#   check2             scores any per-line representation against measured AUC, so generated
+#                      deltas AND embeddings both qualify.
+
+version: 1
+
+variants:
+  # ---------------------------------------------------------------- generated deltas
+  - id: stack_cytokine
+    kind: generated_delta
+    what: >
+      In-context generated post-drug state minus the per-line control baseline, from the
+      cytokine-aligned checkpoint. This is the checkpoint the Stack preprint post-trains
+      (CELLxGENE + Parse PBMC cytokines); no drugs in its alignment corpus.
+    checkpoint: stack-aligned/bc_large_aligned.ckpt
+    artifact: generated_agg
+    raw_artifact: generated
+    checks: [check1, check1b, check2]
+    aliases: [stack]
+    # The Check-1b null names this source from its parquet filename and emits `stack`, while
+    # the Check-2 grid names it from a --generated-dir label and emits `stack_cytokine`. The
+    # same checkpoint under two names would read as one variant missing and one undeclared.
+
+  - id: stack_drug_aligned
+    kind: generated_delta
+    what: >
+      Same generation procedure, from the sci-Plex drug-aligned fine-tune. Carries the stronger
+      of the two published Check-1b claims (de_spearman_lfc 0.466 against cytokine's 0.357).
+    checkpoint: finetuned-epoch=5-val_loss=6.1078.ckpt
+    artifact: generated_drug_aligned_agg
+    raw_artifact: generated_drug_aligned
+    checks: [check1, check1b, check2]
+    note: >
+      The specs claim this used finetuned-epoch=4-val_loss=5.0847.ckpt, selected as lowest
+      val_loss. The job logs show epoch=5/6.1078 for both published drug-aligned arms. See
+      docs/results/alpine_resolved_ckpt.txt; the spec carries a dated correction.
+
+  # ---------------------------------------------------------------- embeddings
+  - id: base
+    kind: embedding
+    what: >
+      Per-line embedding from the UNALIGNED bc_large encoder. No generation head, no drug
+      information in the representation. Currently the only row in the whole evaluation with a
+      significant cell-line-specific interaction.
+    checkpoint: stack-large/bc_large.ckpt
+    artifact: emb_base.h5ad
+    checks: [check2]
+
+  - id: aligned
+    kind: embedding
+    what: Per-line embedding from the cytokine-aligned checkpoint's encoder, stripped of the head.
+    checkpoint: stack-aligned/bc_large_aligned.ckpt
+    artifact: emb_aligned.h5ad
+    checks: [check2]
+
+  # ---------------------------------------------------------------- baselines and controls
+  - id: additive
+    kind: baseline_delta
+    what: >
+      Each drug's mean real delta over the OTHER lines. Intended as the line-independent floor
+      and is NOT one: (S - real_i)/(n-1) is affine in real_i, so after standardisation it is the
+      measured delta sign-flipped. Correlation -1.000000 across all 32 drugs.
+    checks: [check1, check1b, check2]
+    same_as: measured_delta
+  - id: knn
+    kind: baseline_delta
+    what: Mean real delta of the k most similar other lines by baseline expression.
+    checks: [check1, check1b, check2]
+  - id: pca
+    kind: baseline_delta
+    what: Ridge on PCA components of the per-line baseline, predicting the delta residual.
+    checks: [check1, check1b, check2]
+  - id: nmf
+    kind: baseline_delta
+    what: As pca, with non-negative matrix factorisation.
+    checks: [check1, check1b, check2]
+  - id: expr
+    kind: representation
+    what: The untreated baseline expression itself. No delta, no drug information.
+    checks: [check2]
+  - id: measured_delta
+    kind: reference
+    what: >
+      The real measured delta used as its own prediction -- the best-case input, not a positive
+      control. Formerly called "oracle", which said how to feel about the row rather than what
+      it is.
+    checks: [check1, check1b, check2]
+  - id: prior
+    kind: control
+    what: >
+      One constant feature, so the model fits a per-drug intercept only. THE line-independent
+      floor: scores interaction exactly 0.000 on the corrected metric.
+    checks: [check2]
+  - id: planted
+    kind: control
+    what: A known organoid-by-drug interaction planted at controlled effect size. Must recover.
+    checks: [check2]
+
+# Variants that exist on the cluster and are deliberately NOT scored here, recorded so their
+# absence is a decision rather than an oversight.
+excluded:
+  - id: generated_sciplex
+    why: >
+      Generation on sci-Plex data itself, from finetuned-epoch=4-val_loss=5.0847.ckpt. A
+      different evaluation domain, not a Tahoe checkpoint variant, so it does not belong in the
+      Tahoe checks. Its name says none of that.
+  - id: generated_base
+    why: Provenance not established -- absent from the resolved-checkpoint evidence. Do not use until it is.
+  - id: generated_rich
+    why: Provenance not established -- absent from the resolved-checkpoint evidence.
