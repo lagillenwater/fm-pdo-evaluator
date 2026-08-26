@@ -1,0 +1,25 @@
+{
+  "name": "dataset_gene_overlap",
+  "claim": "Pairwise gene-symbol overlap across Tahoe, both Stack checkpoints, sci-Plex (human ENSG-restricted), L1000, GDSC2 (full and sarcoma) and the sarcoma organoids. Tahoe n Stack = 14588; Stack n L1000 = 8865; Stack n sci-Plex = 14509. Inputs are recorded with per-file sha256 in the params sidecar, which is the hashed input record for the embargoed source files.",
+  "script": "scripts/dataset_overlap_matrix.py",
+  "git_sha": "178f96577ef660c92ed5c8bc88df9bd58d32b151",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/dataset_gene_overlap.csv",
+    "sha256": "28b1a0dc3b0c9bd52324121ab8145ae43f5319d1761824b094adf992b68cd116",
+    "bytes": 567
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/overlap/dataset_overlap.params.json",
+      "sha256": "b998fa0acf7bab255e3ad5d3a9e4539859eb41722a8018f8bed55d9bc273310d",
+      "bytes": 3688
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31659975",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/overlap/run.log",
+    "sha256": "79fcd843cdee17f03365f48008d8951ef9e9a379b44dbd46e83aff5e64202e86",
+    "bytes": 3386
+  }
+}

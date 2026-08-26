@@ -1,0 +1,25 @@
+{
+  "name": "dataset_cell_line_overlap",
+  "claim": "Pairwise cell-line overlap after mapping DepMap ACH ids to stripped names so all cohorts share one namespace. sci-Plex has 3 lines, L1000 has 76. GDSC2-sarcoma n Tahoe = 0 and the 17 sarcoma organoids overlap no cell-line cohort; both survive the mapping and are real, unlike the five zeros the unmapped run produced.",
+  "script": "scripts/dataset_overlap_matrix.py",
+  "git_sha": "178f96577ef660c92ed5c8bc88df9bd58d32b151",
+  "result": {
+    "path": "/Users/lucas/Repositories/fm-pm-evaluator-mhc/docs/results/dataset_cell_line_overlap.csv",
+    "sha256": "3531fff7fc107f79efa5809fe0aa2cb29a0f5549697965475eb510b582ec01e2",
+    "bytes": 345
+  },
+  "inputs": [
+    {
+      "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/overlap/dataset_overlap.params.json",
+      "sha256": "b998fa0acf7bab255e3ad5d3a9e4539859eb41722a8018f8bed55d9bc273310d",
+      "bytes": 3688
+    }
+  ],
+  "missing_inputs": [],
+  "job_id": "31659975",
+  "log": {
+    "path": "/private/tmp/claude-501/-Users-lucas-Repositories-fm-pm-evaluator/c65c20d7-342e-4831-8d21-1f541b27d8e9/scratchpad/overlap/run.log",
+    "sha256": "79fcd843cdee17f03365f48008d8951ef9e9a379b44dbd46e83aff5e64202e86",
+    "bytes": 3386
+  }
+}
