@@ -38,7 +38,7 @@
 `_repr_by_drug`, `_penalized_preds`, and the `PROLIFERATION`/`FIXED_READOUTS`/`PENALTY_NAMES`
 constants inline. Move them (public names, same behavior) into a new module so
 `check2_registry_driver.py` (Task 4) can reuse them without duplicating ~90 lines -- the same
-move Task 6 of `docs/superpowers/plans/2026-08-11-stack-drug-alignment-and-check1.md` already
+move Task 6 of `docs/tasks/stack-drug-alignment-and-check1/plan.md` already
 made for `loo_baseline_source`/`learned_gene_panel`. This task moves the helpers only; Task 2
 moves the composition that calls them.
 
@@ -1008,7 +1008,7 @@ representation (``expr``, ``additive``, ``knn``, ``pca``, ``nmf``, ``stack``, an
 representation to the same surviving (patient, drug) pairs -- the same same-pair-count parity
 Check 1's table has, without needing to filter the delta sources themselves; they stay built
 from the full, unfiltered Tahoe triple. See
-docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned-design.md for the full
+docs/tasks/check2-leakage-aware-drug-aligned/design.md for the full
 design rationale.
 
 Run (see check1_registry_driver.py's own --context-vs---deltas-bundle caveat -- it applies here
@@ -1284,7 +1284,7 @@ git commit -m "feat: add the leakage-aware, registry-driven Check-2 driver"
 All data this task needs already exists locally in this worktree (`generated/` = cytokine-
 aligned Stack output, 33 files; `generated_sciplex/` = drug-aligned Stack output, 33 files;
 `tahoe_deltas/` = the ground-truth bundle; GDSC2 AUC data already loadable via `--auc-tranche
-gdscv2`) -- unlike Task 9 of `docs/superpowers/plans/2026-08-11-stack-drug-alignment-and-check1.md`,
+gdscv2`) -- unlike Task 9 of `docs/tasks/stack-drug-alignment-and-check1/plan.md`,
 this task is not gated on anything outstanding and its acceptance can be fully verified now.
 
 **Files:**
@@ -1295,7 +1295,7 @@ this task is not gated on anything outstanding and its acceptance can be fully v
 
 - [ ] **Step 1: Re-run Check 1 for all three checkpoint variants**
 
-The handoff doc (`docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md`)
+The handoff doc (`docs/tasks/check2-leakage-aware-drug-aligned/handoff.md`)
 only ever reported the drug-aligned `r` value (0.021 both ways), not the full row
 (`r_offdiag`/`rank`/`n_pairs`) needed for the docs table and the deck -- re-run all three to get
 complete rows on data/code that has not changed since:

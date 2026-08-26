@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the model-agnostic, modality-agnostic core from
-`docs/superpowers/specs/2026-08-07-modular-harness-core-design.md`: `Encoder`/`Generator`
+`docs/tasks/modular-harness-core/design.md`: `Encoder`/`Generator`
 model protocols, the `Modality` registry, leakage filtering, and the `CV`/`Readout`/`Estimator`
 registry additions the spec calls for — all using Stack + the existing baseline models, no new
 foundation-model integration.
@@ -271,7 +271,7 @@ Message: `feat: add Encoder and Generator model protocols`
 
 Phase 1's sci-Plex work hit this exact gap: Stack's NB likelihood silently breaks on
 normalized input, and the mismatch wasn't caught until diagnosis
-(`docs/superpowers/specs/2026-08-06-arm2-harness-validation-design.md`, Phase 1 blocker 3).
+(`docs/tasks/arm2-harness-validation/design.md`, Phase 1 blocker 3).
 Declaring the expected scale lets the harness validate at the boundary instead of downstream.
 
 **Files:**

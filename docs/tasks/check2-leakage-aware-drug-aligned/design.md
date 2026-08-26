@@ -12,7 +12,7 @@ correction and `data/model_matrix.yaml`.
 
 ## Purpose
 
-Resolve the open question in `docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md`:
+Resolve the open question in `docs/tasks/check2-leakage-aware-drug-aligned/handoff.md`:
 Check 2 (end-to-end GDSC2 AUC prediction) has no leakage filtering, unlike Check 1
 (`scripts/check1_registry_driver.py`), so scoring the drug-aligned Stack checkpoint through it
 today would be silently blind to the checkpoint's measured pretraining overlap with the eval

@@ -28,7 +28,7 @@ from a false `'tpm'` to `'cpm'` in the same pass, and its response metric correc
 CoderData's mislabeled `'auc'` to the actual `'viability'`. `load_tranche` adapts both native
 bundles to the shared `build_sample_design` contract, so nothing downstream needed to change.
 
-**Consequence for reading older specs.** `docs/superpowers/specs/2026-08-07-modular-harness-core-design.md`
+**Consequence for reading older specs.** `docs/tasks/modular-harness-core/design.md`
 and other specs written after this revert already assume the native loaders and are accurate.
 The initial CoderData swap (`1bfb922`) predates every design spec in this repo by five to ten
 weeks and left no spec of its own either — there is nothing to correct in retrospect there,

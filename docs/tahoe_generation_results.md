@@ -619,4 +619,4 @@ tahoe_query_baseline.h5ad` (Check 1) and the one-off pattern in the implementati
 Step 2 (Check 1b). Permutation significance for Check 1b: shuffle `pred_key`'s row order (not
 `pred_delta`'s), 200 shuffles/checkpoint, one-sided p = frac(null ≥ observed) — script not
 committed (matches this project's own uncommitted one-off-analysis convention). Plan:
-`docs/superpowers/plans/2026-08-18-stack-faithful-generation-and-de-metrics.md`.
+`docs/tasks/stack-faithful-generation-and-de-metrics/plan.md`.

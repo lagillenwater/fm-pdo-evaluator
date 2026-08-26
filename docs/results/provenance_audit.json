@@ -48,12 +48,12 @@
   {
     "check": "C",
     "title": "the repo pairs finetuned-epoch=4-val_loss=5.0847.ckpt with the drug-aligned run; the logs show finetuned-epoch=5-val_loss=6.1078.ckpt",
-    "evidence": "3 site(s) state it: docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:110, docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:116, docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md:351; evidence pairs generated_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt, generated_sarcoma_organoids_2024_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt",
+    "evidence": "3 site(s) state it: docs/tasks/check2-leakage-aware-drug-aligned/handoff.md:110, docs/tasks/check2-leakage-aware-drug-aligned/handoff.md:116, docs/tasks/stack-faithful-generation-and-de-metrics/design.md:351; evidence pairs generated_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt, generated_sarcoma_organoids_2024_drug_aligned=finetuned-epoch=5-val_loss=6.1078.ckpt",
     "affects": 3,
     "detail": [
-      "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:110",
-      "docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned.md:116",
-      "docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md:351"
+      "docs/tasks/check2-leakage-aware-drug-aligned/handoff.md:110",
+      "docs/tasks/check2-leakage-aware-drug-aligned/handoff.md:116",
+      "docs/tasks/stack-faithful-generation-and-de-metrics/design.md:351"
     ]
   }
 ]

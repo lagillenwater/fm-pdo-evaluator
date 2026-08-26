@@ -876,7 +876,7 @@ Create `scripts/build_tahoe_de_calls.py`:
 
 Wilcoxon rank-sum + Benjamini-Hochberg FDR per (line, drug, gene), from the raw per-cell
 tahoe_context.h5ad -- see fmharness.deltas.build_tahoe_de_calls for the method and
-docs/superpowers/specs/2026-08-18-stack-faithful-generation-and-de-metrics-design.md's Change 2
+docs/tasks/stack-faithful-generation-and-de-metrics/design.md's Change 2
 section for why this needs the raw per-cell context (not the tahoe_deltas/ pseudobulk bundle,
 which retains no per-cell/significance information). Real, one-time compute (~1,650 (line, drug)
 pairs); cache the output, matching the existing tahoe_deltas/ bundle pattern, rather than

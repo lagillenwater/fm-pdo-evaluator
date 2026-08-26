@@ -18,8 +18,8 @@ merged to `main`, **not** opened as a PR (explicitly left "keep as-is" — that 
 yours to make). HEAD at the time this doc was written: `5d6d45563466e11424ee49b8b6b2ec3bd20b362d`.
 
 This branch's prior work (already committed, already pushed):
-- `docs/superpowers/specs/2026-08-11-stack-drug-alignment-and-check1-design.md` and
-  `docs/superpowers/plans/2026-08-11-stack-drug-alignment-and-check1.md` — the design/plan that
+- `docs/tasks/stack-drug-alignment-and-check1/design.md` and
+  `docs/tasks/stack-drug-alignment-and-check1/plan.md` — the design/plan that
   fixed Stack's sci-Plex drug-alignment fine-tune pipeline and built a registry-driven Check-1
   driver (`scripts/check1_registry_driver.py`).
 - A real drug-aligned Stack checkpoint now exists and has been scored on Check 1 (below).

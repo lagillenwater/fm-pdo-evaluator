@@ -8,7 +8,7 @@ from a parallel path that bypasses it. See `docs/PROJECT_SPEC.md`'s spec index.
 
 ## Purpose
 
-Resume `docs/superpowers/specs/2026-08-06-arm2-harness-validation-design.md`'s Phase 1
+Resume `docs/tasks/arm2-harness-validation/design.md`'s Phase 1
 (sci-Plex drug-alignment of the Stack generation checkpoint) and the Check-1 slice of its
 Phase 2 (registry-driven ladder reproduction), now that the modular-harness-core plan has
 landed the `Encoder`/`Generator`/`LeakageQueryable` registries that Phase 2 originally sketched
