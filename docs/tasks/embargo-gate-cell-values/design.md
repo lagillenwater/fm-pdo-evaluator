@@ -52,6 +52,11 @@ Project rules, from `tests/test_project_rules.py`:
 The five task-specific tests above are about one script, so they stay in this task's file.
 If the value-scanning helper is later reused by anything other than `check_release.py`, the first of them becomes a project rule and moves.
 
+## Also in scope
+
+The gate is currently enforced nowhere — no pre-commit hook, no CI step, no test invokes it.
+A gate nobody runs is not a gate, so wiring it into CI is part of this task, not a follow-up.
+
 ## Done when
 
-The gate rejects the case above, the committed file is remediated with a decision entry, rule 9's `xfail` is gone, and `docs/PROJECT_STATE.md` §3 records the gap as closed with the commit that closed it.
+The gate rejects the case above, the committed file is remediated with a decision entry, rule 9's `xfail` is gone, and `docs/PROJECT_STATE.md`'s open-gaps table no longer lists it.

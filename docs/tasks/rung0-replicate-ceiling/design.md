@@ -2,7 +2,7 @@
 
 **Status** OPEN — promoted, with one comparability defect outstanding.
 **Steps** build, score, null, promote.
-**Parent** [`docs/PROJECT_SPEC.md`](../../PROJECT_SPEC.md); **state** [`docs/PROJECT_STATE.md`](../../PROJECT_STATE.md) §1, rung 0.
+**Parent** [`docs/PROJECT_SPEC.md`](../../PROJECT_SPEC.md); **state** [`docs/PROJECT_STATE.md`](../../PROJECT_STATE.md).
 **Design source** [`docs/transfer_ladder_protocol.md`](../../transfer_ladder_protocol.md), rung 0.
 
 ## What this rung establishes

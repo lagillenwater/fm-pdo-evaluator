@@ -1,82 +1,112 @@
-# Project spec — fm-pdo-evaluator
+# fm-pdo-evaluator — project spec
 
-It answers three questions : **what must every piece of analysis in this repo respect, no matter which task produced it; what document is currently authoritative for a given area; and what happened to the documents that used to be authoritative and no longer are.**
+## The question
 
-It changes rarely — project rules get amended deliberately, the tree gets a new branch when a task starts, entries get reclassified when superseded.
-It is not where you look for "what's true right now" (that's `docs/PROJECT_STATE.md`) or "what's the current experimental design" (that's `docs/transfer_ladder_protocol.md`, itself indexed below as the current active spec), and it is not "how do we actually work" (that's `docs/PROCESS.md` — lifecycle, tooling, git/collaboration mechanics; this file's own "Process for new specs" section below is the one piece of that which belongs here instead, since it's specifically about the task index this file owns).
-It is where you look before starting new design work, to find out what's already been decided and where.
+Foundation models trained on cell-line perturbation atlases are advertised as predicting how a tumour will respond to a drug.
+The clinically meaningful test of that claim is not another cell-line benchmark: it is whether the prediction survives the move to **patient-derived tumour organoids** — a different substrate, grown from a real patient, screened on a different assay.
 
-## Mission
+This project measures that move.
+It produces two numbers and the distance between them: an **in-silico transfer score**, obtained now on an embargoed organoid screen held out from all model development, and a **prospective score** obtained later against organoids screened after the prediction is made.
+The gap between a model's cell-line performance and its organoid performance is the quantity the project exists to report.
 
-Does a foundation model's cell-line drug-response prediction transfer to patient-derived organoids?
-Two scores matter: an in-silico score now, a prospective score later, and the gap between them is the number the project exists to produce.
-The evaluation has gone through three framings as understanding of the problem improved — **Check 1 / Check 2** (2026-08-07 onward, registry-driven, per-model correctness checks) → **Path A / Path B** (cell-line vs organoid substrate split) → **the transfer ladder** (2026-08-25 onward, rungs 0-4, one distribution shift added per rung).
-These are not three different projects; they are the same question, reframed each time the previous framing turned out not to isolate *why* a prediction failed.
-The mapping:
+## Why a ladder, not a single test
 
-| Old name | Rung | What it tests |
+Running a cell-line-trained model directly on organoids yields one number and no diagnosis.
+When that number is poor — and it usually is — at least five distinct explanations are consistent with it:
+
+1. the organoid measurement is not reproducible, so nothing could have been predicted;
+2. the model cannot predict an unseen cell line even in its own training distribution;
+3. the measurement platform changed;
+4. the readout changed, from expression response to viability;
+5. the substrate genuinely differs — tumour organoids are not cell lines.
+
+Those are five different conclusions demanding five different responses, and one end-to-end number cannot separate them.
+
+So the evaluation is built as a **ladder**: each rung adds exactly one distribution shift to the rung below it, and every rung is scored against the same reproducibility ceiling.
+Where the score falls off localises the failure to a specific shift.
+A model that clears rungs 0-3 and fails rung 4 has told us something about organoids; a model that fails rung 1 has told us something about the model.
+
+## Three words this project uses precisely
+
+| Word | Means | Lifecycle |
 |---|---|---|
-| (new) | 0 | Tahoe replicate ceiling — is the target itself reproducible |
-| Check 1 / Check 1b | 1 | held-out Tahoe cell line, delta fidelity |
-| (new) | 2 | cross-platform: map fit on L1000, tested on Tahoe |
-| Check 2 | 3 | GDSC2 viability (cell line) |
-| Path B (Sarcoma organoids) | 4 | organoid viability — embargoed, frozen holdout |
+| **Rung** | A scientific question — one level of the ladder, adding one distribution shift. The experiment. | Answered, or not yet |
+| **Step** | A stage of the evaluation pipeline that every rung passes through: load, build, restrict, split, fit, score, null, promote, release, document. The machinery. | Never "done"; rules attach here |
+| **Task** | A unit of work with a spec, an owner and a definition of done. Touches one or more steps, serves one rung or is cross-cutting. | OPEN or CLOSED |
 
-A spec written before 2026-08-25 that says "Check 1" means rung 1; "Check 2" means rung 3; "Path B" or "Soragni" means rung 4.
-There is no rung 0 or rung 2 equivalent in the old framing — both are new diagnostic rungs added when Check 1/Check 2 alone couldn't distinguish "the model failed" from "the ceiling was never established" or "the platform shifted."
+A rung is *what we are asking*; a step is *where in the machinery*; a task is *what someone is doing about it*.
+The project rules below bind to steps, which is why they hold for every rung without being restated per rung.
 
-## Structure — the transfer ladder
+## The ladder
 
-The project's structure is the ladder: five rungs, one distribution shift added per rung, ending at the organoid number the project exists to produce.
-The spec tree below branches from this document: **one spec per rung**, and each rung's spec links its child tasks — the pieces of work that build or repair that rung.
-Cross-cutting branches hold what no single rung owns: the harness library and the rule-enforcement work.
+Each rung states the question it settles, the shift it adds, how it is measured, and what a passing result means.
+Detailed per-rung protocol — panels, aggregation, per-rung baseline and control lists — is in [`docs/transfer_ladder_protocol.md`](transfer_ladder_protocol.md).
+Each rung links to its own spec, which carries that rung's design decisions and the tasks building it.
 
-Each branch carries only its status — OPEN or CLOSED — and a blurb of what it wants to accomplish; why a branch is still open lives in its own spec, and the numbers live in [`docs/PROJECT_STATE.md`](PROJECT_STATE.md).
-**A branch is CLOSED when** its outputs are promoted with provenance, `PROJECT_STATE.md` records its numbers, and the project-rule tests for its steps pass, including any `xfail` it was meant to flip; "implemented" is not closed, which is how three children below ended up implemented-but-bypassed.
+---
 
-- **Rung 0 — replicate ceiling** · **OPEN** · [spec](tasks/rung0-replicate-ceiling/design.md) · [state](PROJECT_STATE.md)
-  Establish how reproducible the target itself is: split Tahoe's replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the same 14,121-gene panel rung 1 is scored on, and publish that ceiling so every higher rung reports a fraction of it instead of a raw correlation against an imaginary 1.0.
-- **Rung 1 — held-out line, delta fidelity** · **OPEN** · [spec](tasks/rung1-delta-fidelity/design.md) · [state](PROJECT_STATE.md)
-  Establish whether any method — Stack's generation (cytokine and drug-aligned checkpoints) against pca/nmf/knn baselines — can predict a held-out Tahoe cell line's expression delta within the same platform: the easiest transfer, one unseen line and nothing else, the rung a foundation model must clear before any harder shift means anything.
-  - [`rung1-controls-and-capacity`](tasks/rung1-controls-and-capacity/design.md) · **OPEN**
-    Add the rows rung 1's table is missing — a `prior` floor that must fail, a per-drug `planted` signal threaded into the fit target that must be recovered, noise controls — and replace the pinned `--k 10` with cross-validated capacity, in one re-run and re-promotion.
-  - [`stack-drug-alignment-and-check1`](tasks/stack-drug-alignment-and-check1/design.md) · **OPEN, ORPHANED**
-    Fine-tune Stack's generation head on drug perturbations (sci-Plex) instead of its cytokine-only alignment, and evaluate through the registry driver so pretraining-corpus leakage is filtered before any line is scored.
-  - [`stack-faithful-generation-and-de-metrics`](tasks/stack-faithful-generation-and-de-metrics/design.md) · **OPEN (mostly done)**
-    Run Stack's generation with its real scheduled in-context procedure (`--mode mdm`, not the vanilla workaround), and score fidelity by Wilcoxon differential-expression recovery — which genes actually move — alongside the Pearson-delta correlation.
-- **Rung 2 — cross-platform** · **OPEN** · [spec](tasks/rung2-cross-platform/design.md) · [state](PROJECT_STATE.md)
-  Measure what crossing a measurement platform costs: fit the same line-to-delta mapping on L1000 instead of Tahoe, test on Tahoe, and report the retained fraction per method against shuffled and planted controls — isolating the platform shift that the organoid transfer will also contain.
-- **Rung 3 — GDSC2 viability** · **OPEN** · [spec](tasks/rung3-gdsc2-viability/design.md) · [state](PROJECT_STATE.md)
-  Establish whether any representation — Stack embeddings, expression, PCA/NMF — predicts GDSC2 drug response (AUC) beyond each drug's mean, scored as drug×line interaction under one shared CV partition, still on cell lines so that only the substrate shift remains for rung 4.
-  - [`check2-leakage-aware-drug-aligned`](tasks/check2-leakage-aware-drug-aligned/design.md) · **OPEN, ORPHANED**
-    Score GDSC2 viability through a registry path that drug-aligns Stack's checkpoint and filters train/test contamination (lines in the pretraining corpus, shared drugs) by construction rather than by per-script care.
-- **Rung 4 — organoid viability** · **OPEN, BLOCKED** · [spec](tasks/rung4-organoid-viability/design.md) · [state](PROJECT_STATE.md)
-  Produce the number the project exists for: train on GDSC2 cell lines, predict the frozen Soragni sarcoma organoid screen on GDSC2's drug axis, and report the transfer gap — under embargo, on a holdout that stays frozen until D2's preconditions are met.
-- **Cross-cutting — harness and rules**
-  - [`modular-harness-core`](tasks/modular-harness-core/design.md) · **OPEN, ORPHANED**
-    Build the shared evaluation library — Encoder/Generator protocols, model and readout registries, `filter_leakage`, one `fold_assignment` partition — so every rung scores through the same machinery and a guarantee implemented once holds everywhere.
-  - [`cross-check-fairness-and-capacity`](tasks/cross-check-fairness-and-capacity/design.md) · **OPEN**
-    Make every cross-method comparison fair by construction: every arm scored on the same (patient, drug) pairs and gene panel (`restrict_common_support`, `common_gene_panel`), matched-width random-feature controls, and capacity CV-selected identically instead of one arm tuned against another's hardcoded k.
-  - [`project-rule-enforcement`](tasks/project-rule-enforcement/design.md) · **OPEN**
-    Close the edge cases the project-rule tests cannot see by making the guarantees structural: a metric declaration the scorers read (rule 2), support/panel guards inside the scoring entry point (rules 1, 3), a selected-capacity column in every table (rule 7), and `clean_tree` plus the producing commit in every sidecar (rule 8).
-  - [`embargo-gate-cell-values`](tasks/embargo-gate-cell-values/design.md) · **OPEN**
-    Make `check_release.py` scan cell values of every text column against the public-line registry rather than only columns named like identifiers, and remediate the one committed table that carries organoid ids inside a schema-description cell.
-  - `arm2-harness-validation` · **MISSING**
-    Recover the Arm-2 harness-validation spec (commit `4aca11f`, other branches only) that four documents cite as the source of their Phase-1 blockers, or rewrite those citations to state their dependencies directly.
+### Rung 0 — is the target reproducible?
 
-No branch is CLOSED yet, measured against the bar above — worth seeing plainly, since the repo has looked "mostly done" for weeks because implementation and closure were not distinguished.
+[spec](tasks/rung0-replicate-ceiling/design.md) · [state](PROJECT_STATE.md)
 
-### Project-level documents (not part of the tree)
+**Question** How much of a measured perturbation response is signal rather than assay noise?
+**Adds** Nothing — this is the reference every other rung is read against.
+**Measure** Split the replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the declared gene panel, Spearman-Brown corrected to full-data reliability, against a mismatched-pair null.
+**Passing means** A ceiling significantly above that null. A rung above it can then be reported as a fraction of what is achievable rather than as a fraction of a hypothetical 1.0.
+**If it fails** Nothing above it is interpretable: an unpredictable target cannot distinguish a bad model from an unmeasurable outcome.
 
-| Doc | Status | Note |
-|---|---|---|
-| [`docs/transfer_ladder_protocol.md`](transfer_ladder_protocol.md) | **ACTIVE** | The rung designs the tree's specs are written against — the six ladder-scoped invariants, per-rung baseline/model/control lists. Its own Invariant 2 is **wrong** (rungs 0/1 are Pearson by design; only rung 2 is Spearman) and needs a correction. Its list is numbered separately from this file's project rules; cite which you mean. |
-| [`docs/decisions/2026-08-25-ladder-round.md`](decisions/2026-08-25-ladder-round.md) | **ACTIVE, one entry stale** | D1-D6; decisions stay dated because a decision is an event, not a task. D1 implemented only at `24c6240`; D2's precondition still unmet. |
-| [`docs/decisions/2026-06-16-revert-coderdata-loaders.md`](decisions/2026-06-16-revert-coderdata-loaders.md) | **ACTIVE** | The recovered CoderData reversal entry (project rule 10). |
-| [`docs/HANDOFF-2026-08-26.md`](HANDOFF-2026-08-26.md) | **HISTORICAL** | Superseded by `PROJECT_STATE.md`; do not update. |
-| [`docs/adapter_contract.md`](adapter_contract.md), [`docs/models.md`](models.md), [`docs/environment.md`](environment.md) | **ACTIVE** | Reference docs; not comprehensively audited against current code. |
+### Rung 1 — can a model predict an unseen cell line, in-distribution?
 
-**Every plan file has zero checked boxes**, including ones fully implemented — the checkbox mechanism is not a reliable status signal in this repo; this tree, not a plan's checkboxes, is the status source.
+[spec](tasks/rung1-delta-fidelity/design.md) · [state](PROJECT_STATE.md)
+
+**Question** Given a cell line the model has never seen, can it predict that line's expression response to a drug?
+**Adds** One shift: an unseen cell line. Same platform, same readout, same substrate.
+**Measure** Correlation between predicted and measured delta on the held-out line, against a floor that must fail and a planted signal that must be recovered, reported as a fraction of rung 0's ceiling.
+**Passing means** The method beats its floor and recovers a stated fraction of the ceiling — the minimum competence claim before any harder shift is worth testing.
+**If it fails** The failure is about the model, not about organoids, and no result above this rung can be attributed to the substrate.
+
+### Rung 2 — what does crossing a measurement platform cost?
+
+[spec](tasks/rung2-cross-platform/design.md) · [state](PROJECT_STATE.md)
+
+**Question** How much predictive signal survives when the mapping is fitted on one transcriptomic platform and tested on another?
+**Adds** One shift on top of rung 1: the platform (fit on L1000, test on Tahoe).
+**Measure** The retained fraction of rung 1's in-platform score, per method, against a scrambled-line control.
+**Passing means** Retention clearly separable from the scrambled control — the platform shift costs something quantifiable rather than everything.
+**Why it exists** The organoid comparison contains a platform change bundled with the substrate change. This rung prices the platform part on its own, so rung 4's shortfall is not silently attributed to biology.
+
+### Rung 3 — does the representation predict drug response, not just expression?
+
+[spec](tasks/rung3-gdsc2-viability/design.md) · [state](PROJECT_STATE.md)
+
+**Question** Does a representation carry information about how much a drug *kills* a line, beyond what the drug does on average?
+**Adds** One shift: the readout changes from expression delta to viability (dose-response AUC).
+**Measure** Drug×line interaction, residualising each drug's mean so that only line-specific ranking counts, corrected across all declared variants, reported against the screen-agreement ceiling between independent screens of the same lines.
+**Passing means** Interaction significantly above zero after correction, at a stated fraction of the screen-agreement ceiling.
+**Why it exists** Viability is the endpoint the organoid rung uses. A representation that predicts expression but not viability would fail rung 4 for reasons that have nothing to do with organoids.
+
+### Rung 4 — does it transfer to patient-derived organoids?
+
+[spec](tasks/rung4-organoid-viability/design.md) · [state](PROJECT_STATE.md)
+
+**Question** Does a model trained on cell-line drug response predict drug response in patient-derived tumour organoids?
+**Adds** The final shifts: substrate (immortalised line → patient organoid), patients, and assay.
+**Measure** The same interaction statistic as rung 3, fitted on cell lines and evaluated on a frozen, embargoed organoid screen, on the drug axis the cell-line training set defines, reported as a fraction of both rung 3 and rung 0.
+**Passing means** Either transfer holds at a measurable fraction — the useful positive result — or it does not, and the ladder below localises the loss to the substrate step rather than leaving it unexplained.
+**Constraint** The organoid cohort is a frozen holdout under embargo. It is not looked at, tuned on, or unfrozen except under conditions stated in its spec, because a holdout inspected once is no longer a holdout.
+
+---
+
+### Cross-cutting work
+
+Not rungs: work every rung depends on.
+
+- [`modular-harness-core`](tasks/modular-harness-core/design.md) — the shared evaluation library: model protocols, registries, leakage filtering, one cross-validation partition, so a guarantee implemented once holds at every rung.
+- [`cross-check-fairness-and-capacity`](tasks/cross-check-fairness-and-capacity/design.md) — comparisons fair by construction: shared evaluation support and gene panel, matched-width controls, capacity chosen the same way for every method.
+- [`project-rule-enforcement`](tasks/project-rule-enforcement/design.md) — make the rules below structural rather than advisory, so violating one is difficult instead of merely discouraged.
+- [`embargo-gate-cell-values`](tasks/embargo-gate-cell-values/design.md) — the release gate that keeps patient identifiers out of anything published.
+
+Task status for every branch above — OPEN or CLOSED, and what remains — is in [`docs/PROJECT_STATE.md`](PROJECT_STATE.md).
 
 ## Project rules — what every task must satisfy
 
@@ -157,40 +187,7 @@ Current violations are exempted only through `KNOWN_GAPS` in `tests/test_project
     **Edge case** a reversal nobody writes down is undetectable mechanically, and no CI heuristic changes that.
     **Edge-case test** none, deliberately: an unwritten reversal is undetectable mechanically, and stays a human read of git log against `docs/decisions/`. The primary test catches only the next failure along — a document that exists but is indexed nowhere.
 
-## Known drift points — read before you touch these areas
+## Process
 
-Concrete case studies, kept here permanently (not in PROJECT_STATE.md, which only tracks current open/fixed status) because the *lesson* stays useful after the specific confusion is resolved.
-
-- **A newer, more authoritative-looking document can itself be the source of drift.**
-  `transfer_ladder_protocol.md` is the newest, most-referenced design doc in the repo, and its Invariant 2 is the one that's wrong — it was written without checking the two older specs that correctly describe the code it's supposedly formalizing.
-  Recency is not the same as accuracy; a new spec must check existing specs and code, not just state intent.
-- **Renaming a concept without a forward pointer leaves every prior document silently ambiguous.**
-  `additive` → `observed_delta` (D6) and `soragni` → `sarcoma_organoids_2024` (`a6c8976`) both have a working *code* alias/rename, and zero *documentation* trail pointing old-name readers to what changed.
-  A rename is a two-line fix in the doc that used the old name; do it at rename time, not retroactively.
-- **A parallel implementation that bypasses an abstraction silently drops that abstraction's guarantees.**
-  The registry-driver orphaning (spec tree above) is the concrete instance: three specs' worth of leakage-filtering design is not running on any promoted number, and discovering that took a targeted review, not a doc anyone could just read.
-- **An architectural reversal with no decision entry is invisible to everyone but git log.**
-  The CoderData → custom-loaders revert sat undocumented for over two months.
-  See project rule 10 and `docs/decisions/2026-06-16-revert-coderdata-loaders.md`.
-
-## Process for new tasks
-
-1. **Every task gets its own spec.**
-   Create `docs/tasks/<task-slug>/design.md` — one folder per task, slug named for the work (`cross-check-fairness-and-capacity`), never date-prefixed — and add its branch to the spec tree above — under its rung, or under cross-cutting — linking the spec, in the same change.
-   The plan (`plan.md`) and any task-local decisions (`decisions.md`) live beside it in that folder.
-   The slug is the task's identity everywhere: the tree keys on it, `docs/PROJECT_STATE.md` links to it, and commit messages can name it.
-2. **Before writing that spec**, read this file's project rules and spec tree.
-   If the new work overlaps an ACTIVE task, extend that task's `design.md` or explicitly supersede it — don't open a second task on the same subject.
-3. **A new spec's header names the harness steps the task touches, the project rules it relies on, and the tests it must pass.**
-   The steps are the ten registered as markers in `pyproject.toml`: load, build, restrict, split, fit, score, null, promote, release, document.
-   Naming them is what tells the next reader, and whoever reviews the PR, which tests this task had to pass — without anyone reconstructing it from the diff.
-4. **If the new work needs an exception to a project rule**, that exception is written into *this* file (a numbered sub-point under the rule, with the reason), not left implicit in the new spec alone — otherwise the next task that touches the same code has no way to know the exception exists and will "fix" it back, or worse, not know it was ever a deliberate choice.
-5. **When a new spec/decision supersedes or reverses an older one**, do both of:
-   - Add a one-line dated banner at the top of the *old* document pointing to the new one (the pattern already used ad hoc in `docs/l1000_imputation_fidelity.md`'s correction banner and the 2026-08-13 handoff's inline status note — make it the standard, not the exception).
-   - Update this file's spec-tree branch for the old task.
-6. **A task's own tests live in its spec; a test that should bind the whole project is promoted here.**
-   Write the task-specific tests into `docs/tasks/<task-slug>/design.md` — they are what shows *that* update satisfied the rules it touches.
-   When the work establishes that every task should pass one of them, move it into the project rules above, with its step, its enforcing test, and what a pass does not prove; the task's spec records that it was promoted.
-   A test that never generalises simply stays in the task, which is the normal case.
-7. **If the new work changes a currently-reported number**, update `docs/PROJECT_STATE.md` in the same change — a spec describing new intent and a state doc still showing the old number is exactly the drift this structure exists to prevent.
-   That state entry links back to the task's `design.md`, the commits that changed the code, and the promoted output, so the number, the intent behind it, and the artifact it came from are one hop apart in either direction.
+How work moves from question to promoted result — the lifecycle, the task folders, the compute boundary, the definition of done — is in [`docs/PROCESS.md`](PROCESS.md).
+The short version: every task gets a folder under `docs/tasks/`, a branch in this spec's tree, and a state entry; every promoted number carries provenance; every rule above is enforced by a named test.

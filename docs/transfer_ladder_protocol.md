@@ -56,7 +56,7 @@ side by side would be meaningless.
    noise). The viability rungs (3/4) use the two-way-demeaned Spearman interaction rho via
    `evaluation.py`'s `score_predictions`. **This means a rung-0-vs-rung-1 ratio is fine (both
    Pearson) but a rung-0-vs-rung-2 or rung-1-vs-rung-2 ratio is not yet valid** (see
-   `docs/PROJECT_STATE.md` §1, rung 0) — the metric mismatch, not just the reliability-
+   `docs/PROJECT_STATE.md`, rung 0) — the metric mismatch, not just the reliability-
    correction one below, blocks it. Fix by explicitly stating Pearson-for-delta-rungs /
    Spearman-for-viability-rungs as the real rule (this note), or by switching rung 0/1 to
    Spearman to match rung 2 — not decided; either closes the gap, leaving it open is what does

@@ -15,6 +15,10 @@ Read those two after this one, before starting work.
 
 ## 1. The work lifecycle
 
+**Rung, step, task** are defined in [`docs/PROJECT_SPEC.md`](PROJECT_SPEC.md) and used precisely here: a rung is a scientific question, a step is a stage of the pipeline every rung passes through, a task is a unit of work with a spec and a definition of done.
+Tasks open and close; steps never do; rungs are answered.
+
+
 **Brainstorm → Design spec → Implementation plan → Execute → Review → Verify → Promote.**
 
 **Work is organized by task, not by date.**
@@ -110,3 +114,21 @@ Full rules in `docs/PROJECT_SPEC.md`'s "Process for new specs" section; the shor
 - **A bug fix**: a real test (imports the actual function) passes locally; if it touches a promoted number, that result is re-run, re-promoted with a fresh sidecar, and the document that reported the old number gets a correction banner — never a silent edit.
 - **A new capability**: went through brainstorm → spec → plan in one `docs/tasks/<task-slug>/` folder, indexed in `PROJECT_SPEC.md`, with `PROJECT_STATE.md`'s entry linking spec, code, and outputs.
 - **A claim of "complete"**: backed by command output you actually ran, not by what the code should do.
+
+## 7. Failure modes this process exists to prevent
+
+Concrete cases, kept because the lesson outlives the specific confusion.
+
+- **A newer, more authoritative-looking document can itself be the source of drift.**
+  `transfer_ladder_protocol.md` is the newest, most-referenced design doc in the repo, and its Invariant 2 is the one that's wrong — it was written without checking the two older specs that correctly describe the code it's supposedly formalizing.
+  Recency is not the same as accuracy; a new spec must check existing specs and code, not just state intent.
+- **Renaming a concept without a forward pointer leaves every prior document silently ambiguous.**
+  `additive` → `observed_delta` (D6) and `soragni` → `sarcoma_organoids_2024` (`a6c8976`) both have a working *code* alias/rename, and zero *documentation* trail pointing old-name readers to what changed.
+  A rename is a two-line fix in the doc that used the old name; do it at rename time, not retroactively.
+- **A parallel implementation that bypasses an abstraction silently drops that abstraction's guarantees.**
+  The registry-driver orphaning (see `PROJECT_SPEC.md`'s cross-cutting work) is the concrete instance: three specs' worth of leakage-filtering design is not running on any promoted number, and discovering that took a targeted review, not a doc anyone could just read.
+- **An architectural reversal with no decision entry is invisible to everyone but git log.**
+  The CoderData → custom-loaders revert sat undocumented for over two months.
+  See project rule 10 and `docs/decisions/2026-06-16-revert-coderdata-loaders.md`.
+
+

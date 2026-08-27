@@ -29,7 +29,7 @@ Each is small and independent; they are grouped because they are one review and 
    `fmharness.statistics.bootstrap_aggregate_pvalue` is the only correct route for an aggregate.
    The five `np.mean(null >= observed)` sites under `scripts/` are **correct** — their nulls are permutation replicates of the same aggregate, verified by reading each one — but that is a fact established by a human read and recorded nowhere.
    Add an explicit allowlist naming those five with that reason, and a test that any new occurrence must either use the helper or be added to the allowlist deliberately.
-   This closes `docs/PROJECT_STATE.md` §2's open audit item honestly, rather than by grep.
+   This closes the open audit item honestly, rather than by grep.
 4. **Rule 2 — one declaration of each rung's correlation and averaging.**
    Nothing in the repo states, in a form code can read, that rung 0 is Pearson-median and rung 1 is Pearson-mean.
    The mismatch that blocks rung 1's fraction-of-ceiling therefore lives only in prose, and any two rungs can be divided by accident.
@@ -41,6 +41,27 @@ Each is small and independent; they are grouped because they are one review and 
 6. **Rule 7 — capacity recorded in the output.**
    Every scoring table gains a column naming the selected capacity per method, so tuned-vs-pinned is answerable from the artifact.
    Coordinate with `rung1-controls-and-capacity`, which needs the same column: land this first, so that rung re-runs once rather than twice.
+
+## The exemption register
+
+`tests/test_project_rules.py`'s `KNOWN_GAPS` is the authoritative list: every current violation of a project rule, keyed by rule and instance, each applied as a strict `xfail` so that fixing one turns the test into an unexpected pass and forces the entry out.
+Two kinds of entry live there.
+
+**Classified** — the violation is understood and a task owns it.
+Rung 1's missing controls and its pinned capacity are both owned by `rung1-controls-and-capacity`.
+`rung3_declared_variants.csv` is exempt from the support/panel check with a stated reason: its producer re-reports a table whose own pipeline carries the guards upstream of its input.
+
+**Unclassified — the first work item of this task.**
+Four entries surfaced when the rule-6 and rule-7 tests began discovering their cases instead of running against a hardcoded list, and each needs one of three answers, none of which may be guessed: fix it, exempt it with a stated reason, or record that the artefact is retired.
+
+| Case | Rule | Question to answer |
+|---|---|---|
+| `de_permutation_null_both_checkpoints.csv` | 6, 3 | Is a permutation-null table a method comparison at all? If not, the discovery predicate is what needs narrowing, and one decision clears both entries |
+| `scripts/alpine/02_merge_score.sbatch` | 7 | Pins a component count; predates the ladder — retired, or still a live path? |
+| `scripts/alpine/05_stack_score.sbatch` | 7 | Same question |
+| `scripts/alpine/07_stack_emb_score.sbatch` | 7 | Same question |
+
+An unclassified exemption is worse than a failing test, because it looks handled.
 
 ## Tests this task must pass
 

@@ -2,7 +2,7 @@
 
 **Status** OPEN — promoted and solid; two reporting defects outstanding.
 **Steps** build, restrict, split, fit, score, null, promote.
-**Parent** [`docs/PROJECT_SPEC.md`](../../PROJECT_SPEC.md); **state** [`docs/PROJECT_STATE.md`](../../PROJECT_STATE.md) §1, rung 3.
+**Parent** [`docs/PROJECT_SPEC.md`](../../PROJECT_SPEC.md); **state** [`docs/PROJECT_STATE.md`](../../PROJECT_STATE.md).
 **Design source** [`docs/transfer_ladder_protocol.md`](../../transfer_ladder_protocol.md), rung 3 (the old Check 2).
 
 ## What this rung establishes
