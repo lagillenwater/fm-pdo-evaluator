@@ -16,8 +16,10 @@ needs it, along with the `containers/digests.json` that pins them. Whether
 two model families share one image is a decision recorded here when it is
 made, with its reason.
 
-Every `PredictionRecord` carries `EnvironmentSnapshot.container_digest`. A
-prediction made outside a pinned container fails determinism check #6.
+Every promoted result carries the snapshot (`PromotedResult.environment`),
+including `container_digest`; per-prediction environment capture arrives with
+the first model rung. A GPU prediction made outside a pinned container fails
+the determinism contract.
 
 ## 2. Deterministic GPU execution
 
@@ -42,7 +44,8 @@ called and `torch.are_deterministic_algorithms_enabled()` returned `True`.
 Two secrets the harness needs are kept out of the repo:
 
 - `HUGGINGFACE_TOKEN` — Tahoe-x1 weights download
-- `SYNAPSE_PAT` — Soragni 2024 dataset access
+- `SYNAPSE_PAT` — access to the rung-5 organoid cohort's controlled-access
+  source (used from the rung that reads it)
 
 Layout:
 
@@ -99,3 +102,21 @@ When upgrading a dependency:
 | `data_commit` | tranche `content_hash` for the inputs | yes |
 | `seed` | seed passed into the CLI | yes |
 | `cuda_deterministic` | `True` iff `fix_seeds` ran + det algos enabled | yes |
+
+A promoted result embeds this same snapshot at file granularity
+(`PromotedResult.environment`). For a CPU-only result — rung 0's replicate
+ceiling — `container_digest`, `torch_version`, `cuda_version` and
+`model_weights_hash` are absent by design, and `cuda_deterministic` is
+`False` because the GPU determinism contract never engaged; `data_commit`
+carries the tranche `content_hash` exactly as above.
+
+## Changes
+
+- **2026-08-27** (`rung0-replicate-ceiling`) — reconciled against the current
+  schema where rung 0 depends on this contract: the container section had
+  claimed every `PredictionRecord` carries the snapshot, but that record type
+  belongs to the unlanded prior lineage (`Prediction` carries a `tranche_id`;
+  the snapshot lands in `PromotedResult`); the promotion-time paragraph above
+  was added for the same reason; the Synapse secret's description now points
+  at the rung that will use it rather than naming an unlanded dataset. The
+  rest of this document awaits the first rung that depends on it.

@@ -71,9 +71,8 @@ after. Currently registered:
   50 cancer cell lines, ~1,100 drug–dose perturbations on 14 plates with plate-matched DMSO
   controls. The delta rungs (0–3) read its pseudobulk differential-expression table, restricted
   to the 32 drugs shared with GDSC2.
-- **Soragni 2024** sarcoma PDTOs ([Synapse PDTOSarcoma](https://www.synapse.org/PDTOSarcoma)) —
-  the organoid cohort rung 5 evaluates against, held as a frozen embargoed holdout; enters the
-  registry with its rung.
+- Datasets for the higher rungs — the viability screens and the embargoed organoid cohort the
+  ladder names in [docs/SPEC.md](docs/SPEC.md) — enter the registry with their rungs.
 
 ## License
 

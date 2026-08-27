@@ -33,7 +33,8 @@ A rung closes when its result is promoted with provenance, this table records it
 |---|---|
 | Schema, determinism and adapter scaffolding, with tests | The apparatus a rung is added to exists; nothing here yet produces a measurement |
 | No `results/` directory | Rung 0 is the first work to promote a number, and the first to be held to the rules in the spec |
-| `docs/adapter_contract.md` and `docs/environment.md`, predating this spec | Neither has been reconciled against it. The rung that first depends on either brings it into line rather than a sweep that touches everything at once |
+| `docs/adapter_contract.md`, predating this spec | Not yet reconciled. Rung 1 — the first task with a model — brings it into line rather than a sweep that touches everything at once |
+| `docs/environment.md`, reconciled 2026-08-27 where rung 0 depends on it | The promotion-time snapshot semantics now match the landed schema; the rest of the document awaits the first rung that depends on it |
 
 ## Where things live
 
