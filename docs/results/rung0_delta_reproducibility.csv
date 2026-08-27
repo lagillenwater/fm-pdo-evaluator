@@ -1,0 +1,2 @@
+replicate_col,n_pairs,n_genes,splithalf_median_r,splithalf_mean_r,splithalf_q1_r,splithalf_q3_r,spearman_brown_full,frac_pos,null_median_r,null_n_draws,null_any_pair_r,null_diff_drug_r,null_same_drug_r,p_vs_same_drug,lift_over_null,p_vs_null,null_median_ci_lo,null_median_ci_hi,frac_null_draws_above_observed_median
+plate,1600,13886,0.109,0.135,0.071,0.155,0.197,0.989,0.033,500,0.034,0.033,0.069,0.0005,0.076,0.0005,0.032,0.034,0.022

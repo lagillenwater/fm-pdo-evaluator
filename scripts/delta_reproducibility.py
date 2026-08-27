@@ -24,6 +24,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fmharness.statistics import bootstrap_aggregate_pvalue
+
 TAHOE = "tahoebio/Tahoe-100M"
 DE = "pseudobulk_differential_expression"
 REPL_CANDIDATES = ("plate", "Plate", "plate_barcode", "plate_id", "replicate", "batch")
@@ -73,6 +75,36 @@ def _split_half_deltas(paths: list[str], target_names: list[str], repl: str | No
     return de, chosen
 
 
+
+def _write_params_sidecar(result_path, args_ns, extra=None) -> None:
+    """Record the git sha and every resolved argument beside the result.
+
+    A ceiling used as a denominator has to be checkable against a rerun; a bare CSV is a number
+    with no way back to the code and parameters that produced it. This script had none, which is
+    how its value lived in doc prose for weeks with nothing behind it.
+    """
+    import json as _json
+    import subprocess as _sp
+    from pathlib import Path as _P
+
+    try:
+        sha = _sp.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                      check=True).stdout.strip()
+    except Exception:
+        sha = "unknown"
+    import os as _os
+
+    side = _P(str(result_path)).with_suffix(".params.json")
+    side.write_text(_json.dumps({
+        "result": _P(str(result_path)).name,
+        "git_sha": sha,
+        "slurm_job_id": _os.environ.get("SLURM_JOB_ID", "local"),
+        "args": {k: str(v) for k, v in vars(args_ns).items()},
+        **(extra or {}),
+    }, indent=2) + "\n")
+    print(f"wrote {side}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--local-dir", required=True, help="dir with the Tahoe DE parquet (on scratch)")
@@ -80,6 +112,14 @@ def main() -> None:
     ap.add_argument("--replicate-col", default=None, help="plate/replicate column (auto-detected)")
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs, matching check 1")
     ap.add_argument("--min-genes", type=int, default=50, help="min shared genes to score a pair")
+    ap.add_argument(
+        "--panel-file",
+        default=None,
+        help="one gene per line; pins the ceiling to the SAME panel it will be a denominator "
+        "for. Without it the ceiling is top-HVG and not comparable to a panel-scored rung.",
+    )
+    ap.add_argument("--n-perm", type=int, default=500, help="mismatched-pair null draws")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="results/delta_reproducibility.csv")
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
@@ -100,9 +140,18 @@ def main() -> None:
         raise SystemExit("no (line, drug, gene) had both plate halves -- too few plates per pair?")
     de["mean"] = (de["lfc0"].to_numpy() + de["lfc1"].to_numpy()) / 2.0
 
-    # HVG = top-variance genes of the mean delta across pairs (matches check 1's panel basis).
-    gene_var = de.groupby("gene_name")["mean"].var()
-    hvg = set(gene_var.sort_values(ascending=False).index[: args.n_hvg])
+    # The gene set has to match whatever this ceiling will be a DENOMINATOR for. Scoring the
+    # ceiling on top-2000 HVG while rung 1 scores on the 14,121-gene common panel makes
+    # "fraction of achievable" a ratio between two different measurements -- the same class of
+    # error as the panel bug itself. --panel-file pins it to the panel actually used.
+    if args.panel_file:
+        panel = {ln.strip() for ln in Path(args.panel_file).read_text().splitlines() if ln.strip()}
+        hvg = panel & set(de["gene_name"].unique())
+        print(f"scoring the ceiling on the supplied panel: {len(hvg)} of {len(panel)} genes present")
+    else:
+        gene_var = de.groupby("gene_name")["mean"].var()
+        hvg = set(gene_var.sort_values(ascending=False).index[: args.n_hvg])
+        print(f"scoring the ceiling on top-{args.n_hvg} HVG (no --panel-file given)")
     d = de[de["gene_name"].isin(hvg)]
 
     # per (line, drug): split-half Pearson r between the two plate halves over the HVG genes.
@@ -118,7 +167,63 @@ def main() -> None:
     if r.size == 0:
         raise SystemExit("no (line, drug) pair had enough shared HVG genes to score")
 
+    # NEGATIVE CONTROL, STRATIFIED. A split-half correlation has a nonzero floor because genes
+    # share structure whether or not two halves come from the same perturbation. But a single
+    # "mismatched pair" null conflates two very different floors, and the first run showed why:
+    # it drew two random pairs, so whenever they happened to share a DRUG the correlation was
+    # high -- drug effects dominate the delta -- and the null came back at median 0.139 with 23%
+    # of draws exceeding the observed 0.299. That null is inflated by same-drug matches and
+    # cannot be read as a floor for reproducibility.
+    #
+    # Three strata, the same distinction Check 1b draws between shuffle_all and within_drug:
+    #   any_pair      two random pairs. Mixed; reported only for continuity with the first run.
+    #   diff_drug     different line AND different drug -- the floor from generic gene structure.
+    #                 This is the one the CEILING must clear to be a ceiling at all.
+    #   same_drug     same drug, different line -- the floor for LINE specificity. A split-half
+    #                 above this says the pair's delta is reproducible beyond its drug's effect.
+    piv0 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc0")
+    piv1 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc1")
+    common = piv0.index.intersection(piv1.index)
+    piv0, piv1 = piv0.loc[common], piv1.loc[common]
+    idx_pairs = list(common)
+    drugs_of = [str(x[1]) for x in idx_pairs]
+    lines_of = [str(x[0]) for x in idx_pairs]
+    rng = np.random.default_rng(args.seed)
+    n_rows = len(idx_pairs)
+
+    def _draw(kind: str) -> list[float]:
+        """Null correlations under one stratum."""
+        out: list[float] = []
+        tries = 0
+        while len(out) < args.n_perm and tries < args.n_perm * 60 and n_rows >= 2:
+            tries += 1
+            i, j = rng.choice(n_rows, size=2, replace=False)
+            same_drug = drugs_of[i] == drugs_of[j]
+            same_line = lines_of[i] == lines_of[j]
+            if kind == "diff_drug" and (same_drug or same_line):
+                continue
+            if kind == "same_drug" and (not same_drug or same_line):
+                continue
+            a = piv0.iloc[int(i)].to_numpy(dtype=float)
+            b = piv1.iloc[int(j)].to_numpy(dtype=float)
+            ok = np.isfinite(a) & np.isfinite(b)
+            if ok.sum() >= args.min_genes and a[ok].std() > 0 and b[ok].std() > 0:
+                out.append(float(np.corrcoef(a[ok], b[ok])[0, 1]))
+        return out
+
+    nulls = {k: np.asarray(_draw(k), dtype=float) for k in ("any_pair", "diff_drug", "same_drug")}
+    for k, v in nulls.items():
+        med_k = float(np.median(v)) if v.size else float("nan")
+        print(f"null[{k:<10}] median r = {med_k:+.3f} over {v.size} draws")
+    nl = nulls["diff_drug"] if nulls["diff_drug"].size else nulls["any_pair"]
+    null_med = float(np.median(nl)) if nl.size else float("nan")
+
     med = float(np.median(r))
+
+    # Bootstrap the null MEDIAN at the observed pair count, so the comparison is like-for-like.
+    p_boot, boot_lo, boot_hi = bootstrap_aggregate_pvalue(
+        med, nl, int(r.size), agg=np.median, seed=args.seed,
+    )
     # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
     sb = 2 * med / (1 + med) if med > -1 else float("nan")
     summary = {
@@ -131,10 +236,41 @@ def main() -> None:
         "splithalf_q3_r": round(float(np.quantile(r, 0.75)), 3),
         "spearman_brown_full": round(sb, 3),
         "frac_pos": round(float(np.mean(r > 0)), 3),
+        "null_median_r": round(null_med, 3) if np.isfinite(null_med) else float("nan"),
+        "null_n_draws": int(nl.size),
+        "null_any_pair_r": round(float(np.median(nulls["any_pair"])), 3) if nulls["any_pair"].size else float("nan"),
+        "null_diff_drug_r": round(float(np.median(nulls["diff_drug"])), 3) if nulls["diff_drug"].size else float("nan"),
+        "null_same_drug_r": round(float(np.median(nulls["same_drug"])), 3) if nulls["same_drug"].size else float("nan"),
+        # Same fix as p_vs_null below: the observed MEDIAN against the bootstrapped sampling
+        # distribution of the same_drug null's MEDIAN, not against individual same_drug draws.
+        # The two forms previously disagreed within this same summary -- p_vs_null used the
+        # corrected form while this one used the defective one two lines away.
+        "p_vs_same_drug": round(
+            bootstrap_aggregate_pvalue(
+                float(np.median(r)), nulls["same_drug"], int(r.size), agg=np.median, seed=args.seed,
+            )[0], 4,
+        ),
+        "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
+        # p compares the observed MEDIAN against the bootstrapped sampling distribution of the
+        # NULL MEDIAN. The first version compared the observed median against the spread of
+        # INDIVIDUAL null draws, which is a category error: a median over ~1,300 pairs has a
+        # standard error roughly sqrt(n) times tighter than a single draw, so that p was
+        # inflated by more than an order of magnitude and made a reproducible ceiling look
+        # like it had failed its own null.
+        "p_vs_null": round(p_boot, 4) if np.isfinite(p_boot) else float("nan"),
+        "null_median_ci_lo": round(boot_lo, 3) if np.isfinite(boot_lo) else float("nan"),
+        "null_median_ci_hi": round(boot_hi, 3) if np.isfinite(boot_hi) else float("nan"),
+        # Reported separately because it is a real quantity and answers a DIFFERENT question:
+        # how much the two distributions overlap, i.e. what share of mismatched pairs reach the
+        # typical matched pair. It is an effect size, never a significance test.
+        "frac_null_draws_above_observed_median": (
+            round(float(np.mean(nl >= med)), 3) if nl.size else float("nan")
+        ),
     }
     out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame([summary]).to_csv(out, index=False)
+    _write_params_sidecar(out, args, extra={'n_pairs': int(r.size)})
     print("\n=== delta reproducibility ceiling (real Tahoe delta, plate split-half) ===")
     for k, v in summary.items():
         print(f"  {k:22s} {v}")

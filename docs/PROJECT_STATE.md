@@ -5,7 +5,7 @@ The spec says what each rung must establish and what a passing result means; thi
 It carries no history: what a rung's result *is* belongs here, how it came to be is in git and in the task's own spec.
 
 **As of** 2026-08-27.
-This branch carries the project's plan — the spec tree, the rules, and this status — ahead of the implementation and results, which arrive one rung at a time.
+The project's plan is in the spec; results arrive one rung at a time, and rung 0's is the first.
 
 A number not carried here with its provenance record is not evidence.
 Promotion means a result in `docs/results/` with a `.provenance.json` beside it recording the commit, job and inputs that produced it — project rule 8.
@@ -16,7 +16,7 @@ Promotion means a result in `docs/results/` with a `.provenance.json` beside it 
 
 | Rung | What the spec requires | Status | Evidence |
 |---|---|---|---|
-| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | **Measured, not in this repository yet** | Arrives with rung 0's implementation |
+| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | **Measured** | [`rung0_delta_reproducibility.csv`](results/rung0_delta_reproducibility.csv) · job 31676846 |
 | 1 — held-out line | Prediction beating a floor and recovering a planted signal, as a fraction of rung 0 | **Measured, not in this repository yet** | — |
 | 2 — cross-platform | Retention separable from a scrambled-line control | **Measured, not in this repository yet** | — |
 | 3 — GDSC2 viability | Interaction above zero after correction, against the screen-agreement ceiling | **Measured, not in this repository yet** | — |
