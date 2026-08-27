@@ -2,6 +2,11 @@
 
 **Date:** 2026-08-07
 **Status:** approved, pending implementation plan
+**ORPHANED, 2026-08-26:** the library layer here is implemented and correct. Its acceptance
+driver, `check1_registry_driver.py`, is not invoked by any current sbatch — every promoted
+rung-1 result comes from a parallel `rung1_plan/build_one/gather.py` path that does not run
+`filter_leakage`. See `docs/PROJECT_SPEC.md`'s spec index before relying on this spec's
+leakage guarantee.
 
 ## Purpose
 
@@ -22,7 +27,7 @@ Three planning artifacts already exist and partly disagree; this spec is what's 
 | artifact | what it got right | why it's not enough alone |
 |---|---|---|
 | `docs/fm-pdo-evaluator-plan.md` (original 3-week MVP plan, May 2026) | Designed a full `ModelAdapter` protocol, registry, leakage scan, container/determinism discipline. Most of the ideas this spec reuses trace back here. | Most of it was never built (Week 2/3 items are unstarted). Too much infrastructure to build before validating the core abstraction against a real second model. |
-| `docs/superpowers/specs/2026-08-06-arm2-harness-validation-design.md` (yesterday) | Concrete, grounded 4-registry design (Representation/Estimator/CV/Readout) that already matches what's actually built (`docs/models.md`). Phases 0-6 with real acceptance criteria. | Scoped to Arm 2 (Tahoe/cell-line) only — explicitly excludes the Soragni/Arm-1 cohort and any cross-substrate work, which today's session did anyway at direction of the user. Assumes one model (Stack) and one representation shape (embedding); has no place for a model that generates. |
+| `docs/tasks/arm2-harness-validation/design.md` (yesterday) | Concrete, grounded 4-registry design (Representation/Estimator/CV/Readout) that already matches what's actually built (`docs/models.md`). Phases 0-6 with real acceptance criteria. | Scoped to Arm 2 (Tahoe/cell-line) only — explicitly excludes the Soragni/Arm-1 cohort and any cross-substrate work, which today's session did anyway at direction of the user. Assumes one model (Stack) and one representation shape (embedding); has no place for a model that generates. |
 | `docs/adapter_contract.md` / `docs/models.md` | `adapter_contract.md` designed a clean `embed`/`metadata`/`predict_native` contract with required behaviors (determinism, no row reordering, gene-panel-mismatch refusal, content-addressed caching). `docs/models.md` documents what's actually running: a simpler representation × head split, `predict_parts` returning `(base, residual)`. | `adapter_contract.md`'s contract was never implemented. `docs/models.md`'s bilinear and biomarker models are explicitly "standalone — they do not use this head interface," so today's actual model catalogue does not fully conform to any single existing contract. |
 
 This spec keeps yesterday's four registries as-is, extends them with what today's Arm-1/Arm-2
@@ -125,7 +130,7 @@ Reused from `docs/adapter_contract.md` rather than redesigned, plus one addition
 
 `expected_input` is new. Phase 1's sci-Plex work hit exactly this gap: Stack's NB likelihood
 silently breaks on normalized input, and the mismatch wasn't caught until diagnosis, not before
-the job ran (`docs/superpowers/specs/2026-08-06-arm2-harness-validation-design.md`, Phase 1
+the job ran (`docs/tasks/arm2-harness-validation/design.md`, Phase 1
 blocker 3). Declaring it lets the harness validate at the boundary instead of downstream.
 
 **Required behaviors** (from `adapter_contract.md`, restated for the `Encoder`/`Generator`
@@ -153,7 +158,7 @@ the model-plus-adapter pipeline.
 ### `Modality` registry (new)
 
 The piece missing from yesterday's four registries. Today, "which phenotype are we predicting"
-is hardcoded per script — `per_patient_eval.py`, `benchmark_soragni.py`, `label_ceiling.py`,
+is hardcoded per script — `per_patient_eval.py`, `benchmark_sarcoma_organoids_2024.py`, `label_ceiling.py`,
 and `score_generation_eval.py` each build their own `(patient, drug, y)` frame with their own
 sign convention. This is what the manuscript's "evaluation adapter" language names.
 
