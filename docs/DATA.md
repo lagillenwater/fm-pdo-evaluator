@@ -41,7 +41,9 @@ for Context-Dependent Gene Function and Cellular Modeling*, bioRxiv 2025,
   rows (89 GB, 1,026 parquet shards): one row per (cell line, drug, dose, plate) per gene,
   carrying the DESeq2 `log2FoldChange` of the treated pseudobulk against the plate-matched DMSO
   pseudobulk, plus `baseMean`. These statistics are **accepted upstream** — this project does no
-  re-quantification and no re-normalization of them.
+  re-quantification and no re-normalization of them. The registry records that fact; the
+  decision behind it — reasons, risks, and what would revisit it — is made in the rung-0 design
+  ([docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md)).
 - `drug_metadata` — used only to resolve drug names to PubChem CIDs.
 
 **Download.** 2026-07-24, by `scripts/alpine/01_pseudobulk_shortcut.sbatch` (one authenticated

@@ -15,12 +15,12 @@ Without this number, every rung above reports against an implicit 1.0 and a weak
 
 The delta for a (line, drug) pair is its **differential expression profile**: the per-gene log2 fold change of treated vs DMSO from the Tahoe-100M pseudobulk DE table.
 Replicate plates are split deterministically by `hash(plate) % 2`; each half's per-gene fold changes are averaged; the two half-profiles are correlated across the declared gene panel.
-One correlation per (line, drug) pair — the delta's own test-retest reliability, and deliberately the same shape as the quantity rung 1 predicts and scores, so fraction-of-ceiling divides like by like.
+One correlation per (line, drug) pair — the delta's own test-retest reliability.
 
 Two neighbouring quantities are deliberately **not** the measure:
 
-- **Mean-expression reproducibility** (correlating half-pool expression levels) tracks assay stability of abundance, not response reproducibility. It comes out near 1 on the back of housekeeping-vs-low-expressor structure both halves share regardless of perturbation, and no rung predicts it. That shared structure belongs in the null — it is why the diff-drug null sits at ~0.03 rather than 0 — not in the ceiling.
-- **Per-gene reliability** (the transpose: each gene's delta correlated across pairs between halves) says *which* panel genes carry reproducible perturbation signal. It is computed in the same run as an **unpromoted diagnostic** — a CSV and figure in this task folder, referenced from `verification.md` — because it is where to look when rung 1 misses (reproducible genes the model failed, or genes nothing could recover) and the evidence base for any future panel restriction. It carries no promoted claim; a task that wants to cite it promotes it with its own controls.
+- **Mean-expression reproducibility** (correlating half-pool expression levels) tracks assay stability of abundance, not response reproducibility. It comes out near 1 on the back of housekeeping-vs-low-expressor structure both halves share regardless of perturbation, and no rung predicts it. That shared structure belongs in the null.
+- **Per-gene reliability** (the transpose: each gene's delta correlated across pairs between halves) says *which* panel genes carry reproducible perturbation signal. It is computed in the same run as an **unpromoted diagnostic** — a CSV and figure in this task folder, referenced from `verification.md` — because it is where to look as the evidence base for any future panel restriction. It carries no promoted claim; a task that wants to cite it promotes it with its own controls.
 
 ## The declared statistic (ladder-wide)
 
@@ -37,6 +37,16 @@ This supersedes the old-lineage median headline — see the decision history.
 - **Replicate unit** — plate.
 
 Every build script above is on this branch, per PROCESS §4's provenance-chain rule.
+
+## Why the DE statistics are accepted upstream
+
+The `log2FoldChange` values are used exactly as published — no re-quantification from the raw cells, no re-normalization, no refitting of the differential-expression model. That acceptance is a decision, made here:
+
+- **The ceiling must be measured on the quantity the ladder actually uses.** The delta rungs consume this published table; re-deriving DE would make rung 0 the ceiling of a target nothing above it reads.
+- **The published contrast is the better-informed one.** The producers computed the plate-matched treated-vs-DMSO contrast with full access to plate and well structure; recomputing from the ~100M raw cells is a multi-terabyte pipeline whose own analytic choices would then need their own validation, without testing any question the ladder asks.
+- **The acceptance is pinned and checkable, not blind.** The tranche fixes the exact revision and content hash, so "upstream" cannot silently change; the split-half measurement itself would expose a table without genuine replicate structure; and the per-gene diagnostic flags genes whose published statistics fail to reproduce across plate halves.
+
+What would revisit it: a rung needing a quantity the published table cannot supply (raw counts, per-cell resolution), or per-gene diagnostics implicating the upstream processing rather than the assay. A revisit is a dated reversal here, per project rule 2.
 
 ## Controls and power (project rule 4)
 
@@ -95,3 +105,4 @@ The panel rebuild (rung 1 owns it); any rung-1 scoring; re-running the DE-pool b
 - **2026-08-27** — Dataset provenance made part of the scaffolding, at Lucas's direction during spec review: `docs/DATA.md` created as the dataset registry (corpus description, citation, download script and date, post-download processing), this design's Data section rewritten to reference it instead of describing Tahoe inline, and a pool-description table added to the run's outputs so the consumed pool's composition is measured rather than asserted. The README's dataset section points at the registry.
 - **2026-08-27** — REVERSAL: tranche machinery had been declared out of scope, with the bare HuggingFace revision as `data_commit`. Reversed in the same review — the schema is the scaffold, and a registry standing beside it would bypass the abstraction (the failure mode PROCESS §7 names). The pool is ingested as tranche `tahoe100m-pseudobulk-de.v1`; `data_commit` carries the tranche `content_hash`, following the landed environment contract (`docs/environment.md` §6) rather than the tranche id this design briefly proposed.
 - **2026-08-27** — Landed-references sweep, per the new PROCESS §5 rule: the panel derivation and pilot evidence now cite the archive branch explicitly; higher rungs are referenced only in the sense of `docs/SPEC.md`; the archived lineage's dataset notes are preserved at `docs/archive/2026-05-25-datasets-old-lineage.md` (they were the only copy — tracked on no branch). `docs/environment.md` reconciled where this task depends on it.
+- **2026-08-27** — Upstream acceptance of the DE statistics made an explicit decision, after Lucas asked where it was made: it had been asserted in the registry ("accepted upstream") but decided nowhere. The reasons, risks, and revisit triggers are now in "Why the DE statistics are accepted upstream"; the registry entry points here for the decision.
