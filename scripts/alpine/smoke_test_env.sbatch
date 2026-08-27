@@ -11,8 +11,9 @@
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
-# Cheap, non-generative smoke test for docs/superpowers/specs/2026-08-18-stack-faithful-generation-
-# and-de-metrics-design.md's three open items, batched into one Alpine round-trip before any real
+# Cheap, non-generative smoke test for
+# docs/tasks/stack-faithful-generation-and-de-metrics/design.md's three open items,
+# batched into one Alpine round-trip before any real
 # GPU time is spent on the actual Change-1/Change-2 generation runs:
 #
 #   1. GPU partition/env sanity -- confirms the `stack` conda env actually imports and sees a GPU

@@ -20,6 +20,10 @@ from scipy import stats
 from fmharness.deltas import shuffled_target_base
 from fmharness.statistics import bootstrap_aggregate_pvalue
 
+# The signed claim project rule 4 relies on: every test in this file plants a known answer and
+# requires the real, shipped function to recover it. Do not add a test here that does not.
+pytestmark = pytest.mark.known_answer
+
 
 def test_bootstrap_aggregate_pvalue_returns_null_when_there_is_no_signal() -> None:
     # Observed and null drawn from the SAME distribution: the test must not find a difference.

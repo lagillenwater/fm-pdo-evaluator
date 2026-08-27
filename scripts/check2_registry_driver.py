@@ -13,7 +13,7 @@ parity across the table is now ``score_check2``'s own job (``restrict_common_sup
 the fixed-readout rows, ``restrict_representation_support`` for the penalized grid), not a
 side effect of filtering ``design``. Delta sources still stay built from the full,
 unfiltered Tahoe triple. See
-docs/superpowers/specs/2026-08-13-check2-leakage-aware-drug-aligned-design.md for the full
+docs/tasks/check2-leakage-aware-drug-aligned/design.md for the full
 design rationale.
 
 Run (see check1_registry_driver.py's own --context-vs---deltas-bundle caveat -- it applies here

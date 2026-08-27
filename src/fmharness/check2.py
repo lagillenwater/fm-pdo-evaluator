@@ -25,7 +25,7 @@ from sklearn.preprocessing import StandardScaler
 
 from fmharness.adapters import PENALTY_NAMES, build_adapters, make_penalty
 from fmharness.controls import plant_interaction
-from fmharness.deltas import restrict_common_support
+from fmharness.deltas import fold_assignment, restrict_common_support
 from fmharness.evaluation import interaction_rho, score_predictions
 from fmharness.signatures import PROLIFERATION
 
@@ -202,7 +202,7 @@ def random_feature_control(shape: pd.DataFrame, *, seed: int = 0) -> pd.DataFram
     apparent win reflects learned structure or just raw parameter count -- a foundation
     model's embedding width comes from its pretraining corpus, not the small eval cohort,
     so it can't be fairly capacity-matched against PCA/NMF/kNN by truncating dimensions
-    (see docs/superpowers/specs/2026-08-21-cross-check-fairness-and-capacity-design.md).
+    (see docs/tasks/cross-check-fairness-and-capacity/design.md).
     Instead the real embedding must clear this same-width random control by a real margin
     to attribute any win to structure rather than dimension count -- generalizes
     ``fmharness.signatures.score_signatures``'s same-size random-gene-set control
@@ -338,8 +338,12 @@ def score_check2(
         if m in fixed_sigs
     }
     uniq_lines = sorted(set(real_key["patient"].astype(str)))
-    n_folds = max(1, min(folds, len(uniq_lines)))
-    fold_of = {ln: i % n_folds for i, ln in enumerate(uniq_lines)}
+    # The shared split (project rule 1), not a second hand-written `i % n_folds`. Identical to what
+    # this line used to compute at the 5 folds rung 3 actually runs; they diverged only at
+    # folds <= 1, where the local version put every line in one fold -- no holdout at all --
+    # while the helper degenerates to leave-one-out. Same defect, same fix as rung 4's `24c6240`.
+    fold_of = fold_assignment(uniq_lines, folds)
+    n_folds = len(set(fold_of.values()))
     target_drugs = list(set(real_key["drug"].astype(str)))
     # Boolean-mask indexing on a DataFrame is typed Series | DataFrame | Unknown by the pandas
     # stubs (they can't see this mask always selects rows of the same frame); narrow it back.

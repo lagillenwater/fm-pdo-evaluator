@@ -1,6 +1,6 @@
 """End-to-end demo: the harness-core registries driving a real evaluation.
 
-This plan (docs/superpowers/plans/2026-08-07-modular-harness-core.md) built the
+This plan (docs/tasks/modular-harness-core/plan.md) built the
 `Modality`/`Estimator`/`CVScheme`/`LeakageQueryable` registries but deliberately
 left driver integration out of scope. This script is that driver: for each
 dataset it

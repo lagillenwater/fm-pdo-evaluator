@@ -98,3 +98,19 @@ addopts = "-ra -q"
 # scripts/ is not an installed package, but its script/library split (a testable `run_*`
 # function plus a thin `main()` CLI wrapper) is meant to be exercised directly by tests.
 pythonpath = ["scripts"]
+# One marker per step of the harness pipeline. A task declares the steps it touches in its
+# docs/tasks/<slug>/design.md header and gates on them: `pytest -m "step_split or step_score"`.
+# The mapping from step to invariant is the table in docs/PROJECT_SPEC.md's invariants section.
+markers = [
+    "step_load: reading a cohort into expression + design",
+    "step_build: building the quantities being compared (deltas, representations, controls)",
+    "step_restrict: intersecting every method down to shared samples, drugs and genes",
+    "step_split: assigning samples to cross-validation folds",
+    "step_fit: fitting and predicting, including how much flexibility each method gets",
+    "step_score: computing and reporting a statistic",
+    "step_null: building a null and testing significance",
+    "step_promote: writing a result and its provenance record",
+    "step_release: publishing data past the embargo gate",
+    "step_document: recording specs, decisions and state",
+    "known_answer: this test plants a known answer and requires the real function to recover it",
+]

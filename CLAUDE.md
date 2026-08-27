@@ -10,7 +10,9 @@ burning session budget on approval round-trips during the ladder round:
   push to `main` directly — open a PR as usual.
 - `./scripts/alpine/ralpine submit <script.sbatch> [args]` — submitting Alpine jobs.
 - `./scripts/alpine/ralpine cancel <JOBID>` — cancelling one Alpine job by numeric id (the
-  script already restricts this to a single id with no ranges).
+  script already restricts this to a single id with no ranges). This covers our own jobs that
+  are stale (superseded by a newer submission, or running code a later commit already fixed)
+  or running far past their expected wall time. Never another user's job.
 - `./scripts/alpine/ralpine update` — `git pull --ff-only` on the Alpine checkout.
 
 This overrides the general default of checking before git commit/push. Still check before
