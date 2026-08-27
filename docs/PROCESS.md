@@ -84,7 +84,7 @@ A result without a `.provenance.json` sidecar is not citable in a write-up, per 
 - **Run the project-rule tests for what you touched.**
   `uv run pytest tests/test_project_rules.py` every time — six of those are repository- or artifact-wide scans, so they catch a violation the task never intended — plus `-m` for the steps named in the task's `design.md` header, e.g. `uv run pytest -m "step_split or step_score"`.
   The step-to-rule-to-test mapping sits under each rule in `docs/PROJECT_SPEC.md`, and the steps are markers registered in `pyproject.toml`, so the selection is the same whichever rung or dataset the task is about.
-  A strict `xfail` in that run is a recorded gap, not a pass: if the task closed one, the test becomes an unexpected pass and the marker comes out in the same change.
+  An exemption in that run is a recorded gap, not a pass: if the task closed one, the test starts passing unexpectedly and the exemption comes out in the same change.
 - **`verification-before-completion` applies to claims, not just code**: before saying something is fixed, promoted, or done, show the command and its output.
   "Should work now" is not done.
 

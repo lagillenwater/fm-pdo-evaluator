@@ -109,7 +109,7 @@ A task runs `uv run pytest tests/test_project_rules.py` in full — several are 
 The ten step markers are registered in `pyproject.toml`.
 Each entry also names the **edge case its test cannot see, and the mechanism that closes it** — a scan over source text is weaker evidence than a behavioural check, and reading the two as equivalent is its own failure mode.
 These rules stay generic: which table or driver violates one today is current state, and belongs in `docs/PROJECT_STATE.md` and the task that owns the fix, not here.
-Current violations are exempted only through `KNOWN_GAPS` in `tests/test_project_rules.py` — each entry a strict `xfail` naming its owner, so a fixed one forces its own removal.
+A rule a piece of work cannot yet satisfy is exempted in one place, in the test suite, with the reason and the task that will close it — never by quietly not running the check.
 
 1. **One shared way of splitting samples into cross-validation folds, everywhere.**
    `fmharness.deltas.fold_assignment` produces it: sorted, deterministic, and it becomes leave-one-out once there are at least as many folds as cell lines.
