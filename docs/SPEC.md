@@ -27,7 +27,7 @@ Seven different conclusions demanding seven different responses, and one end-to-
 The evaluation is built as a **ladder**: each rung adds exactly one boundary to the rung below it, and every rung is scored against the reproducibility ceiling.
 Where the score falls off localises the failure to a specific boundary.
 
-## Three words this project uses precisely
+## Five words this project uses precisely
 
 | Word | Means | Lifecycle |
 |---|---|---|
@@ -35,9 +35,15 @@ Where the score falls off localises the failure to a specific boundary.
 | **Step** | A stage of the evaluation pipeline that every rung passes through: load, build, restrict, split, fit, score, null, promote, release, document. The machinery. | Never "done"; rules attach here |
 | **Task** | A unit of work with a spec, an owner and a definition of done. Touches one or more steps, serves one rung or is cross-cutting. | OPEN or CLOSED |
 | **Tranche** | A versioned, content-hashed bundle of data from one source — the material a rung is run on, and what a leakage profile is keyed to. | Ingested once, then immutable |
+| **Frame** | The invariants a cross-rung ratio holds fixed: the tranches (by content hash), the declared gene and drug panels (by hash), and the declared statistic. A fraction-of-ceiling is valid only within one frame. | Versioned by its hashes; a new tranche or panel opens a new frame |
 
-A rung is *what we are asking*; a step is *where in the machinery*; a task is *what someone is doing about it*.
+A rung is *what we are asking*; a step is *where in the machinery*; a task is *what someone is doing about it*; a tranche is *what it runs on*; a frame is *what a ratio holds fixed*.
 The project rules below bind to steps, which is why they hold for every rung without being restated per rung.
+
+Scores from different frames are different quantities.
+Bringing in a new tranche — new cell lines, a new drug panel — does not extend the current frame; it opens a new one, and every cross-rung comparison is recomputed inside it.
+That recompute is a re-run of parameterized pipelines over new inputs, not a redesign, and it does not invalidate the old frame: promoted results carry the tranche and panel hashes that say which frame they belong to, and remain citable claims about it.
+The one asymmetry is rung 6 — a registered prospective prediction is frozen in its frame by definition, so a frame change after registration is recorded, and new predictions are registered in the new frame going forward.
 
 ## Specific Implementation
 
@@ -47,7 +53,7 @@ The project rules below bind to steps, which is why they hold for every rung wit
 
 **Question** How much of a measured perturbation response is signal rather than assay noise?
 **Adds** A reference for every other rung to read against.
-**Measure** Split the replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the declared gene panel — per-pair Pearson, aggregated as the mean over pairs, the one statistic every delta rung reports — Spearman-Brown corrected to full-data reliability, against stratified mismatched-pair nulls and alongside a planted-signal positive control.
+**Measure** Split the replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the declared gene and drug panels — per-pair Pearson, aggregated as the mean over pairs, the one statistic every delta rung reports — Spearman-Brown corrected to full-data reliability, against stratified mismatched-pair nulls and alongside a planted-signal positive control.
 **Passing means** A ceiling significantly above the mismatched-pair null. A rung above it can then be reported as a fraction of what is achievable rather than as a fraction of a hypothetical 1.0.
 **If it is low** A low ceiling does not stop the rungs above it; it rescales them. A score of 0.2 against a ceiling of 0.2 sits at the limit the assay supports, while the same 0.2 against a ceiling of 0.9 is a large shortfall — reporting a rung without its ceiling makes those two indistinguishable.
 **Tasks** [docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md) — OPEN.
@@ -159,3 +165,4 @@ The short version: every task gets a folder under `docs/tasks/`, its own branch 
 ## Changes
 
 - **2026-08-27** (`rung0-replicate-ceiling`) — Rung 0's measure now declares the ladder-wide statistic (per-pair Pearson, mean over pairs) with stratified nulls and a positive control, and rung 1's measure references the same statistic. Previously the aggregation was undeclared, and the old lineage had already paid for that: its rung-0 headline was a median while its rung 1 reported means, blocking fraction-of-ceiling. Project rule 4 added — positive and negative controls per measurement step, minimum detectable effect beside every promoted comparison. First task indexed in the spec tree: `rung0-replicate-ceiling`.
+- **2026-08-27** (`rung0-replicate-ceiling`, spec review) — The evaluation **frame** added to the vocabulary, out of a discussion of rung 0's drug scope: should the ceiling be computed over all Tahoe drugs, or over the intersection the upper rungs can score? The intersection — a ceiling must be measured on the pairs it will denominate, and an all-corpus ceiling would shift with drug-composition effects unrelated to the assay. Generalized: tranches, panels, and statistic are frame elements; a new tranche or panel opens a new frame and recomputes the rungs within it, while prior frames' promoted results stand under their own provenance. Rung 0's measure now names the declared drug panel beside the gene panel.
