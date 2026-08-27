@@ -21,6 +21,9 @@ The practice is written down first so those tools get built to it, rather than t
 
 **Brainstorm → Design spec → Implementation plan → Execute → Review → Verify → Promote.**
 
+The first arrow is a gate: brainstorming ends with the design presented and explicitly approved.
+Until that approval nothing is edited and nothing is implemented — a revision request reopens the design, it does not approve it.
+
 **Work is organized by task, not by date.**
 Every task owns one directory, `docs/tasks/<task-slug>/`, named for what the task does with no date prefix.
 The slug is the task's identity: it is what `SPEC.md`'s spec tree keys on and what `STATE.md` links to.
@@ -70,7 +73,7 @@ A result without a `.provenance.json` provenance record is not citable in a writ
 - **Pull the job's log into `results/<task-slug>/` when it finishes.**
   A log left on the cluster is unreadable to anyone reviewing the pull request, and is gone when the scratch space is cleared.
   It is the record of what the run actually did — the resolved arguments, the warnings, the wall time — so it belongs beside the result it produced.
-- **Standing permissions** : `git commit`/`git push` to `origin`, `ralpine submit`/`cancel`/`update`, all without per-action confirmation.
+- **Standing permissions** : `git commit`/`git push` to `origin` on the current task's branch, effective once that task's design is approved; `ralpine submit`/`cancel`/`update` — all without per-action confirmation.
   `submit` is the working default — an agent stages the run and submits it.
   `cancel` covers this project's own jobs that are stale (superseded by a newer submission, or running code that a later commit has already fixed) or running far past their expected wall time; never another user's job, and never a whole array range, which `ralpine cancel` refuses structurally by taking exactly one numeric id.
   Still confirm before force-push, `git reset --hard`, branch deletion, or anything touching `upstream` or `main`.
@@ -80,9 +83,12 @@ A result without a `.provenance.json` provenance record is not citable in a writ
 
 - **Test on synthetic data before spending cluster time.**
   Build a small synthetic fixture that exercises the real code path (not a reimplementation of its logic), run it locally, confirm the shape and sign of the result look right, *then* submit to Alpine.
-- **Every reported statistic needs a known-answer test.**
-  Plant a signal, require it recovered; plant nothing, require null.
-  The test imports the real function.
+- **Every measurement step carries a positive and a negative control** — project rule 4 in `docs/SPEC.md` is the binding form.
+  The positive control plants a known signal and requires the real, shipped code to recover it; the negative control feeds signal-free or mismatched data and requires null.
+  Both are declared per step in the task's `design.md` and implemented as known-answer tests that import the real function.
+- **State the detection power of every reported comparison.**
+  Every promoted comparison carries its minimum detectable effect at the declared α and power, computed from the same null bootstrap as its p-value, and positive-control plants are placed relative to it.
+  A null result without its MDE cannot be told apart from an underpowered experiment — the distinction rung 5's small cohort will turn on.
 - **Run the full local suite before every push**: `uv run pytest -q`.
 - **Run the project-rule tests for what you touched.**
   `uv run pytest tests/test_project_rules.py` every time — they may catch a violation the task never intended — plus `-m` for the steps named in the task's `design.md` header, e.g. `uv run pytest -m "step_split or step_score"`.
@@ -93,11 +99,13 @@ A result without a `.provenance.json` provenance record is not citable in a writ
 
 ## 4. Git and collaboration
 
-- **One branch at a time.**
-  Finish the work, open the pull request, merge it, then branch again.
-  Branching before the current piece lands puts two half-finished versions of the same documents on disk, and every question after that — which number is current, which file is real — has more than one answer.
-- **Branch names say what the work is**, not who or when.
-  A branch is named for a task and lives as long as that task.
+- **One task, one branch — and one at a time.**
+  Every task gets its own branch, cut from the trunk (`project-docs` until it merges; `main` after that) and named for the task slug, so the branch, the task folder, and the spec-tree entry share one identity.
+  Process changes a task motivates are made on the task's branch and land with it, not slipped onto the trunk.
+  Finish the work, open the pull request, merge it, then branch again: branching before the current piece lands puts two half-finished versions of the same documents on disk, and every question after that — which number is current, which file is real — has more than one answer.
+- **The branch carries every script in its result's provenance chain.**
+  Data downloads, input builds, model builds: if a script produced anything the task's result depends on, it is on the task's branch before the result is promoted.
+  A result whose producing scripts live elsewhere — an old worktree, an uncommitted file on the cluster — cannot be regenerated from the branch that claims it.
 - **Commit messages state the root cause, not just the change**, written so a future reader can tell what happened and why without re-deriving it from the diff.
   Do not put result numbers in a commit message — reference the output and the document that reports it, so there is one place a number can be corrected.
 - **Push to `origin`** (the `lagillenwater` fork).
@@ -136,3 +144,11 @@ Written down because each has already cost this project real time, and because t
   If a guarantee matters, it belongs where it cannot be routed around.
 - **A reversal with no decision entry is invisible to everyone but git log.**
   Reverting an architecture, a method or a data source and writing nothing down leaves the next reader to rediscover it from commit archaeology, or to reinstate what was deliberately removed.
+
+## Changes
+
+- **2026-08-27** (`rung0-replicate-ceiling`) — four changes, motivated by the first task run under this manual:
+  §1 gained the brainstorming approval gate — the first rung-0 session began editing documents on a revision request that had not approved the design; the gate existed in the brainstorming skill but not here, and this manual is what sessions follow.
+  §3's known-answer bullet was rewritten in positive/negative-control vocabulary bound to SPEC project rule 4, and a bullet was added requiring the minimum detectable effect beside every promoted comparison — one requirement, one vocabulary, across both documents.
+  §4's "one branch at a time" (which governed only branch timing, with naming in a separate bullet) was tightened to one-task-one-branch cut from the trunk, and a bullet was added requiring the branch to carry its result's full provenance chain of scripts.
+  §2's standing commit/push grant (previously unscoped `origin`) was scoped to the current task's branch, effective on design approval.

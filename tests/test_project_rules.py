@@ -258,3 +258,85 @@ def test_rule_03_edge_readme_is_revisited_when_the_ladder_changes() -> None:
         "the ladder in docs/SPEC.md changed but README.md did not; the summary a reader opens "
         "first has to be revisited in the same change"
     )
+
+
+# ======================================================================================
+# Rule 4 — every measurement step carries a positive and a negative control
+# ======================================================================================
+
+MEASUREMENT_STEPS = ("load", "build", "restrict", "split", "fit", "score", "null")
+
+
+@pytest.mark.step_score
+@pytest.mark.step_null
+def test_rule_04_every_task_declares_controls_for_its_measurement_steps() -> None:
+    """Scan: a task touching measurement steps declares both control signs for each of them.
+
+    Reads the ``**Steps**`` header line of each task's ``design.md``; for every measurement
+    step named there, the document's Controls section must hold an entry for that step
+    containing both a positive and a negative control. Does not prove the declared control is
+    implemented anywhere, or that a plant is placed where it proves something — the known-answer
+    tests are the implemented half, and the edge-case test below ties them to promotion.
+    """
+    folders = _task_folders()
+    if not folders:
+        pytest.skip("no task folders yet; nothing for this rule to check")
+
+    problems: list[str] = []
+    for folder in folders:
+        design = folder / "design.md"
+        if not design.exists():
+            problems.append(f"{folder.name}: no design.md")
+            continue
+        text = design.read_text()
+        header = re.search(r"\*\*Steps\*\*(.+)", text)
+        if header is None:
+            problems.append(f"{folder.name}: design.md has no **Steps** header line")
+            continue
+        steps = [s for s in MEASUREMENT_STEPS if re.search(rf"\b{s}\b", header.group(1))]
+        if not steps:
+            continue  # a documentation- or promotion-only task measures nothing
+        controls = re.search(r"^## .*[Cc]ontrols.*$", text, re.M)
+        if controls is None:
+            problems.append(
+                f"{folder.name}: touches measurement steps {steps} but design.md has no "
+                "Controls section"
+            )
+            continue
+        section = text[controls.end() :]
+        nxt = re.search(r"^## ", section, re.M)
+        if nxt:
+            section = section[: nxt.start()]
+        for step in steps:
+            entry = re.search(rf"\*\*{step}\*\*(.*?)(?=\n- \*\*|\Z)", section, re.S)
+            if entry is None:
+                problems.append(f"{folder.name}: no control entry for step '{step}'")
+                continue
+            for sign in ("positive", "negative"):
+                if sign not in entry.group(1).lower():
+                    problems.append(f"{folder.name}: step '{step}' lacks a {sign} control")
+    assert not problems, problems
+
+
+@pytest.mark.step_score
+@pytest.mark.step_null
+def test_rule_04_edge_promoted_tasks_have_known_answer_tests() -> None:
+    """A promoted result may not exist while no test carries the known-answer marker.
+
+    Declared controls precede their implementation while a task is being built, so this binds
+    only at promotion: once any result is promoted, the repository must hold at least one test
+    marked ``known_answer``. A shape scan — it cannot tell whether the marked tests cover the
+    controls the promoting task declared; the reviewer of that task's PR can.
+    """
+    if not _promoted_results():
+        pytest.skip("no promoted results yet; declared controls precede their implementation")
+
+    marked = [
+        p
+        for p in sorted((REPO / "tests").glob("test_*.py"))
+        if "known_answer" in p.read_text()
+    ]
+    assert marked, (
+        "results are promoted but no test file carries pytest.mark.known_answer; rule 4 "
+        "requires the declared controls to be implemented before a number becomes evidence"
+    )

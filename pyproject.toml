@@ -62,4 +62,7 @@ addopts = "-ra -q"
 markers = [
     "step_promote: writing a result and its provenance record",
     "step_document: recording specs, state, and the reversals behind them",
+    "step_score: computing a reported statistic from a measurement",
+    "step_null: building the negative-control distribution a statistic is read against",
+    "known_answer: plants a known answer and requires the real, shipped function to recover it",
 ]

@@ -19,8 +19,10 @@ wrong.
 | 5 | Does it transfer to patient-derived organoids? |
 | 6 | Does it hold when the prediction comes first? |
 
-Rungs are built one at a time, and a rung's spec arrives with its implementation, so the design
-of a measurement and the code producing it are reviewed together.
+Rungs are built one at a time — each task on its own branch, named for the task — and a rung's
+spec arrives with its implementation, so the design of a measurement and the code producing it
+are reviewed together. Every measurement ships with a positive and a negative control, and every
+promoted comparison reports the smallest effect it was powered to detect.
 
 ## The documents
 
@@ -38,8 +40,10 @@ or where a rung stands, it updates the README in the same change — see `PROCES
 
 ## Status
 
-No rung has landed yet; rung 0 is next. `results/` does not exist, so nothing here is evidence
-of anything. [`docs/STATE.md`](docs/STATE.md) is authoritative.
+No rung has landed yet. Rung 0 — the replicate ceiling every higher rung is read against — is in
+progress on the `rung0-replicate-ceiling` branch
+([design](docs/tasks/rung0-replicate-ceiling/design.md)). `results/` does not exist, so nothing
+here is evidence of anything. [`docs/STATE.md`](docs/STATE.md) is authoritative.
 
 ## Quickstart
 

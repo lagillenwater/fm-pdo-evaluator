@@ -16,7 +16,7 @@ No `results/` directory exists yet, so nothing in this repository is evidence of
 
 | Rung | What the spec requires | Status |
 |---|---|---|
-| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | Not started |
+| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | In progress — [docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md), branch `rung0-replicate-ceiling`; no number promoted |
 | 1 — held-out line | Prediction beating a floor and recovering a planted signal, as a fraction of rung 0 | Not started |
 | 2 — bulk read by a single-cell model | A synthesised population landing near the same material's real single cells, clearing a mismatched-line null | Not started |
 | 3 — cross-platform | Retention separable from a scrambled-line control | Not started |

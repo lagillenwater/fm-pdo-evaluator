@@ -47,16 +47,17 @@ The project rules below bind to steps, which is why they hold for every rung wit
 
 **Question** How much of a measured perturbation response is signal rather than assay noise?
 **Adds** A reference for every other rung to read against.
-**Measure** Split the replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the declared gene panel, Spearman-Brown corrected to full-data reliability, against a mismatched-pair null.
+**Measure** Split the replicate pool in half, correlate the two halves' per-(line, drug) expression deltas on the declared gene panel — per-pair Pearson, aggregated as the mean over pairs, the one statistic every delta rung reports — Spearman-Brown corrected to full-data reliability, against stratified mismatched-pair nulls and alongside a planted-signal positive control.
 **Passing means** A ceiling significantly above the mismatched-pair null. A rung above it can then be reported as a fraction of what is achievable rather than as a fraction of a hypothetical 1.0.
 **If it is low** A low ceiling does not stop the rungs above it; it rescales them. A score of 0.2 against a ceiling of 0.2 sits at the limit the assay supports, while the same 0.2 against a ceiling of 0.9 is a large shortfall — reporting a rung without its ceiling makes those two indistinguishable.
+**Tasks** [docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md) — OPEN.
 
 ### Rung 1 — can a model predict an unseen cell line, in-distribution?
 
 
 **Question** Given a cell line the model has never seen, can it predict that line's expression response to a drug?
 **Adds** One boundary: a cell line the model has not seen — where *unseen* is what the tranche's leakage profile asserts, not what the split assumes. Same platform, readout and substrate.
-**Measure** Correlation between predicted and measured delta on the held-out line, against a floor that must fail and a planted signal that must be recovered, reported as a fraction of rung 0's ceiling.
+**Measure** Correlation between predicted and measured delta on the held-out line, scored with rung 0's declared statistic — per-pair Pearson, mean over pairs, so the fraction is a ratio of like quantities — against a floor that must fail and a planted signal that must be recovered, reported as a fraction of rung 0's ceiling.
 **Passing means** The method beats its floor and recovers a stated fraction of the ceiling — the minimum competence claim, in the easiest setting the ladder offers.
 **How it contextualises the rest** A model that fails here fails in-distribution, so a shortfall at any rung above is not evidence about organoids, platforms or readouts — the same weakness is already present with none of those boundaries crossed.
 
@@ -143,7 +144,18 @@ The rules stay generic: which artifact violates one today is current state, and 
    **Edge case** a README can link correctly and still describe last month's ladder; no test reads prose for accuracy.
    **Edge-case test** `::test_rule_03_edge_readme_is_revisited_when_the_ladder_changes` — a change to the ladder in `docs/SPEC.md` requires `README.md` to have changed too. It proves the summary was revisited, not that it was revised well.
 
+4. **Every measurement step a task touches carries a positive and a negative control, and every promoted comparison reports its detection power.**
+   For each pipeline step that produces or transforms a measurement — load, build, restrict, split, fit, score, null; promote, release and document are bookkeeping — the task's `design.md` declares a positive control (plant a known signal, require the real code to recover it) and a negative control (feed signal-free or mismatched data, require null), implemented as known-answer tests that import the shipped functions.
+   Controls are placed relative to the measurement's minimum detectable effect, and every promoted comparison reports that MDE at the declared α and power beside its p-value — a null with no MDE cannot be told apart from an underpowered experiment.
+   **Step** score, null (declared at design time for every measurement step the task touches). **Enforced by** `tests/test_project_rules.py::test_rule_04_every_task_declares_controls_for_its_measurement_steps` (`-m "step_score or step_null"`).
+   **Edge case** the scan reads declarations, not implementations: a Controls section can describe a control no test implements, and a weak plant proves little. The known-answer tests are the implemented half, and they land with the code they validate.
+   **Edge-case test** `::test_rule_04_edge_promoted_tasks_have_known_answer_tests` — a promoted result may not exist while the repository carries no known-answer-marked test; skips until the first promotion.
+
 ## Process
 
 How work moves from question to promoted result — the lifecycle, the task folders, the compute boundary, the definition of done — is in [`docs/PROCESS.md`](PROCESS.md).
-The short version: every task gets a folder under `docs/tasks/`, a place in the ladder above, and a state entry; every promoted number carries provenance; every rule above is enforced by a named test.
+The short version: every task gets a folder under `docs/tasks/`, its own branch cut from the trunk, a place in the ladder above, and a state entry; every promoted number carries provenance; every rule above is enforced by a named test.
+
+## Changes
+
+- **2026-08-27** (`rung0-replicate-ceiling`) — Rung 0's measure now declares the ladder-wide statistic (per-pair Pearson, mean over pairs) with stratified nulls and a positive control, and rung 1's measure references the same statistic. Previously the aggregation was undeclared, and the old lineage had already paid for that: its rung-0 headline was a median while its rung 1 reported means, blocking fraction-of-ceiling. Project rule 4 added — positive and negative controls per measurement step, minimum detectable effect beside every promoted comparison. First task indexed in the spec tree: `rung0-replicate-ceiling`.
