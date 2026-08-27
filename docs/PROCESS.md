@@ -126,6 +126,7 @@ The rules these serve are in [`docs/SPEC.md`](SPEC.md); this is what they requir
   A rung above the current one is referenced in the sense of `docs/SPEC.md` — what the ladder will ask — never through unlanded code or documents a reviewer of this repository cannot open.
   Work from the archived development lineage is cited only by its archive branch or archive file, labeled as archive.
   A forward reference a reviewer cannot follow reads as missing work, and a worktree reference reads as work that exists when, for the repository, it does not.
+  Files on the cluster are cited by repository-relative path plus "on Alpine" (scratch locations in `$USER` form) — an absolute site path embeds a username and a mount layout no reviewer can use.
 
 ## 6. Definition of done
 
@@ -157,3 +158,4 @@ Written down because each has already cost this project real time, and because t
   §4's "one branch at a time" (which governed only branch timing, with naming in a separate bullet) was tightened to one-task-one-branch cut from the trunk, and a bullet was added requiring the branch to carry its result's full provenance chain of scripts.
   §2's standing commit/push grant (previously unscoped `origin`) was scoped to the current task's branch, effective on design approval.
 - **2026-08-27** (`rung0-replicate-ceiling`, later the same day) — §5 gained the landed-references rule during rung 0's spec review: the new dataset registry and design documents had cited datasets and derivations from the unlanded prior lineage, which a reviewer of the public repository cannot open. References in the sense of `docs/SPEC.md` remain correct; references into worktrees do not.
+- **2026-08-27** (`rung0-replicate-ceiling`, later still) — the landed-references bullet gained the path form: cluster files cited repository-relative plus "on Alpine", never by absolute site paths. The first design document to cite a cluster file had written the absolute path, username and mount layout included.
