@@ -63,8 +63,17 @@ the project runs on rather than what it might run on later.
 
 ## Datasets
 
+Every dataset the project reads is described in the registry, [docs/DATA.md](docs/DATA.md) —
+what it is, the paper behind it, the script and date of its download, and the processing applied
+after. Currently registered:
+
+- **Tahoe-100M** (Vevo Therapeutics; Zhang et al. 2025, CC0-1.0) — ~100M single-cell profiles,
+  50 cancer cell lines, ~1,100 drug–dose perturbations on 14 plates with plate-matched DMSO
+  controls. The delta rungs (0–3) read its pseudobulk differential-expression table, restricted
+  to the 32 drugs shared with GDSC2.
 - **Soragni 2024** sarcoma PDTOs ([Synapse PDTOSarcoma](https://www.synapse.org/PDTOSarcoma)) —
-  the organoid cohort rung 5 evaluates against, held as a frozen embargoed holdout.
+  the organoid cohort rung 5 evaluates against, held as a frozen embargoed holdout; enters the
+  registry with its rung.
 
 ## License
 
