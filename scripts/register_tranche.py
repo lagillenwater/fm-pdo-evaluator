@@ -91,6 +91,12 @@ def register(
         raise SystemExit(f"{out} exists; a tranche is ingested once, then immutable")
     version, etags = read_download_metadata(data_dir, config)
     manifest = shard_manifest(data_dir, config)
+    unverified = [rel for rel, _, _ in manifest if Path(rel).name not in etags]
+    if unverified:
+        raise SystemExit(
+            f"{len(unverified)} shard(s) have no download-time metadata entry "
+            f"(first: {unverified[0]}) -- refusing to register unverified data"
+        )
     mismatched = [
         rel for rel, _, sha in manifest if Path(rel).name in etags and etags[Path(rel).name] != sha
     ]

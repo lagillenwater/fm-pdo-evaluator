@@ -96,3 +96,22 @@ def test_registration_writes_a_valid_tranche_and_refuses_overwrite(tmp_path: Pat
             description="d",
             out=out,
         )
+
+
+def test_registration_refuses_unverified_shards(tmp_path: Path) -> None:
+    data = _fixture_pool(tmp_path, {"s1.parquet": b"AAA"})
+    # Write an extra shard file without a matching .metadata entry
+    (data / CONFIG / "s2.parquet").write_bytes(b"BBB")
+    with pytest.raises(SystemExit, match="metadata"):
+        rt.register(
+            data_dir=data,
+            config=CONFIG,
+            tranche_id="t.v1",
+            source="src",
+            ingestion_date="2026-07-24",
+            patient_count=0,
+            sample_count=50,
+            drug_count=32,
+            description="d",
+            out=tmp_path / "t.v1.json",
+        )
