@@ -18,6 +18,12 @@ Reuses the measurement core in `scripts/delta_reproducibility.py` (`build_split_
 `score_split_half`, `stratified_null_draws`, `masked_rowwise_pearson`) rather than
 reimplementing it, loaded the same way `tests/test_rung0_controls.py` loads it.
 
+Deliberate divergence from `delta_reproducibility.py`: without `--panel-file`, this script
+scores on all genes present in the data rather than falling back to a top-HVG subset (there is
+no `--n-hvg` here). A verification tool should score on exactly the panel the ceiling it is
+checking used, never a different gene set of its own choosing -- the sbatch job always passes
+`--panel-file`, so the fallback exists only for ad hoc local runs.
+
   python scripts/derangement_null.py --local-dir /scratch/alpine/$USER/tahoe_pseudobulk_de \\
       --drug-names-file <a file of Tahoe drug names, one per line> \\
       --panel-file results/rung1_panel/common_panel.txt --out-dir rung0_outputs
@@ -95,6 +101,16 @@ def derangement_null(
     for k in range(n_perm):
         sigma = sample_derangement(rng, n)
         perm_means[k] = float(np.nanmean(dr.masked_rowwise_pearson(a, b[sigma], min_genes)))
+
+    # An all-NaN row-correlation vector for a single derangement (every mismatched pairing in
+    # that draw falling below min_genes shared finite entries) would put a NaN into perm_means.
+    # np.mean/np.var/np.std then propagate that NaN into perm_mean_mean, perm_mean_sd, and
+    # design_effect, while p_exact's `>=` comparison silently treats NaN as False -- so a
+    # broken draw would still produce an ordinary-looking, wrong number instead of an error.
+    assert not np.isnan(perm_means).any(), (
+        "a derangement produced zero scoreable pairs -- investigate before trusting "
+        "design_effect/p_exact"
+    )
 
     pool = dr.stratified_null_draws(piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes)[
         "any_pair"

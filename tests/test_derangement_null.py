@@ -28,10 +28,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# The leading underscore marks this as not part of delta_reproducibility's public surface, not
-# a boundary this sibling test module needs to respect -- both files test the same rung 0 task,
-# and re-declaring the fixture builder here would be the duplication PROCESS §3 tells tests not
-# to reintroduce.
+# `_write_fixture_pool` lives in tests/test_rung0_controls.py; the leading underscore marks it
+# as private to that module, not a boundary this sibling test file needs to respect -- both
+# test the same rung 0 task, and re-declaring the fixture builder here would be the duplication
+# PROCESS §3 tells tests not to reintroduce. The suppression covers importing a sibling test
+# module's private helper for exactly that reason.
 from tests.test_rung0_controls import _write_fixture_pool  # pyright: ignore[reportPrivateUsage]
 
 pytestmark = pytest.mark.known_answer
