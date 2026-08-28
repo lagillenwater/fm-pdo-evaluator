@@ -98,6 +98,24 @@ def test_zero_signal_pool_is_not_significant(tmp_path: Path) -> None:
     )
 
 
+def test_derangement_null_rejects_too_few_pairs_or_too_few_permutations() -> None:
+    """A single finite pair has no derangement (rejection sampling can never satisfy "no
+    fixed points" for n=1), and n_perm=1 gives a null distribution with no spread -- both
+    are degenerate inputs the function should refuse before entering the permutation loop,
+    rather than failing obscurely inside `sample_derangement` or downstream variance math."""
+    import pandas as pd
+
+    one_pair = pd.DataFrame([[1.0, 2.0, 3.0]], index=["a"])
+    with pytest.raises(ValueError, match="at least 2"):
+        dn.derangement_null(one_pair, one_pair, np.array([0.9]), min_genes=1, n_perm=99, seed=0)
+
+    two_pairs = pd.DataFrame([[1.0, 2.0], [3.0, 4.0]], index=["a", "b"])
+    with pytest.raises(ValueError, match="n_perm"):
+        dn.derangement_null(
+            two_pairs, two_pairs, np.array([0.9, 0.8]), min_genes=1, n_perm=1, seed=0
+        )
+
+
 def test_design_effect_sits_in_a_sane_band_on_near_independent_rows(tmp_path: Path) -> None:
     """The design effect the exchangeable-pool bootstrap ignores, measured on data with no
     shared drug or line component (drug_sd = 0.0, the default -- rows are as close to

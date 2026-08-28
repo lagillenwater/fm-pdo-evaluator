@@ -26,7 +26,10 @@ export CONDA_PREFIX="/projects/$USER/software/anaconda/envs/stack"
 export PYTHONPATH="$REPO/src"
 export PYTHONUNBUFFERED=1
 
-python -c "import pydantic" 2>/dev/null || pip install -q "pydantic>=2.7"
+# Pinned to the pyproject floor with an upper bound so a fallback install can't drift the
+# persistent stack env to an untested major version. Lock-based provisioning (containers/uv on
+# Alpine) is a declared follow-up, not done here.
+python -c "import pydantic" 2>/dev/null || pip install -q "pydantic>=2.7,<3"
 
 python scripts/register_tranche.py \
     --data-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de" \

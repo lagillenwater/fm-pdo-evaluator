@@ -38,7 +38,10 @@ export HF_HUB_CACHE="/scratch/alpine/$USER/hf"   # cache off /projects
 # do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
 
-python -c "import duckdb" 2>/dev/null || pip install -q duckdb
+# Pinned to the pyproject floor with an upper bound so a fallback install can't drift the
+# persistent stack env to an untested major version. Lock-based provisioning (containers/uv on
+# Alpine) is a declared follow-up, not done here.
+python -c "import duckdb" 2>/dev/null || pip install -q "duckdb>=1.0,<2"
 
 python scripts/derangement_null.py \
     --local-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de" \

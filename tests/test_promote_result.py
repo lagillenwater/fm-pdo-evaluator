@@ -87,6 +87,15 @@ def test_promotion_refuses_when_the_promoted_copy_differs(repo: Path) -> None:
         _promote(repo)
 
 
+def test_promotion_refuses_repromotion_when_unchanged(repo: Path) -> None:
+    """A provenance record is immutable once written, even when the result did not change --
+    re-promoting must be a deliberate act (remove the old record first), not a silent
+    overwrite."""
+    _promote(repo)
+    with pytest.raises(SystemExit, match=r"record|immutable"):
+        _promote(repo)
+
+
 def test_promotion_refuses_a_result_with_no_inputs(repo: Path) -> None:
     with pytest.raises(SystemExit, match="input"):
         _promote(repo, inputs=[])

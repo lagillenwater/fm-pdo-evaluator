@@ -94,6 +94,12 @@ def derangement_null(
     a = piv0_f.to_numpy(dtype=float)
     b = piv1_f.to_numpy(dtype=float)
     n = a.shape[0]
+    if n < 2:
+        raise ValueError(
+            f"derangement_null needs at least 2 finite (line, drug) pairs to derange, got {n}"
+        )
+    if n_perm < 2:
+        raise ValueError(f"derangement_null needs n_perm >= 2, got {n_perm}")
     observed_mean = float(np.mean(r[finite]))
 
     rng = np.random.default_rng(seed)

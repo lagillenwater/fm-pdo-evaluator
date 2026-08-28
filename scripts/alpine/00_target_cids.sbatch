@@ -37,6 +37,8 @@ dm = load_dataset("tahoebio/Tahoe-100M", "drug_metadata", split="train").to_pand
 dm = dm[dm["pubchem_cid"].notna()].copy()
 dm["cid"] = dm["pubchem_cid"].map(lambda c: str(int(c)))
 mapped = sorted({c for c in dm["cid"] if c in targets}, key=int)
+if not mapped:
+    raise RuntimeError("no GDSC2 target CIDs matched Tahoe drug metadata")
 out = repo / "data/static/tahoe_target_cids.txt"
 out.write_text("\n".join(mapped) + "\n")
 print(f"{len(mapped)} of {len(targets)} GDSC2 CIDs are Tahoe drugs -> {out}")

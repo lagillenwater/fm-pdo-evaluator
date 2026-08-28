@@ -37,7 +37,10 @@ export HF_HUB_CACHE="/scratch/alpine/$USER/hf"   # cache off /projects
 # do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
 
-python -c "import duckdb, matplotlib" 2>/dev/null || pip install -q duckdb matplotlib
+# Pinned to the pyproject floors with upper bounds so a fallback install can't drift the
+# persistent stack env to an untested major version. Lock-based provisioning (containers/uv on
+# Alpine) is a declared follow-up, not done here.
+python -c "import duckdb, matplotlib" 2>/dev/null || pip install -q "duckdb>=1.0,<2" "matplotlib>=3.8,<4"
 
 python scripts/delta_reproducibility.py \
     --local-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de" \

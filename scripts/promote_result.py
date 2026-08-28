@@ -99,6 +99,14 @@ def promote(
             f"refusing: {dest.relative_to(repo)} exists and its checksum differs from "
             f"{result} -- the promoted copy and the task-side copy differ"
         )
+    record_path = dest.with_suffix(".provenance.json")
+    if record_path.exists():
+        raise SystemExit(
+            f"refusing: {record_path.relative_to(repo)} already exists -- a provenance "
+            "record is immutable once written, even when the result is unchanged. "
+            "A deliberate re-promotion (e.g. a correction) requires removing the old "
+            "record first"
+        )
     dest.write_bytes(result.read_bytes())
 
     record = PromotedResult(
@@ -121,7 +129,6 @@ def promote(
         ),
         promoted_at=datetime.now(UTC),
     )
-    record_path = dest.with_suffix(".provenance.json")
     record_path.write_text(record.model_dump_json(indent=2) + "\n")
     print(f"promoted -> {dest.relative_to(repo)}")
     print(f"           {record_path.relative_to(repo)}")
