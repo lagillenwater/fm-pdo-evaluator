@@ -561,7 +561,9 @@ git add scripts/delta_reproducibility.py tests/test_rung0_controls.py
 git commit -m "feat: rung-0 measurement core, testable and vectorized, with build/score/null controls"
 ```
 
----### Task 4: Reporting layer — mean headline, MDE, terciles, per-gene diagnostic, pool description, figure
+---
+
+### Task 4: Reporting layer — mean headline, MDE, terciles, per-gene diagnostic, pool description, figure
 
 **Files:**
 - Modify: `scripts/delta_reproducibility.py`
