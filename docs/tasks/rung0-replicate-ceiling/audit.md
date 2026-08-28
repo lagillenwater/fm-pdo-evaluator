@@ -15,7 +15,7 @@ recounts of the committed CSVs, diffs against the archive branch, a full-suite r
 passed / 0 skipped). Verdicts: ALIGNED, DEVIATION-RECORDED (a dated entry exists), DRIFT
 (departed, unrecorded).
 
-**Counts — 68 clauses: ALIGNED 47, DEVIATION-RECORDED 3, DRIFT 18.**
+**Counts — 68 clauses: ALIGNED 47, DEVIATION-RECORDED 3, DRIFT 18** (the first auditor's own enumeration; the condensed tables below merge some clause ranges in transcription and expand to 69/49/2/18 — the DRIFT set of 18 reconciles exactly either way, and it is the set that matters).
 
 Auditor's judgment, verbatim: the scientific artifact is faithful and independently checkable —
 the tranche content hash recomputed from the committed manifest, both promotion input hashes,
@@ -113,9 +113,9 @@ discrepancy invisible in every document.
 Gates green at every commit (ruff check/format, strict pyright, 52 passed / 0 skipped — two new
 restrict-control tests). The promoted record and CSV untouched, verified by diff.
 
-1. D14 (declared vs scored panel) — reconciled in design.md, DATA.md, and summary.md with the
-   measured numbers; the solvate-in-the-null placement stated as conservative; dated design
-   entry. FIXED.
+1. D14 (declared vs scored panel) — the measured reconciliation stated in design.md, DATA.md,
+   and summary.md; the solvate-in-the-null placement stated as conservative at the design
+   level; dated design entry. FIXED.
 2. D26 (plant-vs-MDE scope) — **ruled after the wave** (below). RECORDED.
 3. S6/P10–P15 (unrecorded rulings) — dated blocks at design.md's and plan.md's feet covering
    all six rulings plus pyarrow. RECORDED.
@@ -148,3 +148,28 @@ their MDEs, which would trade an exact known answer for a fragile one.
 Pending: a fresh reader re-checks the 18 drifted clauses and the reverse-direction items against
 the fixed tree; the audit passes only when every item verdicts FIXED or RECORDED. The verdict is
 appended here.
+## Re-audit (2026-08-28, fresh reader, at `5d0c7c3`)
+
+Every item verified by reading shipped code or recomputing the number, never by trusting a
+document: all 17 remaining drifted clauses, both reverse-direction items, and all four
+additional findings verdicted FIXED or RECORDED; the promoted record confirmed unchanged since
+`3b674de`; the suite green at 52 passed / 0 skipped; four independent recomputations (the pool
+arithmetic, the per-gene diagnostic's every stated number, the planted-0.8 recovery at three
+seeds, the 2.031× plant-to-MDE ratio) reproduced the documents' values exactly.
+
+**Verdict: NOT PASSED on the first pass** — one open item and four one-line issues:
+
+1. P5 residual: `verification.md` still cited the untracked execution-ledger file once more, in
+   the transient-SSH note. Removed.
+2. This document's headline counts did not reconcile with its own condensed tables (transcription
+   merged clause ranges). Annotated above rather than silently edited; the 18-clause DRIFT set
+   reconciles exactly either way.
+3. Stale "As of" headers on `design.md` and `docs/DATA.md` (2026-08-27 under 2026-08-28 content).
+   Updated.
+4. The fix-wave disposition overstated D14 ("all three" documents carry the null-placement
+   clause; it is a design-level statement). Disposition wording corrected above.
+5. Pre-existing, first audit missed it: a broken em-dash ("__ see note below") in `design.md`'s
+   Tahoe bullet, from before the audit. Repaired to name the actual section.
+
+All five corrections applied in the commit carrying this entry; a confirmation pass by a fresh
+reader checked exactly these lines. Its verdict:

@@ -1,6 +1,6 @@
 # Datasets
 
-**As of** 2026-08-27.
+**As of** 2026-08-28.
 
 The registry of every dataset this project reads: what each one is, where it came from, the
 script and date of its download, and what was done to it afterwards. A task's `design.md` links

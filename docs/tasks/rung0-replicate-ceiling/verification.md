@@ -47,7 +47,7 @@ git add docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv docs/
 git commit -m "run: rung-0 ceiling outputs and job log, job 31758395"   # 0ce4ba7
 ```
 
-One transient SSH failure (Permission denied — network) occurred on 2026-08-27 during this sequence; it resolved itself on retry, no re-auth needed (`task-8-facts.md`).
+One transient SSH failure (Permission denied — network) occurred on 2026-08-27 during this sequence; it resolved itself on retry, no re-auth needed.
 
 ## Job log — summary block (tail of `results/rung0-replicate-ceiling/delta-repro-31758395.out`)
 
