@@ -173,3 +173,9 @@ seeds, the 2.031× plant-to-MDE ratio) reproduced the documents' values exactly.
 
 All five corrections applied in the commit carrying this entry; a confirmation pass by a fresh
 reader checked exactly these lines. Its verdict:
+
+**Confirmation pass (fresh reader, at `0c4e74b`): all five corrections CONFIRMED, promoted
+record confirmed unchanged. The audit is PASSED.** One caveat this task carries by construction:
+its audit ran after promotion (the stage order was corrected because of it); the promoted record
+was verified unchanged through every audit-driven edit, so the number the record pins is the
+number the documents now describe.
