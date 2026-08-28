@@ -316,8 +316,11 @@ def test_rule_04_every_task_declares_controls_for_its_measurement_steps() -> Non
                 problems.append(f"{folder.name}: no control entry for step '{step}'")
                 continue
             for sign in ("positive", "negative"):
-                if sign not in entry.group(1).lower():
-                    problems.append(f"{folder.name}: step '{step}' lacks a {sign} control")
+                # Require the declaration FORM "positive:"/"negative:" (colon required), not a
+                # bare occurrence of the word -- prose like "positive control omitted" contains
+                # the word "positive" without declaring one, and used to pass this scan.
+                if f"{sign}:" not in entry.group(1).lower():
+                    problems.append(f"{folder.name}: step '{step}' lacks a '{sign}:' control")
     assert not problems, problems
 
 

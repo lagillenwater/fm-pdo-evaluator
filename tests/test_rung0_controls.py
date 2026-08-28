@@ -99,6 +99,42 @@ def test_build_negative_no_replication_yields_no_scoreable_pairs(tmp_path: Path)
     assert de.dropna(subset=["lfc0", "lfc1"]).empty
 
 
+def test_build_edge_unmatched_target_drugs_return_an_empty_frame(tmp_path: Path) -> None:
+    """ "Empty input" (a pool with zero rows for the requested target drugs) and "unmatched
+    target identifiers" (an explicit query for drug names absent from the file) are the same
+    mechanism in the real loader: `build_split_half_frame`'s WHERE clause filters on
+    `target_names`, so both reduce to requesting drugs the pool does not contain. Read off the
+    real function rather than assumed: it returns an empty DataFrame, not an error."""
+    path = _write_fixture_pool(tmp_path)  # the fixture pool only ever has drugs D0, D1, D2
+    de, chosen = dr.build_split_half_frame(
+        [str(path)], ["ZZZ_NOT_A_REAL_DRUG"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    assert de.empty, "requesting target drugs absent from the pool must return an empty frame"
+    assert chosen == "plate"  # the replicate column is still resolved; only the rows are empty
+
+
+def test_build_edge_all_nan_pair_drops_out_after_the_dropna_path(tmp_path: Path) -> None:
+    """A (line, drug) pair whose log2FoldChange is NaN across every one of its rows aggregates
+    to NaN in both halves (DuckDB's avg() over an all-NaN DOUBLE column returns NaN, verified
+    directly, not NULL -- so this is a distinct code path from a pair simply absent from the
+    data) and is then removed by the `dropna(subset=["lfc0", "lfc1"])` every caller applies
+    before scoring."""
+    path = _write_fixture_pool(tmp_path)
+    df = pd.read_parquet(path)
+    nan_mask = (df["Cell_ID_DepMap"] == "L0") & (df["drug"] == "D0")
+    assert nan_mask.any(), "fixture must actually contain the (L0, D0) pair to NaN out"
+    df.loc[nan_mask, "log2FoldChange"] = np.nan
+    df.to_parquet(path, index=False)
+
+    de, _ = dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    remaining_pairs = {tuple(row) for row in de[["patient", "drug"]].drop_duplicates().to_numpy()}
+    assert ("L0", "D0") not in remaining_pairs, "an all-NaN pair must not survive the dropna path"
+    assert ("L1", "D0") in remaining_pairs, "other pairs must be unaffected"
+
+
 def test_score_positive_planted_reliability_is_recovered(tmp_path: Path) -> None:
     # signal_sd = noise_sd = 1, 8 plates -> 4 per half; half-mean noise sd^2 = 1/4.
     # Expected r = 1 / (1 + 0.25) = 0.8.
