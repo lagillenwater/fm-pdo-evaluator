@@ -254,3 +254,49 @@ def test_stratified_planted_signal_clears_both_nulls(tmp_path: Path) -> None:
     assert strat["p_exact_diff_drug"] < 0.05, (
         f"planted signal must clear the diff-drug null, got p={strat['p_exact_diff_drug']}"
     )
+
+
+def test_stratified_summary_reports_transfer_scope_and_diff_drug_observed_mean(
+    tmp_path: Path,
+) -> None:
+    """`same_drug_rows_equal_n` records whether the same-drug design effect (measured over the
+    >=2-row-drug-group subset) transfers directly to the promoted `p_vs_same_drug` (measured
+    over every row): the fixture's default composition gives every drug all 4 lines, so no row
+    is excluded and the two counts coincide. `observed_mean_diff_drug_rows` is recorded per
+    stratum purely so the summary is self-describing -- by construction (the diff-drug stratum
+    excludes no rows) it equals the global observed mean exactly."""
+    path = _write_fixture_pool(tmp_path, signal_sd=1.0, noise_sd=1.0)
+    de, _ = dn.dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dn.dr.score_split_half(de, set(de["gene_name"].unique()))
+    strat, _ = dn.stratified_derangement_null(piv0, piv1, r, min_genes=50, n_perm=99, seed=0)
+    assert strat["n_rows_same_drug"] == 12, "fixture default: 4 lines x 3 drugs, no singletons"
+    assert strat["same_drug_rows_equal_n"] is True
+    r_fin = r[np.isfinite(r)]
+    assert strat["observed_mean_diff_drug_rows"] == round(float(np.mean(r_fin)), 4)
+
+
+def test_stratified_design_effect_is_nan_when_the_matching_pool_is_too_small(
+    tmp_path: Path,
+) -> None:
+    """A stratum's `stratified_null_draws` pool below `MIN_NULL_DRAWS_FOR_DESIGN_EFFECT` (10,
+    mirroring `bootstrap_aggregate_pvalue`'s `min_null_draws` spirit) must not feed
+    `np.var(ddof=1)` silently -- that stratum's design_effect is nan instead of a numerically
+    fragile ratio built on too few draws. n_perm=5 caps both the derangement draws AND
+    `stratified_null_draws`' pool size at <=5 for every stratum, regardless of how many
+    candidate mismatched pairs the fixture actually has."""
+    path = _write_fixture_pool(tmp_path, signal_sd=0.0, noise_sd=1.0)
+    de, _ = dn.dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dn.dr.score_split_half(de, set(de["gene_name"].unique()))
+    strat, _ = dn.stratified_derangement_null(piv0, piv1, r, min_genes=50, n_perm=5, seed=0)
+    assert np.isnan(strat["design_effect_same_drug"]), (
+        f"expected nan for a <10-draw pool, got {strat['design_effect_same_drug']}"
+    )
+    assert np.isnan(strat["design_effect_diff_drug"]), (
+        f"expected nan for a <10-draw pool, got {strat['design_effect_diff_drug']}"
+    )

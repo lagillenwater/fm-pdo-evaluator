@@ -104,23 +104,55 @@ def sample_cross_derangement(
     ``diff_drug`` mask (different line and different drug).
 
     Starts from a uniform random permutation, then repeatedly sweeps the violating positions
-    and swaps each with a uniformly random other position, until no violations remain. With the
-    real pool (~33 drugs, ~50 lines, ~1,600 rows) violations are sparse -- most random partners
+    and swaps each with a uniformly random other position (redrawing on a self-swap, which can
+    never resolve the violation it was meant to fix), until no violations remain. With the real
+    pool (~33 drugs, ~50 lines, ~1,600 rows) violations are sparse -- most random partners
     already differ on both drug and line -- so this converges in a handful of sweeps;
     ``max_sweeps`` bounds a pathological composition (e.g. one drug shared by most rows) so a
     non-converging repair fails loudly instead of looping forever.
+
+    Caveat, MEASURED not assumed: the repair converges to SOME permutation satisfying every
+    constraint, but the swap process is a local repair, not `sample_derangement`'s plain
+    rejection sampling (which is exactly uniform over derangements by construction) -- and it
+    is NOT uniform over the constraint-satisfying set. An empirical probe (brute-force
+    enumerating all 448 valid permutations on a small 3-drug x 3-line, 9-row fixture, then
+    50,000 draws from this sampler) found a clear departure: chi-square goodness-of-fit against
+    uniform gave statistic 2857 on 447 degrees of freedom (expectation ~447 under uniform),
+    counts ranging 51-209 against a mean of 112, and a coefficient of variation of counts
+    (0.24) roughly 2.5x the ~0.09 a uniform multinomial would produce at this sample size --
+    not a borderline result. The exact p-value this feeds is therefore exact only under
+    exchangeability of the *draws this sampler actually generates*, not under a formal
+    uniform-over-the-constraint-set guarantee; every p_exact this script has reported (real run
+    and fixtures alike) sits far from any decision boundary (<=0.007), where a biased sampling
+    distribution over derangements sharing the SAME symmetric constraint structure as the
+    observed matched pairing is unlikely to flip significance, but this is a real limitation
+    of the "exact" framing, not a cosmetic one -- a provably uniform cross-derangement sampler
+    (e.g. Metropolis-Hastings with a detailed-balance-respecting proposal) is future work, not
+    done here.
     """
     n = len(drugs)
+    if n < 2:
+        raise ValueError(f"sample_cross_derangement needs at least 2 rows, got {n}")
     sigma = rng.permutation(n)
     idx = np.arange(n)
+
+    def _violations(s: np.ndarray) -> np.ndarray:
+        return (s == idx) | (drugs[s] == drugs) | (lines[s] == lines)
+
     for _ in range(max_sweeps):
-        bad = (sigma == idx) | (drugs[sigma] == drugs) | (lines[sigma] == lines)
-        bad_idx = np.flatnonzero(bad)
+        bad_idx = np.flatnonzero(_violations(sigma))
         if bad_idx.size == 0:
             return sigma
-        partners = rng.integers(0, n, size=bad_idx.size)
-        for i, j in zip(bad_idx.tolist(), partners.tolist(), strict=True):
+        for i in bad_idx.tolist():
+            j = i
+            while j == i:  # a self-swap is a no-op and can never fix row i's violation
+                j = int(rng.integers(0, n))
             sigma[i], sigma[j] = sigma[j], sigma[i]
+    # The check above runs at the START of each sweep; the LAST sweep's swaps may have repaired
+    # every violation with no further iteration to notice. Check once more before giving up, so
+    # a last-pass repair is honored rather than discarded.
+    if not _violations(sigma).any():
+        return sigma
     raise RuntimeError(
         f"sample_cross_derangement failed to repair every violation within {max_sweeps} sweeps "
         f"(n={n}) -- the diff-drug constraint may be unsatisfiable for this drug/line "
@@ -135,6 +167,8 @@ def derangement_null(
     min_genes: int,
     n_perm: int,
     seed: int,
+    *,
+    pools: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, float], np.ndarray]:
     """The exact-permutation null for the split-half mean, carrying the half-profile-sharing
     dependence by construction instead of treating the mismatched-pair pool as exchangeable.
@@ -149,6 +183,12 @@ def derangement_null(
     same size would have (``stratified_null_draws``'s ``any_pair`` stratum, the pool a
     derangement's composition matches): the number the write-up caveat in
     `docs/tasks/rung0-replicate-ceiling/verification.md` could only bound theoretically.
+
+    ``pools``, if given, must be `stratified_null_draws`'s return value computed on the same
+    (``piv0_f``, ``piv1_f``, ``n_perm``, ``seed``, ``min_genes``) this function would use --
+    the caller (`main`, sharing one call with `stratified_derangement_null`) passes it to avoid
+    recomputing an identical pool twice; omitted, it is computed here exactly as before, so
+    every existing call site (and the standalone-callability known-answer tests) is unaffected.
 
     Returns the summary dict (one row's worth of columns) and the raw array of ``n_perm``
     permutation means.
@@ -182,9 +222,11 @@ def derangement_null(
         "design_effect/p_exact"
     )
 
-    pool = dr.stratified_null_draws(piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes)[
-        "any_pair"
-    ]
+    if pools is None:
+        pools = dr.stratified_null_draws(
+            piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes
+        )
+    pool = pools["any_pair"]
     var_pool = float(np.var(pool, ddof=1))
     se_iid = float(np.sqrt(var_pool / n))
     design_effect = float(np.var(perm_means, ddof=1) / (var_pool / n))
@@ -209,6 +251,13 @@ def derangement_null(
     return summary, perm_means
 
 
+#: Mirrors `fmharness.statistics.bootstrap_aggregate_pvalue`'s `min_null_draws` default: a
+#: pool this small cannot support a variance estimate `design_effect`'s denominator needs, so
+#: below this many finite draws the design effect is reported as nan rather than a numerically
+#: fragile (or silently nan/inf) ratio.
+MIN_NULL_DRAWS_FOR_DESIGN_EFFECT = 10
+
+
 def stratified_derangement_null(
     piv0: pd.DataFrame,
     piv1: pd.DataFrame,
@@ -216,6 +265,8 @@ def stratified_derangement_null(
     min_genes: int,
     n_perm: int,
     seed: int,
+    *,
+    pools: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
     """Stratum-preserving derangement nulls for the promoted PER-STRATUM p-values.
 
@@ -231,16 +282,32 @@ def stratified_derangement_null(
       different line). Rows in a singleton drug group have no derangement and are excluded from
       both the null and the observed comparator, which is therefore computed over the SAME row
       subset (``observed_mean_same_drug_rows``, ``n_rows_same_drug``) rather than the full pool.
+      ``same_drug_rows_equal_n`` records whether that subset is the FULL finite pool (every drug
+      has >= 2 rows): only when it is does ``design_effect_same_drug`` transfer directly to the
+      promoted ``p_vs_same_drug`` (computed over all ``n`` rows) -- when it does not, the design
+      effect describes only the multi-row subset and that scope must be stated wherever it is
+      cited. ``observed_mean_diff_drug_rows`` is recorded alongside it purely so the summary is
+      self-describing per stratum; it equals the global ``observed_mean`` by construction, since
+      the diff-drug stratum (unlike same-drug) excludes no rows.
     - ``diff_drug``: `sample_cross_derangement` -- every draw changes both line and drug,
       exactly `stratified_null_draws`'s ``diff_drug`` mask, over all finite rows.
 
     Each stratum's ``design_effect`` is the derangement-null variance of the mean over the
     matching `stratified_null_draws` pool's variance at that stratum's own row count -- the same
-    construction as `derangement_null`'s design effect, applied per stratum.
+    construction as `derangement_null`'s design effect, applied per stratum. If a stratum's pool
+    has fewer than `MIN_NULL_DRAWS_FOR_DESIGN_EFFECT` finite draws (mirroring
+    `bootstrap_aggregate_pvalue`'s ``min_null_draws`` spirit), that design effect is reported as
+    nan, with a printed warning, rather than a ratio built on too few draws to estimate a
+    variance from.
 
-    Returns a summary dict with ``_same_drug``/``_diff_drug``-suffixed keys (plus the two
-    same-drug-only row-count/observed-mean keys) and a dict of the two raw perm-mean arrays,
-    keyed ``"same_drug"``/``"diff_drug"``.
+    ``pools``, if given, must be `stratified_null_draws`'s return value computed on the same
+    (``piv0_f``, ``piv1_f``, ``n_perm``, ``seed``, ``min_genes``) this function would use --
+    the caller (`main`, sharing one call with `derangement_null`) passes it to avoid recomputing
+    an identical pool twice; omitted, it is computed here exactly as before.
+
+    Returns a summary dict with ``_same_drug``/``_diff_drug``-suffixed keys (plus
+    ``n_rows_same_drug``, ``same_drug_rows_equal_n``, and the two per-stratum observed-mean
+    keys) and a dict of the two raw perm-mean arrays, keyed ``"same_drug"``/``"diff_drug"``.
     """
     finite = np.isfinite(r)
     piv0_f, piv1_f = piv0.loc[finite], piv1.loc[finite]
@@ -289,25 +356,44 @@ def stratified_derangement_null(
         perm_means_diff[k] = float(np.nanmean(row_r))
     assert not np.isnan(perm_means_diff).any(), "a cross derangement produced zero scoreable pairs"
 
-    pools = dr.stratified_null_draws(piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes)
+    if pools is None:
+        pools = dr.stratified_null_draws(
+            piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes
+        )
 
-    def _stratum(perm_means: np.ndarray, pool: np.ndarray, n_used: int, observed: float) -> dict:
-        var_pool = float(np.var(pool, ddof=1))
-        design_effect = float(np.var(perm_means, ddof=1) / (var_pool / n_used))
+    def _stratum(
+        name: str, perm_means: np.ndarray, pool: np.ndarray, n_used: int, observed: float
+    ) -> dict:
+        pool_finite = pool[np.isfinite(pool)]
+        if pool_finite.size < MIN_NULL_DRAWS_FOR_DESIGN_EFFECT:
+            print(
+                f"WARNING: {name} stratum's stratified_null_draws pool has only "
+                f"{pool_finite.size} finite draws (< {MIN_NULL_DRAWS_FOR_DESIGN_EFFECT}); "
+                "design_effect set to nan rather than computed from too few draws to estimate "
+                "a variance from"
+            )
+            design_effect = float("nan")
+        else:
+            var_pool = float(np.var(pool_finite, ddof=1))
+            design_effect = float(np.var(perm_means, ddof=1) / (var_pool / n_used))
         p_exact = float((1 + np.sum(perm_means >= observed)) / (1 + n_perm))
         return {
             "perm_mean_mean": round(float(np.mean(perm_means)), 4),
             "perm_mean_sd": round(float(np.std(perm_means, ddof=1)), 4),
             "p_exact": round(p_exact, 4),
-            "design_effect": round(design_effect, 3),
+            "design_effect": round(design_effect, 3)
+            if np.isfinite(design_effect)
+            else design_effect,
         }
 
-    same = _stratum(perm_means_same, pools["same_drug"], n_multi, observed_mean_multi)
-    diff = _stratum(perm_means_diff, pools["diff_drug"], n, observed_mean)
+    same = _stratum("same_drug", perm_means_same, pools["same_drug"], n_multi, observed_mean_multi)
+    diff = _stratum("diff_drug", perm_means_diff, pools["diff_drug"], n, observed_mean)
 
     summary = {
         "n_rows_same_drug": n_multi,
+        "same_drug_rows_equal_n": bool(n_multi == n),
         "observed_mean_same_drug_rows": round(observed_mean_multi, 4),
+        "observed_mean_diff_drug_rows": round(observed_mean, 4),
         **{f"{k}_same_drug": v for k, v in same.items()},
         **{f"{k}_diff_drug": v for k, v in diff.items()},
     }
@@ -374,9 +460,25 @@ def main() -> None:
     if not np.any(np.isfinite(r)):
         raise SystemExit("no (line, drug) pair had enough shared panel genes to score")
 
-    summary, perm_means = derangement_null(piv0, piv1, r, args.min_genes, args.n_perm, args.seed)
+    # Computed once and shared with both nulls below: `derangement_null` and
+    # `stratified_derangement_null` each independently call `stratified_null_draws` on the same
+    # (finite piv0, finite piv1, n_perm, seed, min_genes) -- identical inputs and a deterministic
+    # RNG make the two calls produce identical pools, so computing it once here is pure cost
+    # removal, not a behavior change (each function still computes it itself if called without
+    # `pools`, as the existing known-answer tests do).
+    finite = np.isfinite(r)
+    pools = dr.stratified_null_draws(
+        piv0.loc[finite],
+        piv1.loc[finite],
+        n_perm=args.n_perm,
+        seed=args.seed,
+        min_genes=args.min_genes,
+    )
+    summary, perm_means = derangement_null(
+        piv0, piv1, r, args.min_genes, args.n_perm, args.seed, pools=pools
+    )
     strat_summary, strat_perm_means = stratified_derangement_null(
-        piv0, piv1, r, args.min_genes, args.n_perm, args.seed
+        piv0, piv1, r, args.min_genes, args.n_perm, args.seed, pools=pools
     )
     summary_row = {
         "replicate_col": repl,
@@ -415,6 +517,15 @@ def main() -> None:
         f"{strat_summary['perm_mean_sd_same_drug']:.4f} (sd), p_exact = "
         f"{strat_summary['p_exact_same_drug']:.4f}, design effect = "
         f"{strat_summary['design_effect_same_drug']:.3f}."
+    )
+    transfer_note = (
+        "(transfers directly to the promoted p_vs_same_drug)"
+        if strat_summary["same_drug_rows_equal_n"]
+        else "(applies to the multi-line subset only -- state this wherever the number is cited)"
+    )
+    print(
+        f"same-drug design effect measured over {strat_summary['n_rows_same_drug']} of "
+        f"{summary['n_pairs']} rows {transfer_note}"
     )
     print(
         f"diff-drug: observed mean r = {summary['observed_mean']:.4f}, cross null mean = "
