@@ -45,14 +45,15 @@ def _target_names(repo: Path, cid_file: Path) -> list[str]:
 def build_split_half_frame(
     paths: list[str],
     target_names: list[str],
-    repl: str | None,
+    repl_col: str | None,
     tmp: Path,
     memory_limit: str = "36GB",
-):
+) -> tuple[pd.DataFrame, str]:
     """Per (line, drug, gene), the mean log2FoldChange in each of two plate halves, via DuckDB.
 
-    Splits plates by ``hash(repl) % 2`` (deterministic, no RNG) and aggregates each half IN-ENGINE,
-    so raw rows are never materialized. Returns the long frame plus the chosen replicate column.
+    Splits plates by ``hash(repl_col) % 2`` (deterministic, no RNG) and aggregates each half
+    IN-ENGINE, so raw rows are never materialized. Returns the long frame plus the chosen
+    replicate column.
     """
     import duckdb  # type: ignore  # Alpine-only
 
@@ -64,7 +65,7 @@ def build_split_half_frame(
     schema = con.execute("DESCRIBE SELECT * FROM read_parquet(?) LIMIT 0", [paths]).df()
     cols = list(schema["column_name"])
     print(f"DE columns: {cols}")
-    candidates = ([repl] if repl else []) + list(REPL_CANDIDATES)
+    candidates = ([repl_col] if repl_col else []) + list(REPL_CANDIDATES)
     chosen = next((c for c in candidates if c in cols), None)
     if chosen is None:
         raise SystemExit(f"no replicate column in {cols}; pass --replicate-col")
@@ -113,6 +114,11 @@ def score_split_half(
     piv1 = d.pivot_table(index=["patient", "drug"], columns="gene_name", values="lfc1")
     common = piv0.index.intersection(piv1.index)
     piv0, piv1 = piv0.loc[common], piv1.loc[common]
+    # pivot_table drops all-NaN columns per half, so the two halves can carry different gene
+    # sets even after the index intersection above -- callers that skip main()'s dropna could
+    # otherwise silently correlate misaligned genes whenever the column COUNTS happen to match.
+    cols = piv0.columns.intersection(piv1.columns)
+    piv0, piv1 = piv0[cols], piv1[cols]
     r = masked_rowwise_pearson(piv0.to_numpy(dtype=float), piv1.to_numpy(dtype=float), min_genes)
     return r, piv0, piv1
 
@@ -151,7 +157,7 @@ def stratified_null_draws(
         if avail.size == 0:
             out[name] = np.array([])
             continue
-        pick = rng.choice(avail, size=min(n_perm, avail.size), replace=avail.size < n_perm)
+        pick = rng.choice(avail, size=min(n_perm, avail.size), replace=False)
         r = masked_rowwise_pearson(a[ii[pick]], b[jj[pick]], min_genes)
         out[name] = r[np.isfinite(r)]
     return out
@@ -244,9 +250,11 @@ def main() -> None:
         print(f"scoring the ceiling on top-{args.n_hvg} HVG (no --panel-file given)")
 
     # per (line, drug): split-half Pearson r between the two plate halves over the HVG genes.
+    # `r` stays aligned with piv0/piv1's rows (NaNs and all) -- Task 4's tercile/per-gene
+    # diagnostics need that alignment; `r_fin` is the finite-only view for aggregate stats.
     r, piv0, piv1 = score_split_half(de, hvg, min_genes=args.min_genes)
-    r = r[np.isfinite(r)]
-    if r.size == 0:
+    r_fin = r[np.isfinite(r)]
+    if r_fin.size == 0:
         raise SystemExit("no (line, drug) pair had enough shared HVG genes to score")
 
     # NEGATIVE CONTROL, STRATIFIED. A split-half correlation has a nonzero floor because genes
@@ -272,13 +280,13 @@ def main() -> None:
     nl = nulls["diff_drug"] if nulls["diff_drug"].size else nulls["any_pair"]
     null_med = float(np.median(nl)) if nl.size else float("nan")
 
-    med = float(np.median(r))
+    med = float(np.median(r_fin))
 
     # Bootstrap the null MEDIAN at the observed pair count, so the comparison is like-for-like.
     p_boot, boot_lo, boot_hi = bootstrap_aggregate_pvalue(
         med,
         nl,
-        int(r.size),
+        int(r_fin.size),
         agg=np.median,
         seed=args.seed,
     )
@@ -286,14 +294,14 @@ def main() -> None:
     sb = 2 * med / (1 + med) if med > -1 else float("nan")
     summary = {
         "replicate_col": repl,
-        "n_pairs": int(r.size),
+        "n_pairs": int(r_fin.size),
         "n_genes": len(hvg),
         "splithalf_median_r": round(med, 3),
-        "splithalf_mean_r": round(float(np.mean(r)), 3),
-        "splithalf_q1_r": round(float(np.quantile(r, 0.25)), 3),
-        "splithalf_q3_r": round(float(np.quantile(r, 0.75)), 3),
+        "splithalf_mean_r": round(float(np.mean(r_fin)), 3),
+        "splithalf_q1_r": round(float(np.quantile(r_fin, 0.25)), 3),
+        "splithalf_q3_r": round(float(np.quantile(r_fin, 0.75)), 3),
         "spearman_brown_full": round(sb, 3),
-        "frac_pos": round(float(np.mean(r > 0)), 3),
+        "frac_pos": round(float(np.mean(r_fin > 0)), 3),
         "null_median_r": round(null_med, 3) if np.isfinite(null_med) else float("nan"),
         "null_n_draws": int(nl.size),
         "null_any_pair_r": round(float(np.median(nulls["any_pair"])), 3)
@@ -311,9 +319,9 @@ def main() -> None:
         # corrected form while this one used the defective one two lines away.
         "p_vs_same_drug": round(
             bootstrap_aggregate_pvalue(
-                float(np.median(r)),
+                float(np.median(r_fin)),
                 nulls["same_drug"],
-                int(r.size),
+                int(r_fin.size),
                 agg=np.median,
                 seed=args.seed,
             )[0],
@@ -339,7 +347,7 @@ def main() -> None:
     out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame([summary]).to_csv(out, index=False)
-    _write_params_sidecar(out, args, extra={"n_pairs": int(r.size)})
+    _write_params_sidecar(out, args, extra={"n_pairs": int(r_fin.size)})
     print("\n=== delta reproducibility ceiling (real Tahoe delta, plate split-half) ===")
     for k, v in summary.items():
         print(f"  {k:22s} {v}")
