@@ -15,6 +15,7 @@
 - Declared statistic: per-(line, drug) Pearson over the declared panel, **mean over pairs** as the headline; median is descriptive only. Spearman-Brown `2r/(1+r)` stated wherever used. (SPEC rungs 0–1.)
 - Every measurement step ships positive and negative controls as known-answer tests importing the real functions; every promoted comparison reports its MDE at α=0.05, power=0.80. (SPEC rule 4.)
 - `uv run pytest -q` green before every push; project-rule markers for this task: `-m "step_promote or step_document or step_score or step_null"`. (PROCESS §3.)
+- CI also gates on `uv run ruff check .`, `uv run ruff format --check .`, and `uv run pyright` (strict, `include = ["src", "tests"]`). Every task leaves the files it touched clean under all three; run them scoped to tracked dirs locally (`ruff check src tests scripts`, `ruff format --check src tests scripts`) because the working tree carries untracked strays CI never sees. (Added 2026-08-27 during execution — the plan had gated only on pytest.)
 - Landed documents reference only landed work; cluster files cited repo-relative plus "on Alpine"; absolute site paths never. (PROCESS §5.)
 - Stage files explicitly — **never `git add -A`** (untracked data and archives sit in the working tree).
 - Commit messages state the root cause; no result numbers in messages. Every commit ends with the `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` trailer.
