@@ -223,6 +223,7 @@ pairing with 500 derangements of the 1,600 finite-scored conditions and computed
 mismatched correlation per derangement — the null distribution of the reported aggregate with
 the dependence carried by construction. Summary
 (`rung0_derangement_summary.csv`; per-permutation means in `rung0_derangement_perm_means.csv`;
+resolved arguments and producing commit in `rung0_derangement_summary.params.json`;
 log at `results/rung0-replicate-ceiling/derangement-null-31764582.out`):
 
 ```

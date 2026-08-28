@@ -179,3 +179,19 @@ record confirmed unchanged. The audit is PASSED.** One caveat this task carries 
 its audit ran after promotion (the stage order was corrected because of it); the promoted record
 was verified unchanged through every audit-driven edit, so the number the record pins is the
 number the documents now describe.
+
+## Audit delta — derangement addition (2026-08-28, fresh reader, at `ce92bf5`)
+
+The late addition audited under PROCESS §1's convergence rule: seven clauses over the new
+surface only. Six ALIGNED with recomputed evidence — the reader independently re-derived the
+permutation mean (0.036131), its sd (0.0009233), and the exact p (0/500 permutation means at or
+above the observed, (1+0)/(1+500) = 0.002) from the committed per-permutation file; confirmed
+design effect 0.872 = perm variance over the pooled-SE variance and its conservative reading;
+confirmed the promoted record untouched; confirmed 0.1348 and the promoted 0.135 are one
+quantity at two roundings, computed by the same imported code on the same pivots. One DRIFT:
+the reverse-direction check caught `rung0_derangement_summary.params.json` committed but named
+in no document — a completeness gap, no numeric or provenance defect. Corrected in the commit
+carrying this entry (the sidecar is now named in verification.md's artifact list); a fresh
+reader confirmed the correction and the absence of further unnamed derangement artifacts.
+
+**Audit delta: PASSED after the one correction.**
