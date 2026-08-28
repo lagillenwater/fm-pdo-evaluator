@@ -24,8 +24,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fmharness.statistics import bootstrap_aggregate_pvalue
-
 TAHOE = "tahoebio/Tahoe-100M"
 DE = "pseudobulk_differential_expression"
 REPL_CANDIDATES = ("plate", "Plate", "plate_barcode", "plate_id", "replicate", "batch")
@@ -163,6 +161,132 @@ def stratified_null_draws(
     return out
 
 
+def effect_size_terciles(piv0: pd.DataFrame, piv1: pd.DataFrame, r: np.ndarray) -> dict[str, float]:
+    """Split-half mean r within terciles of per-pair effect size (mean |delta|).
+
+    The empirical positive control: an assay that cannot find more reproducibility where
+    there is more signal is broken. Tercile 1 = smallest effects.
+    """
+    a, b = piv0.to_numpy(dtype=float), piv1.to_numpy(dtype=float)
+    ok = np.isfinite(a) & np.isfinite(b)
+    mean_abs = np.where(ok, np.abs(a + b) / 2.0, 0.0).sum(axis=1) / np.maximum(ok.sum(axis=1), 1)
+    finite = np.isfinite(r)
+    edges = np.quantile(mean_abs[finite], [1 / 3, 2 / 3])
+    out: dict[str, float] = {}
+    for t in (1, 2, 3):
+        lo = -np.inf if t == 1 else edges[t - 2]
+        hi = np.inf if t == 3 else edges[t - 1]
+        sel = finite & (mean_abs > lo) & (mean_abs <= hi)
+        out[f"splithalf_mean_r_tercile{t}"] = round(float(np.mean(r[sel])), 3)
+    return out
+
+
+def per_gene_reliability(
+    piv0: pd.DataFrame, piv1: pd.DataFrame, min_pairs: int = 20
+) -> pd.DataFrame:
+    """The transpose diagnostic: each gene's delta correlated across pairs between halves.
+
+    Unpromoted (see design.md): says which panel genes carry reproducible perturbation
+    signal, as the evidence base for any future panel restriction.
+    """
+    a, b = piv0.to_numpy(dtype=float).T, piv1.to_numpy(dtype=float).T
+    r = masked_rowwise_pearson(a, b, min_pairs)
+    n = (np.isfinite(a) & np.isfinite(b)).sum(axis=1)
+    return pd.DataFrame(
+        {"gene": piv0.columns.to_numpy(), "n_pairs": n, "r": np.round(r, 4)}
+    ).sort_values("r", ascending=False)
+
+
+def summarize(r: np.ndarray, nulls: dict[str, np.ndarray], seed: int = 0) -> dict:
+    """The headline row: mean-over-pairs Pearson (the declared statistic), its nulls,
+    p-values from the bootstrapped null aggregate, and the MDEs (SPEC rule 4)."""
+    from fmharness.statistics import (
+        bootstrap_aggregate_pvalue,
+        minimum_detectable_aggregate,
+        spearman_brown,
+    )
+
+    r = r[np.isfinite(r)]
+    mean = float(np.mean(r))
+    nl = nulls["diff_drug"] if nulls["diff_drug"].size else nulls["any_pair"]
+    p_boot, ci_lo, ci_hi = bootstrap_aggregate_pvalue(mean, nl, r.size, seed=seed)
+    p_same = bootstrap_aggregate_pvalue(mean, nulls["same_drug"], r.size, seed=seed)[0]
+    sb = spearman_brown(mean) if mean > -1 else float("nan")
+    return {
+        "n_pairs": int(r.size),
+        "splithalf_mean_r": round(mean, 3),
+        "splithalf_median_r": round(float(np.median(r)), 3),
+        "splithalf_q1_r": round(float(np.quantile(r, 0.25)), 3),
+        "splithalf_q3_r": round(float(np.quantile(r, 0.75)), 3),
+        "spearman_brown_full": round(sb, 3),
+        "frac_pos": round(float(np.mean(r > 0)), 3),
+        "null_any_pair_mean_r": round(float(np.mean(nulls["any_pair"])), 3),
+        "null_diff_drug_mean_r": round(float(np.mean(nulls["diff_drug"])), 3),
+        "null_same_drug_mean_r": round(float(np.mean(nulls["same_drug"])), 3),
+        "null_n_draws": int(nl.size),
+        "p_vs_null": round(p_boot, 4),
+        "p_vs_same_drug": round(p_same, 4),
+        "null_mean_ci_lo": round(ci_lo, 3),
+        "null_mean_ci_hi": round(ci_hi, 3),
+        "mde_80_vs_diff_drug": round(minimum_detectable_aggregate(r, nl, r.size, seed=seed), 4),
+        "mde_80_vs_same_drug": round(
+            minimum_detectable_aggregate(r, nulls["same_drug"], r.size, seed=seed), 4
+        ),
+    }
+
+
+DOSE_CANDIDATES = ("dose", "Dose", "drug_dose", "concentration", "dose_uM")
+
+
+def pool_description(
+    paths: list[str], target_names: list[str], repl: str, tmp: Path
+) -> pd.DataFrame:
+    """Measured composition of the consumed pool (design: 'measured not asserted'):
+    per (line, drug) the replicate-row count, distinct plates per half, and dose levels
+    when a dose column exists."""
+    import duckdb  # type: ignore  # heavy path; imported where used
+
+    con = duckdb.connect()
+    con.execute(f"SET temp_directory='{tmp}'")
+    cols = list(
+        con.execute("DESCRIBE SELECT * FROM read_parquet(?) LIMIT 0", [paths]).df()["column_name"]
+    )
+    dose = next((c for c in DOSE_CANDIDATES if c in cols), None)
+    dose_expr = f"count(DISTINCT {dose})" if dose else "NULL"
+    return con.execute(
+        f"""SELECT Cell_ID_DepMap AS patient, drug,
+                   count(*) AS n_rows,
+                   count(DISTINCT {repl}) AS n_plates,
+                   count(DISTINCT {repl}) FILTER (WHERE hash({repl}) % 2 = 0) AS n_plates_half0,
+                   count(DISTINCT {repl}) FILTER (WHERE hash({repl}) % 2 = 1) AS n_plates_half1,
+                   {dose_expr} AS n_dose_levels
+            FROM read_parquet(?)
+            WHERE drug IN (SELECT unnest(?)) AND {repl} IS NOT NULL
+            GROUP BY Cell_ID_DepMap, drug ORDER BY patient, drug""",
+        [paths, target_names],
+    ).df()
+
+
+def write_figure(r: np.ndarray, nulls: dict[str, np.ndarray], out_png: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bins = np.linspace(-0.3, 0.8, 56)
+    ax.hist(r[np.isfinite(r)], bins=bins, density=True, alpha=0.65, label="matched pairs")
+    ax.hist(nulls["diff_drug"], bins=bins, density=True, alpha=0.45, label="diff-drug null")
+    ax.hist(nulls["same_drug"], bins=bins, density=True, alpha=0.45, label="same-drug null")
+    ax.axvline(float(np.nanmean(r)), color="k", lw=1.5, label="mean (headline)")
+    ax.set_xlabel("split-half Pearson r per (line, drug) pair")
+    ax.set_ylabel("density")
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=150)
+    plt.close(fig)
+
+
 def _write_params_sidecar(result_path, args_ns, extra=None) -> None:
     """Record the git sha and every resolved argument beside the result.
 
@@ -203,6 +327,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--local-dir", required=True, help="dir with the Tahoe DE parquet (on scratch)")
     ap.add_argument("--drugs-cid-file", default="data/static/tahoe_target_cids.txt")
+    ap.add_argument(
+        "--drug-names-file",
+        default=None,
+        help="one Tahoe drug name per line; bypasses the HuggingFace name lookup so fixtures "
+        "and offline runs need no `datasets` import.",
+    )
     ap.add_argument("--replicate-col", default=None, help="plate/replicate column (auto-detected)")
     ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs, matching check 1")
     ap.add_argument("--min-genes", type=int, default=50, help="min shared genes to score a pair")
@@ -214,7 +344,7 @@ def main() -> None:
     )
     ap.add_argument("--n-perm", type=int, default=500, help="mismatched-pair null draws")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out", default="results/delta_reproducibility.csv")
+    ap.add_argument("--out-dir", default="rung0_outputs")
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
 
@@ -223,10 +353,18 @@ def main() -> None:
     paths = sorted(str(p) for p in local.rglob("*.parquet") if DE in str(p))
     if not paths:
         raise SystemExit(f"no {DE} parquet under {local}")
-    cid_file = Path(args.drugs_cid_file)
-    cid_file = cid_file if cid_file.is_absolute() else repo / cid_file
-    names = _target_names(repo, cid_file)
+    if args.drug_names_file:
+        names = sorted(
+            {ln.strip() for ln in Path(args.drug_names_file).read_text().splitlines() if ln.strip()}
+        )
+    else:
+        cid_file = Path(args.drugs_cid_file)
+        cid_file = cid_file if cid_file.is_absolute() else repo / cid_file
+        names = _target_names(repo, cid_file)
     print(f"{len(names)} target drugs; reading {len(paths)} DE parquet files ...")
+
+    out_dir = Path(args.out_dir) if Path(args.out_dir).is_absolute() else repo / args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     de, repl = build_split_half_frame(paths, names, args.replicate_col, local.parent / "duckdb_tmp")
     de = de.dropna(subset=["lfc0", "lfc1"])
@@ -277,83 +415,30 @@ def main() -> None:
     for k, v in nulls.items():
         med_k = float(np.median(v)) if v.size else float("nan")
         print(f"null[{k:<10}] median r = {med_k:+.3f} over {v.size} draws")
-    nl = nulls["diff_drug"] if nulls["diff_drug"].size else nulls["any_pair"]
-    null_med = float(np.median(nl)) if nl.size else float("nan")
 
-    med = float(np.median(r_fin))
-
-    # Bootstrap the null MEDIAN at the observed pair count, so the comparison is like-for-like.
-    p_boot, boot_lo, boot_hi = bootstrap_aggregate_pvalue(
-        med,
-        nl,
-        int(r_fin.size),
-        agg=np.median,
-        seed=args.seed,
-    )
-    # Spearman-Brown lifts the half-data reliability to the full (all-plate) delta check 1 targets.
-    sb = 2 * med / (1 + med) if med > -1 else float("nan")
     summary = {
         "replicate_col": repl,
-        "n_pairs": int(r_fin.size),
         "n_genes": len(hvg),
-        "splithalf_median_r": round(med, 3),
-        "splithalf_mean_r": round(float(np.mean(r_fin)), 3),
-        "splithalf_q1_r": round(float(np.quantile(r_fin, 0.25)), 3),
-        "splithalf_q3_r": round(float(np.quantile(r_fin, 0.75)), 3),
-        "spearman_brown_full": round(sb, 3),
-        "frac_pos": round(float(np.mean(r_fin > 0)), 3),
-        "null_median_r": round(null_med, 3) if np.isfinite(null_med) else float("nan"),
-        "null_n_draws": int(nl.size),
-        "null_any_pair_r": round(float(np.median(nulls["any_pair"])), 3)
-        if nulls["any_pair"].size
-        else float("nan"),
-        "null_diff_drug_r": round(float(np.median(nulls["diff_drug"])), 3)
-        if nulls["diff_drug"].size
-        else float("nan"),
-        "null_same_drug_r": round(float(np.median(nulls["same_drug"])), 3)
-        if nulls["same_drug"].size
-        else float("nan"),
-        # Same fix as p_vs_null below: the observed MEDIAN against the bootstrapped sampling
-        # distribution of the same_drug null's MEDIAN, not against individual same_drug draws.
-        # The two forms previously disagreed within this same summary -- p_vs_null used the
-        # corrected form while this one used the defective one two lines away.
-        "p_vs_same_drug": round(
-            bootstrap_aggregate_pvalue(
-                float(np.median(r_fin)),
-                nulls["same_drug"],
-                int(r_fin.size),
-                agg=np.median,
-                seed=args.seed,
-            )[0],
-            4,
-        ),
-        "lift_over_null": round(med - null_med, 3) if np.isfinite(null_med) else float("nan"),
-        # p compares the observed MEDIAN against the bootstrapped sampling distribution of the
-        # NULL MEDIAN. The first version compared the observed median against the spread of
-        # INDIVIDUAL null draws, which is a category error: a median over ~1,300 pairs has a
-        # standard error roughly sqrt(n) times tighter than a single draw, so that p was
-        # inflated by more than an order of magnitude and made a reproducible ceiling look
-        # like it had failed its own null.
-        "p_vs_null": round(p_boot, 4) if np.isfinite(p_boot) else float("nan"),
-        "null_median_ci_lo": round(boot_lo, 3) if np.isfinite(boot_lo) else float("nan"),
-        "null_median_ci_hi": round(boot_hi, 3) if np.isfinite(boot_hi) else float("nan"),
-        # Reported separately because it is a real quantity and answers a DIFFERENT question:
-        # how much the two distributions overlap, i.e. what share of mismatched pairs reach the
-        # typical matched pair. It is an effect size, never a significance test.
-        "frac_null_draws_above_observed_median": (
-            round(float(np.mean(nl >= med)), 3) if nl.size else float("nan")
-        ),
+        **summarize(r, nulls, args.seed),
+        **effect_size_terciles(piv0, piv1, r),
     }
-    out = Path(args.out) if Path(args.out).is_absolute() else repo / args.out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame([summary]).to_csv(out, index=False)
-    _write_params_sidecar(out, args, extra={"n_pairs": int(r_fin.size)})
+    summary_path = out_dir / "rung0_delta_reproducibility.csv"
+    pd.DataFrame([summary]).to_csv(summary_path, index=False)
+    _write_params_sidecar(summary_path, args, extra={"n_pairs": summary["n_pairs"]})
+
+    per_gene_reliability(piv0, piv1).to_csv(out_dir / "rung0_per_gene_reliability.csv", index=False)
+    pool_description(paths, names, repl, local.parent / "duckdb_tmp").to_csv(
+        out_dir / "rung0_pool_description.csv", index=False
+    )
+    write_figure(r, nulls, out_dir / "rung0_ceiling.png")
+
     print("\n=== delta reproducibility ceiling (real Tahoe delta, plate split-half) ===")
     for k, v in summary.items():
         print(f"  {k:22s} {v}")
     print(
-        f"\nCheck-1 achieved r ~ 0.2; the ceiling is the split-half median ({med:.3f}) / "
-        f"Spearman-Brown full-data ({sb:.3f}).\nwrote {out}"
+        f"\nCheck-1 achieved r ~ 0.2; the ceiling is the split-half mean "
+        f"({summary['splithalf_mean_r']:.3f}) / Spearman-Brown full-data "
+        f"({summary['spearman_brown_full']:.3f}).\nwrote {summary_path}"
     )
 
 

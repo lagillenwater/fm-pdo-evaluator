@@ -159,3 +159,112 @@ def test_null_negative_signal_free_strata_sit_at_their_floors(tmp_path: Path) ->
     nulls = dr.stratified_null_draws(piv0, piv1, n_perm=200, seed=0)
     for stratum, draws in nulls.items():
         assert abs(float(np.mean(draws))) < 0.05, f"{stratum} floor is not ~0 on noise"
+
+
+def test_tercile_control_rises_monotonically_with_planted_effect_size(tmp_path: Path) -> None:
+    # Three drugs with graded signal size, same noise: split-half r must rise with
+    # effect size, tercile 1 -> 3.
+    rng = np.random.default_rng(7)
+    lines = [f"L{i}" for i in range(6)]
+    genes = [f"G{k}" for k in range(400)]
+    plates = tuple(f"P{p}" for p in range(8))
+    rows = []
+    for d, s in (("D0", 0.3), ("D1", 0.8), ("D2", 2.0)):
+        for li in lines:
+            signal = rng.normal(0.0, s, len(genes))
+            for p in plates:
+                rows.append(
+                    pd.DataFrame(
+                        {
+                            "Cell_ID_DepMap": li,
+                            "drug": d,
+                            "gene_name": genes,
+                            "log2FoldChange": signal + rng.normal(0.0, 1.0, len(genes)),
+                            "plate": p,
+                        }
+                    )
+                )
+    pool_dir = tmp_path / "pseudobulk_differential_expression"
+    pool_dir.mkdir(parents=True)
+    pd.concat(rows, ignore_index=True).to_parquet(
+        pool_dir / "train-00000-of-00001.parquet", index=False
+    )
+    de, _ = dr.build_split_half_frame(
+        [str(pool_dir / "train-00000-of-00001.parquet")],
+        ["D0", "D1", "D2"],
+        None,
+        tmp_path / "duck",
+        memory_limit="2GB",
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dr.score_split_half(de, set(de["gene_name"].unique()))
+    terc = dr.effect_size_terciles(piv0, piv1, r)
+    assert (
+        terc["splithalf_mean_r_tercile1"]
+        < terc["splithalf_mean_r_tercile2"]
+        < terc["splithalf_mean_r_tercile3"]
+    ), f"terciles not monotone: {terc}"
+
+
+def test_per_gene_reliability_separates_reliable_from_noise_genes(tmp_path: Path) -> None:
+    # Half the genes carry pair-specific signal, half are pure noise: the diagnostic
+    # must rank the signal genes above the noise genes.
+    rng = np.random.default_rng(8)
+    lines = [f"L{i}" for i in range(8)]
+    drugs = [f"D{j}" for j in range(4)]
+    genes = [f"S{k}" for k in range(100)] + [f"N{k}" for k in range(100)]
+    plates = tuple(f"P{p}" for p in range(8))
+    rows = []
+    for li in lines:
+        for d in drugs:
+            signal = np.concatenate([rng.normal(0.0, 1.5, 100), np.zeros(100)])
+            for p in plates:
+                rows.append(
+                    pd.DataFrame(
+                        {
+                            "Cell_ID_DepMap": li,
+                            "drug": d,
+                            "gene_name": genes,
+                            "log2FoldChange": signal + rng.normal(0.0, 1.0, 200),
+                            "plate": p,
+                        }
+                    )
+                )
+    pool_dir = tmp_path / "pseudobulk_differential_expression"
+    pool_dir.mkdir(parents=True)
+    pd.concat(rows, ignore_index=True).to_parquet(
+        pool_dir / "train-00000-of-00001.parquet", index=False
+    )
+    de, _ = dr.build_split_half_frame(
+        [str(pool_dir / "train-00000-of-00001.parquet")],
+        drugs,
+        None,
+        tmp_path / "duck",
+        memory_limit="2GB",
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    _, piv0, piv1 = dr.score_split_half(de, set(de["gene_name"].unique()))
+    pg = dr.per_gene_reliability(piv0, piv1, min_pairs=10)
+    mean_signal = pg[pg["gene"].str.startswith("S")]["r"].mean()
+    mean_noise = pg[pg["gene"].str.startswith("N")]["r"].mean()
+    assert mean_signal > mean_noise + 0.3, f"signal {mean_signal:.3f} vs noise {mean_noise:.3f}"
+
+
+def test_summarize_headlines_the_mean_and_reports_both_mdes() -> None:
+    rng = np.random.default_rng(9)
+    r = rng.normal(0.14, 0.06, 1600)
+    nulls = {
+        "any_pair": rng.normal(0.03, 0.05, 500),
+        "diff_drug": rng.normal(0.03, 0.05, 500),
+        "same_drug": rng.normal(0.07, 0.05, 500),
+    }
+    s = dr.summarize(r, nulls, seed=0)
+    assert abs(s["splithalf_mean_r"] - float(np.mean(r))) < 5e-4
+    assert (
+        abs(s["spearman_brown_full"] - 2 * s["splithalf_mean_r"] / (1 + s["splithalf_mean_r"]))
+        < 2e-3
+    )
+    assert s["p_vs_null"] < 0.01 and s["p_vs_same_drug"] < 0.01
+    assert 0 < s["mde_80_vs_diff_drug"] < s["splithalf_mean_r"], "trivially powered here"
+    assert 0 < s["mde_80_vs_same_drug"] < s["splithalf_mean_r"]
+    assert s["splithalf_median_r"] is not None  # descriptive column retained
