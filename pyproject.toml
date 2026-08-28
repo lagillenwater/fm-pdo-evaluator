@@ -6,9 +6,10 @@ authors = [{ name = "Lucas Gillenwater", email = "lucas.gillenwater@cuanschutz.e
 license = { text = "BSD-2-Clause-Patent" }
 readme = "README.md"
 requires-python = ">=3.11"
-# Every dependency here is imported by code in this repository. The rest arrive with the rung
-# that first needs them, so a reviewer can tell what the project actually runs on from the
-# manifest alone rather than from what it might run on later.
+# Every dependency here is imported by code in this repository or by code landing on this
+# task's branch. The rest arrive with the rung that first needs them, so a reviewer can tell
+# what the project actually runs on from the manifest alone rather than from what it might run
+# on later.
 dependencies = [
     "pydantic>=2.7",
     "numpy>=1.26",
