@@ -101,3 +101,11 @@ def test_promotion_records_a_dirty_tree_honestly(repo: Path) -> None:
 def test_promotion_refuses_a_script_not_in_the_repo(repo: Path) -> None:
     with pytest.raises(SystemExit, match="script"):
         _promote(repo, script="scripts/never_existed.py")
+
+
+def test_promotion_ignores_an_untracked_stray_file(repo: Path) -> None:
+    """An untracked file does not make clean_tree False (PROCESS §2: working trees carry
+    untracked data by design); only tracked-file modifications should."""
+    (repo / "stray_untracked.txt").write_text("not part of the repo\n")
+    record_path = _promote(repo)
+    assert PromotedResult.model_validate_json(record_path.read_text()).clean_tree is True
