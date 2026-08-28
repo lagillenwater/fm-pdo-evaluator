@@ -112,3 +112,86 @@ The stratified null draws reuse the same half-profiles across mismatched pairs, 
 ## GDSC2 CID list — provenance note
 
 `00_target_cids.sbatch` (which built `data/static/tahoe_target_cids.txt`, one of this promotion's two declared inputs) reads `data/static/gdsc2_auc_pubchem_cids.txt` on Alpine. That file is untracked on Alpine and not landed in this repository; neither `00_target_cids.sbatch` nor `01_pseudobulk_shortcut.sbatch` is re-run by this task — their outputs exist already and are pinned by hash (the CID file) and by the tranche (the DE pool). `data/static/gdsc2_auc_pubchem_cids.txt` becomes a tracked input in this repository when rung 4 registers GDSC2.
+
+## Promotion (Task 9)
+
+Run from a tree clean of tracked modifications (`git status --porcelain -uno` empty, verified before running), from commit `84c094d` (the docs commit above):
+
+```bash
+SCRATCH=/private/tmp/claude-502/-Users-gillenlu-Repositories-fm-pdo-evaluator/982cf604-f4fc-49b1-9bc3-1bb128cafd76/scratchpad
+uv run python scripts/promote_result.py \
+  --task rung0-replicate-ceiling \
+  --result docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv \
+  --script scripts/delta_reproducibility.py \
+  --input "$SCRATCH/common_panel.txt" --input "$SCRATCH/tahoe_target_cids.txt" \
+  --seed 0 \
+  --data-commit "$(uv run python -c "from pathlib import Path; from fmharness.schema import Tranche; print(Tranche.model_validate_json(Path('data/tranches/tahoe100m-pseudobulk-de.v1.json').read_text()).content_hash)")" \
+  --arg tranche_id=tahoe100m-pseudobulk-de.v1 \
+  --arg panel_file="results/rung1_panel/common_panel.txt on Alpine" \
+  --job-id 31758395 \
+  --log results/rung0-replicate-ceiling/delta-repro-31758395.out
+```
+
+Output:
+
+```
+promoted -> results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv
+           results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json
+```
+
+The written record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json`):
+
+```json
+{
+  "result": "results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv",
+  "result_sha256": "98985f030ba8933589a4910f2d47dda5878b3dff635e51a52bb5dd3b875c2e71",
+  "task": "rung0-replicate-ceiling",
+  "script": "scripts/delta_reproducibility.py",
+  "args": {
+    "tranche_id": "tahoe100m-pseudobulk-de.v1",
+    "panel_file": "results/rung1_panel/common_panel.txt on Alpine"
+  },
+  "inputs": {
+    "<scratchpad>/common_panel.txt": "356bcfe69c50fef5ab108be78c3d6dea2cd42f24fdc43b7a3d52dfbdc5471344",
+    "<scratchpad>/tahoe_target_cids.txt": "0bd61793d051f9cad8d5bbbabe9e3589563ae01385692a1eb8fe6505076a1081"
+  },
+  "log": "results/rung0-replicate-ceiling/delta-repro-31758395.out",
+  "log_sha256": "3a2398b5a906b475ed2d3789f5c74dd6b1b4683f7a0831a46c7f7a19a5ca0274",
+  "job_id": "31758395",
+  "clean_tree": true,
+  "environment": {
+    "code_commit": "84c094d5905b9499fc2f9d6a7572ac3d23e06887",
+    "python_version": "3.13.5",
+    "seed": 0,
+    "cuda_deterministic": false,
+    "data_commit": "9a8797a5698e2c56ec1b61bdd3d5f68d18a972e227e86b64ac341ef507f73dd6",
+    "container_digest": null,
+    "torch_version": null,
+    "cuda_version": null,
+    "model_weights_hash": null
+  },
+  "promoted_at": "2026-08-28T15:19:22.111185Z"
+}
+```
+
+`inputs` paths are shown with `<scratchpad>` standing in for the session-local scratch directory recorded in the real file; the sha256 values are unabridged and match `.superpowers/sdd/plan/task-8-facts.md`'s pulled-copy hashes exactly. `clean_tree: true` confirms the rule-1 fix (this task's first commit) — the working tree carries plenty of untracked data (PROCESS §2), but no tracked-file modification was pending at promotion.
+
+## Project-rule tests (Task 9, Step 4)
+
+Before promotion, the rule-1 and rule-4-edge tests skipped (no promoted results yet). After promotion:
+
+```
+$ uv run pytest tests/test_project_rules.py -v -m "step_promote or step_score or step_null or step_document"
+tests/test_project_rules.py::test_rule_01_every_promoted_result_carries_a_complete_provenance_record PASSED
+tests/test_project_rules.py::test_rule_01_edge_promoted_records_validate_against_the_schema PASSED
+tests/test_project_rules.py::test_rule_02_every_task_is_named_in_the_spec_tree PASSED
+tests/test_project_rules.py::test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry PASSED
+tests/test_project_rules.py::test_rule_03_readme_links_to_the_project_documents PASSED
+tests/test_project_rules.py::test_rule_03_edge_readme_is_revisited_when_the_ladder_changes PASSED
+tests/test_project_rules.py::test_rule_04_every_task_declares_controls_for_its_measurement_steps PASSED
+tests/test_project_rules.py::test_rule_04_edge_promoted_tasks_have_known_answer_tests PASSED
+
+8 passed in 0.28s
+```
+
+All 8 run (none skip) and all pass: rule 1's two tests validate the real record above; rule 4's edge test finds `pytest.mark.known_answer` already present in the suite (`tests/test_statistics_known_answers.py`, `tests/test_rung0_controls.py`). The full suite (`uv run pytest -q`) also runs with zero skips now — every project-rule test that was gated on a promoted result binds.
