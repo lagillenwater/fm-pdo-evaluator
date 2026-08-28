@@ -1,0 +1,36 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+33 target drugs; reading 1026 DE parquet files ...
+DE columns: ['gene_name', 'baseMean', 'log2FoldChange', 'lfcSE', 'stat', 'pvalue', 'padj', 'plate', 'n_cells_trt', 'n_cells_ctrl', 'Cell_ID_Cellosaur', 'Cell_ID_DepMap', 'drug', 'concentration', 'concentration_unit', 'Cell_Name_Vevo']
+splitting plates by hash(plate) % 2
+scoring the ceiling on the supplied panel: 13886 of 14121 genes present
+null[any_pair  ] median r = +0.034 over 500 draws
+null[diff_drug ] median r = +0.034 over 500 draws
+null[same_drug ] median r = +0.067 over 500 draws
+wrote /projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator/rung0_outputs/rung0_delta_reproducibility.params.json
+
+=== delta reproducibility ceiling (real Tahoe delta, plate split-half) ===
+  replicate_col          plate
+  n_genes                13886
+  n_pairs                1600
+  splithalf_mean_r       0.135
+  splithalf_median_r     0.109
+  splithalf_q1_r         0.071
+  splithalf_q3_r         0.155
+  spearman_brown_full    0.238
+  frac_pos               0.989
+  null_any_pair_mean_r   0.036
+  null_diff_drug_mean_r  0.035
+  null_same_drug_mean_r  0.079
+  null_n_draws           500
+  p_vs_null              0.0005
+  p_vs_same_drug         0.0005
+  null_mean_ci_lo        0.033
+  null_mean_ci_hi        0.037
+  mde_80_vs_diff_drug    0.0392
+  mde_80_vs_same_drug    0.0846
+  splithalf_mean_r_tercile1 0.1
+  splithalf_mean_r_tercile2 0.126
+  splithalf_mean_r_tercile3 0.178
+
+Check-1 achieved r ~ 0.2; the ceiling is the split-half mean (0.135) / Spearman-Brown full-data (0.238).
+wrote /projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator/rung0_outputs/rung0_delta_reproducibility.csv

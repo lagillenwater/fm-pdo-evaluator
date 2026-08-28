@@ -1,0 +1,2 @@
+replicate_col,n_genes,n_pairs,splithalf_mean_r,splithalf_median_r,splithalf_q1_r,splithalf_q3_r,spearman_brown_full,frac_pos,null_any_pair_mean_r,null_diff_drug_mean_r,null_same_drug_mean_r,null_n_draws,p_vs_null,p_vs_same_drug,null_mean_ci_lo,null_mean_ci_hi,mde_80_vs_diff_drug,mde_80_vs_same_drug,splithalf_mean_r_tercile1,splithalf_mean_r_tercile2,splithalf_mean_r_tercile3
+plate,13886,1600,0.135,0.109,0.071,0.155,0.238,0.989,0.036,0.035,0.079,500,0.0005,0.0005,0.033,0.037,0.0392,0.0846,0.1,0.126,0.178
