@@ -46,7 +46,7 @@ for Context-Dependent Gene Function and Cellular Modeling*, bioRxiv 2025,
   ([docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md)).
 - `drug_metadata` — used only to resolve drug names to PubChem CIDs.
 
-**Download.** 2026-07-24, by `scripts/alpine/01_pseudobulk_shortcut.sbatch` (one authenticated
+**Download.** 2026-07-24, by `scripts/alpine/01_pseudobulk_shortcut.sbatch` (download logic in `scripts/download_tahoe_pseudobulk_de.py`; the archived lineage's variant of the same pull performed the 2026-07-24 download) (one authenticated
 bulk download, single process — the shard set has no drug partition, so concurrent readers trip
 the rate limit) to Alpine scratch at `/scratch/alpine/$USER/tahoe_pseudobulk_de` (verified
 present 2026-08-27, 83G). Scratch is purgeable; the same script rebuilds the copy (~12h).
@@ -68,8 +68,7 @@ compounds.
   (line, drug, gene) within each half — collapsing plates and any dose replicates within a half,
   so the delta is the drug's average response at its screened doses — then restrict to the
   declared gene panel and correlate the halves per pair.
-- *Delta bundle* (`scripts/build_tahoe_pseudobulk_deltas.py`, landing with the rung-0 task as
-  part of this pool's provenance chain): the same aggregation without the split — mean
+- *Delta bundle* (arrives with rung 1; its download half is landed as `scripts/download_tahoe_pseudobulk_de.py`): the same aggregation without the split — mean
   `log2FoldChange` and `baseMean` per (line, drug, gene) over all plates and doses. Consumed by
   rung 1 ([docs/SPEC.md](SPEC.md)) when that rung arrives.
 
