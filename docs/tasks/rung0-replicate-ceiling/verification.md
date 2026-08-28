@@ -10,7 +10,10 @@ Run by the controller on 2026-08-27/28, against `docs/tasks/rung0-replicate-ceil
 ```bash
 git push
 ./scripts/alpine/ralpine switch rung0-replicate-ceiling      # ran at b5da999 (registration), 25cec05 (measurement) after a ff
-./scripts/alpine/ralpine run ls "$SCRATCH/tahoe_pseudobulk_de/pseudobulk_differential_expression" | head -3
+./scripts/alpine/ralpine run find "$SCRATCH/tahoe_pseudobulk_de" -name "*.parquet" -not -path "*/.cache/*" | wc -l
+# -> 1026 (shards live under metadata/pseudobulk_differential_expression/ inside the scratch
+#    dir, the HF repo's own layout — ties the tranche manifest's 1,026 lines to the job log's
+#    "reading 1026 DE parquet files" line)
 ./scripts/alpine/ralpine run wc -l "$ROOT/results/rung1_panel/common_panel.txt" "$ROOT/data/static/tahoe_target_cids.txt"
 # -> 14121 and 32
 
@@ -54,6 +57,7 @@ scoring the ceiling on the supplied panel: 13886 of 14121 genes present
 null[any_pair  ] median r = +0.034 over 500 draws
 null[diff_drug ] median r = +0.034 over 500 draws
 null[same_drug ] median r = +0.067 over 500 draws
+...  (a "wrote .../rung0_delta_reproducibility.params.json" line omitted here)
 
 === delta reproducibility ceiling (real Tahoe delta, plate split-half) ===
   replicate_col          plate
@@ -85,11 +89,13 @@ wrote /projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator/rung0_outpu
 
 Every field above matches `docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` exactly (checked column by column).
 
+**Figure**: this run's figure is `docs/tasks/rung0-replicate-ceiling/rung0_ceiling.png`, produced alongside the headline table — per `docs/STATE.md`'s convention, a figure a task cites is pointed at from that task's `verification.md`, which this line does.
+
 ## Pool description (from `rung0_pool_description.csv`)
 
-The pool-description table lists 1,650 (line × drug) rows: 50 cell lines by 33 drug-name entries in the DE table matching the target-CID panel (32 drugs, plus a `Trametinib (DMSO_TF solvate)` name variant). All 1,650 rows carry 3 dose levels.
+The pool-description table lists 1,650 (line × drug) rows: 50 cell-line keys by 33 drug-name entries in the DE table matching the target-CID panel (32 drugs, plus a `Trametinib (DMSO_TF solvate)` name variant). All 1,650 rows carry 3 dose levels. One of the 50 line keys is literally `NA` (a missing DepMap id in the source table — the grouping key carries it through as-is), accounting for 33 of the 1,650 rows, one line's worth.
 
-- 1,210 of 1,650 rows (the majority) have exactly 3 plates, split 1 plate in half0 / 2 in half1 — the typical case.
+- 1,210 of 1,650 rows (the majority) have exactly 3 plates: 1,200 of those split 1 plate in half0 / 2 in half1, and 10 split 2/1 — the typical case, with the minority split running the other way.
 - 290 rows have 4 plates (2/2), 50 have 6 (2/4), 50 have 7 (3/4) — drugs profiled on more plates (e.g. Afatinib, Trametinib, Cytarabine, Docetaxel, Rapamycin, Retinoic acid, Temsirolimus).
 - 50 rows — all 50 lines of Ribociclib, and only Ribociclib — have exactly 1 plate total (1 in half0, 0 in half1): a single plate cannot be split, so these pairs are unscoreable.
 - 1,650 candidate rows − 50 unscoreable Ribociclib rows = 1,600, matching `n_pairs` in the headline CSV exactly.
@@ -174,7 +180,9 @@ The written record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility
 }
 ```
 
-`inputs` paths are shown with `<scratchpad>` standing in for the session-local scratch directory recorded in the real file; the sha256 values are unabridged and match `.superpowers/sdd/plan/task-8-facts.md`'s pulled-copy hashes exactly. `clean_tree: true` confirms the rule-1 fix (this task's first commit) — the working tree carries plenty of untracked data (PROCESS §2), but no tracked-file modification was pending at promotion.
+`inputs` paths are shown with `<scratchpad>` standing in for the session-local scratch directory recorded in the real file; the sha256 values are unabridged and match `.superpowers/sdd/plan/task-8-facts.md`'s pulled-copy hashes exactly. `clean_tree: true` confirms the rule-1 fix (this task's first commit) — the working tree carries plenty of untracked data (`docs/tasks/rung0-replicate-ceiling/plan.md`, Global Constraints), but no tracked-file modification was pending at promotion.
+
+**Commit reconciliation**: the measurement itself (job 31758395) ran against commit `25cec05` — the run's own `rung0_delta_reproducibility.params.json` records `"git_sha": "25cec0540d1cf86beb871aacb807003c14c9a843"`. The provenance record's `environment.code_commit` is `84c094d`, repository HEAD at promotion time, not the measuring commit — but `84c094d` is a descendant of `25cec05` whose only code changes are `scripts/promote_result.py` and its test (`tests/test_promote_result.py`); `scripts/delta_reproducibility.py` and everything under `src/` are byte-identical at both commits (`git diff 25cec05..84c094d -- scripts/delta_reproducibility.py src/` is empty). The measurement is reproducible from either commit; `code_commit` records the promoting commit, per the schema's contract, not the measuring one.
 
 ## Project-rule tests (Task 9, Step 4)
 

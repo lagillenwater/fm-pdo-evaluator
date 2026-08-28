@@ -16,7 +16,7 @@ Promotion means a result in `results/<task-slug>/` with a `<result>.provenance.j
 
 | Rung | What the spec requires | Status |
 |---|---|---|
-| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | Done — spec [docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md); code the commits on branch `rung0-replicate-ceiling`; outputs [results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv](../results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv) + [its provenance record](../results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json) |
+| 0 — replicate ceiling | A reproducibility ceiling clearing its null, on the declared panel | Done — split-half mean r 0.135, Spearman-Brown 0.238, over 1,600 pairs (p = 0.0005 against both the diff-drug and same-drug nulls). Spec [docs/tasks/rung0-replicate-ceiling/design.md](tasks/rung0-replicate-ceiling/design.md); code the commits on branch `rung0-replicate-ceiling`; outputs [results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv](../results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv) + [its provenance record](../results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json) |
 | 1 — held-out line | Prediction beating a floor and recovering a planted signal, as a fraction of rung 0 | Not started |
 | 2 — bulk read by a single-cell model | A synthesised population landing near the same material's real single cells, clearing a mismatched-line null | Not started |
 | 3 — cross-platform | Retention separable from a scrambled-line control | Not started |
@@ -31,7 +31,7 @@ A rung closes when its result is promoted with provenance, this table records it
 
 | Present | Consequence |
 |---|---|
-| Schema, determinism and adapter scaffolding, with tests | The apparatus a rung is added to exists; nothing here yet produces a measurement |
+| Schema, determinism and adapter scaffolding, with tests | The apparatus a rung is added to exists; rung 0 is the first measurement built on it |
 | `results/rung0-replicate-ceiling/` | Rung 0's promoted result and provenance record — the first work to promote a number, and the first to be held to the rules in the spec |
 | `docs/adapter_contract.md`, predating this spec | Not yet reconciled. Rung 1 — the first task with a model — brings it into line rather than a sweep that touches everything at once |
 | `docs/environment.md`, reconciled 2026-08-27 where rung 0 depends on it | The promotion-time snapshot semantics now match the landed schema; the rest of the document awaits the first rung that depends on it |

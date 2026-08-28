@@ -76,10 +76,11 @@ def promote(
         raise SystemExit(f"declared inputs not found: {[str(p) for p in missing]}")
 
     # Check clean_tree status before writing any files. ``-uno`` restricts this to tracked
-    # files: this project's working trees deliberately carry untracked data (PROCESS §2),
-    # locally and on the cluster, so counting untracked files would make clean_tree
-    # permanently False and meaningless. What this flag records is whether the tracked code
-    # and docs carried uncommitted modifications at promotion time.
+    # files: this project's working trees deliberately carry untracked data (rung 0's plan,
+    # docs/tasks/rung0-replicate-ceiling/plan.md, Global Constraints), locally and on the
+    # cluster, so counting untracked files would make clean_tree permanently False and
+    # meaningless. What this flag records is whether the tracked code and docs carried
+    # uncommitted modifications at promotion time.
     clean_tree_status = _git(repo, "status", "--porcelain", "-uno") == ""
     code_commit = _git(repo, "rev-parse", "HEAD")
 
