@@ -19,7 +19,7 @@ The practice is written down first so those tools get built to it, rather than t
 
 ## 1. The work lifecycle
 
-**Brainstorm → Design spec → Implementation plan → Execute → Review → Verify → Promote → Audit → Summarise → Close out.**
+**Brainstorm → Design spec → Implementation plan → Execute → Review → Verify → Audit → Promote → Summarise → Close out.**
 
 The first arrow is a gate: brainstorming ends with the design presented and explicitly approved.
 Until that approval nothing is edited and nothing is implemented — a revision request reopens the design, it does not approve it.
@@ -37,10 +37,10 @@ Dates live in git and in each document's own header line.
 | Execute | code changes | `superpowers:executing-plans` or `superpowers:subagent-driven-development`, with `superpowers:test-driven-development` and `superpowers:systematic-debugging` as needed |
 | Review | `docs/tasks/<task-slug>/review.md` — each finding and what was done about it | `superpowers:requesting-code-review` / `receiving-code-review` |
 | Verify | `docs/tasks/<task-slug>/verification.md` — the commands run, their output, and pointers to everything the run produced: tables, figures, logs | `superpowers:verification-before-completion` — evidence before "done," always |
+| Audit | a drift section in `docs/tasks/<task-slug>/review.md` — the design read as numbered, checkable claims, each verified against the landed tree with evidence, every departure classified aligned / recorded / drift. Drift found triggers a fix wave; it is fixed or recorded **before promotion**, so what gets promoted is what the documents describe | (clause-by-clause read of `design.md` vs the tree; dispatch a fresh reader) |
 | Promote | `results/<task-slug>/<result>.csv` + a `<result>.provenance.json` record beside it — only the subset the project will cite, copied out of the task folder and made citable. The record carries the result's own checksum, and promotion refuses when the two copies differ | `scripts/promote_result.py` |
-| Audit | a drift section in `docs/tasks/<task-slug>/review.md` — the design read as numbered, checkable claims, each verified against the landed tree with evidence, every departure classified aligned / recorded / drift. Drift found is fixed or recorded before the pull request | (clause-by-clause read of `design.md` vs the tree; dispatch a fresh reader) |
 | Summarise | `docs/tasks/<task-slug>/summary.md` — the finding in plain language: the hypothesis, the evidence (summary table, control results, figure), the conclusions, and the scripts the task touched. Written for the lab member reviewing the pull request, in statistical and biological terms | (write directly) |
-| Close out | branch merge/PR | `superpowers:finishing-a-development-branch` |
+| Close out | branch merge/PR. The pull request opens as a **draft**; the task's documents — `verification.md` especially — get one more human review before it is marked ready | `superpowers:finishing-a-development-branch` |
 
 Three rules keep the task folder from becoming an orphan:
 
@@ -98,6 +98,10 @@ A result without a `.provenance.json` provenance record is not citable in a writ
   An exemption in that run is a recorded gap, not a pass: if the task closed one, the test starts passing unexpectedly and the exemption comes out in the same change.
 - **`verification-before-completion` applies to claims, not just code**: before saying something is fixed, promoted, or done, show the command and its output.
   "Should work now" is not done.
+- **A verification check that is cheap to compute is worth running.**
+  When an assumption or a claim can be tested directly for minutes of compute, run the test rather than argue the assumption — the argument convinces, the check settles.
+- **State an assumption with its quantitative exposure, never as a bare hedge.**
+  Say what value would have to obtain for the conclusion to change and whether that value is plausible — "the draws are not independent" alone tells a reader nothing; "the dependence would need to inflate the null variance 3,700-fold to lose significance" tells them everything.
 
 ## 4. Git and collaboration
 
@@ -136,7 +140,7 @@ The rules these serve are in [`docs/SPEC.md`](SPEC.md); this is what they requir
 - **A new capability**: went through brainstorm → spec → plan in one `docs/tasks/<task-slug>/` folder, indexed in `SPEC.md`, with `STATE.md`'s entry linking spec, code, and outputs.
 - **A claim of "complete"**: backed by command output you actually ran, not by what the code should do.
 - **Any task**: the README reflects it. A rung that landed, a rule that arrived, a status that moved — if a reader would learn it from the three documents, the README says it too.
-- **A task heading to its pull request**: the drift audit ran (design read clause by clause against the landed tree, every departure aligned or recorded, findings in `review.md`) and the plain-language summary exists (`summary.md`: hypothesis, evidence with its table, controls and figure, conclusions, scripts touched). The PR opens after both, not before.
+- **A task heading to its pull request**: the drift audit ran after verification and **before promotion** (design read clause by clause against the landed tree, every departure aligned or recorded through a fix wave, findings in `review.md`), and the plain-language summary exists (`summary.md`: hypothesis, evidence with its table, controls and figure, conclusions, scripts touched). The pull request opens as a draft after both, and is marked ready only after a final human review of the task documents.
 
 ## 7. Failure modes this process exists to prevent
 
@@ -163,3 +167,4 @@ Written down because each has already cost this project real time, and because t
 - **2026-08-27** (`rung0-replicate-ceiling`, later the same day) — §5 gained the landed-references rule during rung 0's spec review: the new dataset registry and design documents had cited datasets and derivations from the unlanded prior lineage, which a reviewer of the public repository cannot open. References in the sense of `docs/SPEC.md` remain correct; references into worktrees do not.
 - **2026-08-27** (`rung0-replicate-ceiling`, later still) — the landed-references bullet gained the path form: cluster files cited repository-relative plus "on Alpine", never by absolute site paths. The first design document to cite a cluster file had written the absolute path, username and mount layout included.
 - **2026-08-28** (`rung0-replicate-ceiling`) — two lifecycle stages added between Promote and Close out, at Lucas's direction after rung 0 reached its pull request: **Audit** (the design read as numbered claims against the landed tree, every departure aligned or recorded — the systematic drift check the per-task reviews and dated entries approximate but do not guarantee) and **Summarise** (the plain-language `summary.md` a lab reviewer reads first). §6's definition of done gained the matching bullet; the PR opens only after both.
+- **2026-08-28** (`rung0-replicate-ceiling`, after its first audit) — the Audit stage moved from after Promote to **before** it, with an explicit fix wave: rung 0's audit ran post-promotion and found a declared-vs-scored panel discrepancy the promotion should have waited for. Close out now opens the pull request as a draft, with a final human review of the task documents before it is marked ready. §3 gained two principles from the same discussion: a cheap verification check beats an argued assumption, and an assumption is stated with its quantitative exposure, never as a bare hedge.

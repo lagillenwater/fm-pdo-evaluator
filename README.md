@@ -22,9 +22,10 @@ wrong.
 Rungs are built one at a time — each task on its own branch, named for the task — and a rung's
 spec arrives with its implementation, so the design of a measurement and the code producing it
 are reviewed together. Every measurement ships with a positive and a negative control, and every
-promoted comparison reports the smallest effect it was powered to detect. Before its pull
-request, every task passes a drift audit of its design against what landed and carries a
-plain-language summary of hypothesis, evidence, and conclusions. All rungs are scored
+promoted comparison reports the smallest effect it was powered to detect. Every task passes a
+drift audit of its design against what landed before promoting its result, carries a
+plain-language summary of hypothesis, evidence, and conclusions, and opens its pull request as
+a draft for a final review round. All rungs are scored
 inside one declared evaluation frame — the same datasets, gene and drug panels, and statistic —
 so their numbers divide like by like; a new dataset opens a new frame rather than silently
 shifting the old one.
