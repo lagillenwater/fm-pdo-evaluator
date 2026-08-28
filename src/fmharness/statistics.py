@@ -94,3 +94,12 @@ def minimum_detectable_aggregate(
     )
     # P(agg + theta >= crit) >= power  <=>  theta >= crit - Q_{boot_centred}(1 - power)
     return float(crit - np.quantile(boot_centred, 1.0 - power))
+
+
+def spearman_brown(r: float) -> float:
+    """Lift a split-half reliability to full-data reliability: ``2r / (1 + r)``.
+
+    The one implementation of the lift the ladder states wherever it is used, so a rung
+    cannot quietly compute a different correction. Undefined at r = -1; callers guard.
+    """
+    return 2.0 * r / (1.0 + r)
