@@ -5,15 +5,14 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G                    # DuckDB memory_limit is 28G + the aggregated result frame
+#SBATCH --mem=16G                    # snapshot_download bookkeeping only (no in-engine aggregation); modest
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
-# The pseudobulk shortcut, as a SINGLE process -- deliberately NOT an array. Tahoe's pseudobulk
-# table is a flat 1026-file shard set with no drug partition. --local-dir downloads it to scratch
-# once (authenticated), then DuckDB aggregates the treated-vs-DMSO means IN-ENGINE (bounded memory,
-# spills to disk), so no drug's raw rows -- some are tens of millions -- are ever materialized.
+# One authenticated bulk pull of Tahoe's pseudobulk DE config to scratch, as a SINGLE process --
+# deliberately NOT an array. The table is a flat 1026-file shard set with no drug partition, so
+# there is no work to split across shards; concurrent readers would only trip the HF rate limit.
 #
 # The archived lineage's variant also built the rung-1 delta bundle; that half arrives with rung 1.
 #
@@ -29,8 +28,6 @@ export PYTHONPATH="$REPO/src"
 export HF_HUB_CACHE="/scratch/alpine/$USER/hf"   # cache large downloads on scratch, not /projects
 # do NOT set HF_HOME to scratch -- that hides the token `hf auth login` saved under the HF cache:
 export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/token" 2>/dev/null || true)}"
-
-python -c "import duckdb" 2>/dev/null || pip install -q duckdb   # aggregate engine (compute node has internet)
 
 python scripts/download_tahoe_pseudobulk_de.py \
     --local-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de"
