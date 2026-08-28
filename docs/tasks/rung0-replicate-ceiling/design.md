@@ -1,6 +1,6 @@
 # Rung 0 — the replicate ceiling
 
-**Task** `rung0-replicate-ceiling` · **Status** DONE · **Branch** `rung0-replicate-ceiling`
+**Task** `rung0-replicate-ceiling` · **Status** OPEN — promoted; closes at merge · **Branch** `rung0-replicate-ceiling`
 **Steps** build, score, null, promote, document.
 **Spec** [docs/SPEC.md](../../SPEC.md), rung 0 · **State** [docs/STATE.md](../../STATE.md)
 **As of** 2026-08-27.
