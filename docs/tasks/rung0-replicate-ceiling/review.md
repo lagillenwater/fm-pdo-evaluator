@@ -79,64 +79,10 @@ line omits `restrict` and `split` although the run restricts (panel, drugs) and 
 description, but a wrong CID list would pass every declared control — the declared-panel hashes
 recorded at promotion are the guard.
 
-## Drift audit (2026-08-28)
+## Drift audit
 
-An independent audit of this branch against its own documents (`design.md`, `docs/DATA.md`,
-`summary.md`, `verification.md`, `plan.md`) scored 68 clauses: **47 aligned, 3 recorded
-deviations, 18 drift**. Auditor's judgment: the measurement is faithful and independently
-re-derivable — tranche hash, input hashes, CSV byte-identity, the pool arithmetic
-(1,650 − 50 = 1,600), and CSV-to-log-to-record agreement all recomputed and exact, suite green at
-zero skips — and the drift found was documentary, clustered in unrecorded execution rulings, plus
-one substantive panel finding. No promoted number was touched by the audit or by the fix wave
-below.
-
-Findings and dispositions, this fix wave:
-
-1. **Declared vs scored panel** — reconciled in `design.md`'s drug-panel bullet, `docs/DATA.md`'s
-   Restriction paragraph, and `summary.md`'s measured-quantity section: 32 CIDs resolve to 33
-   Tahoe names, 1,650 candidate conditions, Ribociclib unscoreable, 1,600 = 1,650 − 50 (not
-   32 × 50); dated 2026-08-28 entry recorded at `design.md`'s foot. FIXED.
-2. **"~2× MDE" claim scope mismatch** (statistics-layer plant 2.03×, verified against the closed
-   form; measurement-core plant 54.9×, with no test relating the plant to the MDE) — **not
-   addressed by this wave**; carried forward as an open item.
-3. **Unrecorded execution rulings** — one dated block at `design.md`'s foot records the two rulings
-   that belong at the design level (`spearman_brown` as a third shipped statistics function;
-   `clean_tree`'s redefinition to tracked-files-only, captured before writes); one dated block at
-   `plan.md`'s foot records all six plus `pyarrow>=15`. FIXED/RECORDED.
-4. **Steps line omits `restrict`/`split`** — `design.md`'s Steps line now reads `build, restrict,
-   split, score, null, promote, document`; the Controls section gained **restrict** and **split**
-   entries; two new tests (`test_restrict_positive_panel_subset_scores_exactly_the_subset`,
-   `test_restrict_negative_disjoint_panel_scores_nothing`) exercise the restrict controls against
-   the real `score_split_half`. FIXED.
-5. **Missing per-gene figure** — `write_per_gene_figure` added to `scripts/delta_reproducibility.py`
-   and wired into `main()`; the figure generated from the committed CSV
-   (`rung0_per_gene_reliability.png`); `verification.md` now reads the diagnostic with the actual
-   numbers (97.0% of genes r > 0, median per-gene r 0.146). FIXED.
-6. **Unreachable `task-8-facts.md` citations** — both replaced in `verification.md` with
-   self-contained statements naming the controller's execution log and noting the two input
-   hashes are independently recomputable (they also appear in, and match, the promoted provenance
-   record). FIXED.
-7. **Decision-history section-title mismatch** — `design.md`'s dated entry now quotes the section's
-   real title, "Why use the DE statistics as published". FIXED.
-8. **Pilot commit misattribution** — `design.md`'s Expected-result line now distinguishes the
-   recorded commit (`4c23f609`) from the archive branch tip (`ff88bba`). FIXED.
-9. **Control-table number that doesn't reproduce** — `summary.md`'s row corrected to "recovered
-   (0.800-0.809 across seeds; tolerance plus/minus 0.05)". FIXED.
-10. **Post-promotion prose rewrite (`c6f1baf`) unrecorded** — one sentence added to
-    `verification.md`'s commit-reconciliation paragraph; the script docstring's nonexistent-path
-    example (`data/static/tahoe_drug_names.txt`) fixed to describe `--drug-names-file`
-    generically. FIXED.
-11. **Bare Alpine-only path forms** — `data/static/tahoe_target_cids.txt` is not tracked on this
-    branch; `design.md` and `docs/DATA.md` now say so rather than citing it bare; the
-    `/projects`-path decision entry reworded to "at its repository-relative path on Alpine".
-    FIXED.
-12. **`pyarrow>=15` and unticked checkboxes** — recorded in `plan.md`'s dated block; all 55
-    checkboxes ticked (every task executed). FIXED/RECORDED.
-
-Reverse-direction items landed but undescribed — `ralpine help`'s verb rewrite and
-`register_tranche`'s etag/unverified-shard refusal — are now named in `design.md`'s
-ported-apparatus table.
-
-One process change came with this wave, beyond the individual fixes: the work lifecycle is
-reordered so a drift audit like this one runs *before* promotion on future tasks, not after —
-closing the gap that let this wave's findings accumulate undetected past promotion.
+The audit stage's full record — the 68-clause first audit, the fix wave's dispositions, and the
+re-audit verdict — lives in [`audit.md`](audit.md). Headline: 47 aligned, 3 recorded deviations,
+18 drift, all drift documentary except the declared-vs-scored panel finding; every item fixed or
+recorded by the fix wave, re-audit pending. The measurement itself was independently
+re-derived and reproduced exactly.
