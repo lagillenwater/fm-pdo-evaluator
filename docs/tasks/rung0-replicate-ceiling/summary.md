@@ -91,9 +91,12 @@ null's variance more than 3,000-fold — and detection power only degrades by th
 that factor (a tenfold variance inflation would move the smallest detectable effect from 0.039
 to about 0.12, still under the observed 0.135). How much sharing actually happens is small: any
 one half-profile appears in roughly 0.25% of the draw pairs, which produces single-digit
-inflation factors in practice, not thousands. An exact permutation check that carries this
-dependence by construction — sampling derangements of the pairing rather than treating draws as
-an independent pool — is running, and its measured inflation factor will be recorded here.
+inflation factors in practice, not thousands. The check has now been run: breaking the pairing
+with 500 derangements — the null that carries the dependence by construction — gives a measured
+inflation factor of 0.87, meaning the dependence does not widen the null at all and the
+reported p-values were, if anything, slightly conservative. The observed mean exceeded every
+one of the 500 rearrangements (exact p = 0.002, the smallest 500 permutations can certify).
+The assumption is discharged by measurement, not argument.
 
 ## Scripts this task touched
 

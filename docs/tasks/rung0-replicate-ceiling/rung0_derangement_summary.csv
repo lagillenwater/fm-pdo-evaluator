@@ -1,0 +1,2 @@
+replicate_col,n_genes,n_pairs,n_perm,observed_mean,perm_mean_mean,perm_mean_sd,p_exact,se_iid_pool,design_effect,z_derangement
+plate,13886,1600,500,0.1348,0.0361,0.0009,0.002,0.00099,0.872,106.84

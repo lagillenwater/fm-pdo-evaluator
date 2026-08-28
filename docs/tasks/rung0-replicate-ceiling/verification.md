@@ -119,7 +119,7 @@ Both MDEs are far below the observed ceiling — at n ≈ 1,600 pairs this run i
 
 The stratified null draws reuse the same half-profiles across mismatched pairs, so they are not i.i.d., while the bootstrap treats them as an exchangeable pool; this is the residual assumption behind the reported p-values and MDEs, inherited from the archived lineage's design.
 
-**Quantitative exposure (PROCESS §3).** That dependence can only widen the null aggregate's spread, never move its location. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null CI columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — is running; its measured inflation factor will be recorded here.
+**Quantitative exposure (PROCESS §3).** That dependence can only widen the null aggregate's spread, never move its location. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null CI columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — was run; its result is in the section below.
 
 ## GDSC2 CID list — provenance note
 
@@ -213,3 +213,28 @@ tests/test_project_rules.py::test_rule_04_edge_promoted_tasks_have_known_answer_
 ```
 
 All 8 run (none skip) and all pass: rule 1's two tests validate the real record above; rule 4's edge test finds `pytest.mark.known_answer` already present in the suite (`tests/test_statistics_known_answers.py`, `tests/test_rung0_controls.py`). The full suite (`uv run pytest -q`) also runs with zero skips now — every project-rule test that was gated on a promoted result binds.
+
+## Derangement permutation check (2026-08-28, job 31764582)
+
+The exposure argument above bounded the damage the profile-sharing dependence could do; this
+check measured it. `scripts/derangement_null.py` (submitted as
+`scripts/alpine/derangement_null.sbatch`, same inputs as the ceiling run) broke the matched
+pairing with 500 derangements of the 1,600 finite-scored conditions and computed the mean
+mismatched correlation per derangement — the null distribution of the reported aggregate with
+the dependence carried by construction. Summary
+(`rung0_derangement_summary.csv`; per-permutation means in `rung0_derangement_perm_means.csv`;
+log at `results/rung0-replicate-ceiling/derangement-null-31764582.out`):
+
+```
+observed_mean 0.1348   perm_mean_mean 0.0361   perm_mean_sd 0.0009
+p_exact 0.002          se_iid_pool 0.00099     design_effect 0.872   z_derangement 106.84
+```
+
+Reading: the measured design effect is **0.872** — the dependence does not widen the null
+mean's spread at all (a derangement uses each half-profile exactly once, whose balance slightly
+*tightens* the permutation mean relative to independent pooling), so the exchangeable-pool
+treatment behind the reported p-values and MDEs was marginally conservative, not optimistic.
+The observed mean exceeds every one of the 500 permutation means; p_exact = 0.002 is the
+smallest value 500 permutations can certify. The stated assumption is discharged by
+measurement rather than argument. The check is an unpromoted verification diagnostic: the
+promoted record is unchanged, per PROCESS §1's convergence rule.
