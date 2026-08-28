@@ -36,7 +36,7 @@
 
 Why the amendment: the design's ported-apparatus table listed `scripts/build_tahoe_pseudobulk_deltas.py` "unchanged", but that script imports `fmharness.deltas` (rung-1 bundle machinery) at module top — unchanged, it cannot import on this branch. Rung 0's provenance chain needs only its download half.
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 In `pyproject.toml`, extend `dependencies` (keep the existing comment and entries):
 
@@ -50,12 +50,12 @@ dependencies = [
 ]
 ```
 
-- [ ] **Step 2: Lock and sanity-import**
+- [x] **Step 2: Lock and sanity-import**
 
 Run: `uv lock && uv sync --extra dev && uv run python -c "import pandas, duckdb, matplotlib; print('ok')"`
 Expected: `ok`
 
-- [ ] **Step 3: Amend the design's ported-apparatus table**
+- [x] **Step 3: Amend the design's ported-apparatus table**
 
 In `design.md`, replace the row
 
@@ -71,11 +71,11 @@ and append to the decision history:
 
 (Use the actual current date if it differs.)
 
-- [ ] **Step 4: Align DATA.md**
+- [x] **Step 4: Align DATA.md**
 
 In `docs/DATA.md`: in the **Download** paragraph, change "by `scripts/alpine/01_pseudobulk_shortcut.sbatch`" to "by `scripts/alpine/01_pseudobulk_shortcut.sbatch` (download logic in `scripts/download_tahoe_pseudobulk_de.py`; the archived lineage's variant of the same pull performed the 2026-07-24 download)". In the **Delta bundle** bullet, change "(`scripts/build_tahoe_pseudobulk_deltas.py`, landing with the rung-0 task as part of this pool's provenance chain)" to "(arrives with rung 1; its download half is landed as `scripts/download_tahoe_pseudobulk_de.py`)".
 
-- [ ] **Step 5: Test and commit**
+- [x] **Step 5: Test and commit**
 
 Run: `uv run pytest -q` — expected: all pass.
 
@@ -95,7 +95,7 @@ git commit -m "chore: rung-0 dependencies; design amendment extracting the DE do
 **Interfaces:**
 - Produces: `bootstrap_aggregate_pvalue(observed_agg: float, null_draws: np.ndarray, n_obs: int, *, agg=np.mean, n_boot=2000, seed=0, min_null_draws=10) -> tuple[float, float, float]` (p, ci_lo, ci_hi) and `minimum_detectable_aggregate(observed_draws, null_draws, n_obs, *, agg=np.mean, alpha=0.05, power=0.80, n_boot=2000, seed=0, min_null_draws=10) -> float`. Tasks 3–4 and the promotion pipeline consume both.
 
-- [ ] **Step 1: Port the shared helper**
+- [x] **Step 1: Port the shared helper**
 
 Run: `git show rung0-replicate-ceiling-old-lineage:src/fmharness/statistics.py > src/fmharness/statistics.py`
 
@@ -108,7 +108,7 @@ reintroduced in several scripts. One shared, tested helper is how it stays fixed
 everywhere at once.
 ```
 
-- [ ] **Step 2: Add the MDE helper**
+- [x] **Step 2: Add the MDE helper**
 
 Append to `src/fmharness/statistics.py`:
 
@@ -156,7 +156,7 @@ def minimum_detectable_aggregate(
     return float(crit - np.quantile(boot_centred, 1.0 - power))
 ```
 
-- [ ] **Step 3: Write the known-answer tests**
+- [x] **Step 3: Write the known-answer tests**
 
 Create `tests/test_statistics_known_answers.py`:
 
@@ -252,12 +252,12 @@ def test_minimum_detectable_aggregate_returns_nan_on_too_few_null_draws() -> Non
     assert math.isnan(minimum_detectable_aggregate(np.ones(50), np.ones(3), 10))
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest tests/test_statistics_known_answers.py -v`
 Expected: all PASS (the ported function must satisfy the ported tests unchanged; the MDE tests exercise the new helper).
 
-- [ ] **Step 5: Full suite, commit**
+- [x] **Step 5: Full suite, commit**
 
 Run: `uv run pytest -q` — expected: pass.
 
@@ -283,11 +283,11 @@ git commit -m "feat: shared aggregate-vs-null statistics with known answers, plu
   - `score_split_half(de: pd.DataFrame, panel: set[str], min_genes: int = 50) -> tuple[np.ndarray, pd.DataFrame, pd.DataFrame]` — (per-pair r, piv0, piv1), pivots indexed by (patient, drug).
   - `stratified_null_draws(piv0, piv1, n_perm: int = 500, seed: int = 0, min_genes: int = 50) -> dict[str, np.ndarray]` — keys `any_pair`, `diff_drug`, `same_drug`.
 
-- [ ] **Step 1: Port the script**
+- [x] **Step 1: Port the script**
 
 Run: `git show rung0-replicate-ceiling-old-lineage:scripts/delta_reproducibility.py > scripts/delta_reproducibility.py`
 
-- [ ] **Step 2: Write the failing control tests**
+- [x] **Step 2: Write the failing control tests**
 
 Create `tests/test_rung0_controls.py`:
 
@@ -448,12 +448,12 @@ def test_null_negative_signal_free_strata_sit_at_their_floors(tmp_path) -> None:
         assert abs(float(np.mean(draws))) < 0.05, f"{stratum} floor is not ~0 on noise"
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `uv run pytest tests/test_rung0_controls.py -v`
 Expected: FAIL — `build_split_half_frame` etc. do not exist yet (the ported script has `_split_half_deltas` and inline logic).
 
-- [ ] **Step 4: Refactor the ported script's core**
+- [x] **Step 4: Refactor the ported script's core**
 
 In `scripts/delta_reproducibility.py`:
 
@@ -548,12 +548,12 @@ def stratified_null_draws(
 
 (e) In `main()`, replace the old `_corr`/pivot/`_draw` block with calls to these functions (the summary dict is rebuilt in Task 4 — for now keep the ported summary keys wired to the new functions' outputs so the script still runs end-to-end: `r`, `nulls = stratified_null_draws(...)`, `nl = nulls["diff_drug"] ...` as before).
 
-- [ ] **Step 5: Run the control tests to verify they pass**
+- [x] **Step 5: Run the control tests to verify they pass**
 
 Run: `uv run pytest tests/test_rung0_controls.py -v`
 Expected: all PASS. If `test_build_negative...` fails because DuckDB's `hash()` put the single plate in bucket 0 not 1, the frame still has one all-NaN half — the assertion holds either way; investigate before touching the test.
 
-- [ ] **Step 6: Full suite, commit**
+- [x] **Step 6: Full suite, commit**
 
 Run: `uv run pytest -q` — expected: pass.
 
@@ -579,7 +579,7 @@ git commit -m "feat: rung-0 measurement core, testable and vectorized, with buil
   - `main()` writing, under `--out-dir`: `rung0_delta_reproducibility.csv`, `rung0_per_gene_reliability.csv`, `rung0_pool_description.csv`, `rung0_ceiling.png`, and the params sidecar.
   - CLI: `--drug-names-file` (one Tahoe drug name per line; bypasses the HuggingFace name lookup so fixtures and offline runs need no `datasets` import).
 
-- [ ] **Step 1: Append the failing reporting tests**
+- [x] **Step 1: Append the failing reporting tests**
 
 Append to `tests/test_rung0_controls.py`:
 
@@ -692,12 +692,12 @@ def test_summarize_headlines_the_mean_and_reports_both_mdes() -> None:
     assert s["splithalf_median_r"] is not None  # descriptive column retained
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `uv run pytest tests/test_rung0_controls.py -v -k "tercile or per_gene or summarize"`
 Expected: FAIL — functions not defined.
 
-- [ ] **Step 3: Implement the reporting layer**
+- [x] **Step 3: Implement the reporting layer**
 
 Add to `scripts/delta_reproducibility.py`:
 
@@ -781,7 +781,7 @@ def summarize(r: np.ndarray, nulls: dict[str, np.ndarray], seed: int = 0) -> dic
     }
 ```
 
-- [ ] **Step 4: Pool description and figure**
+- [x] **Step 4: Pool description and figure**
 
 Add:
 
@@ -836,7 +836,7 @@ def write_figure(r: np.ndarray, nulls: dict[str, np.ndarray], out_png: Path) -> 
     plt.close(fig)
 ```
 
-- [ ] **Step 5: Rewire `main()`**
+- [x] **Step 5: Rewire `main()`**
 
 In `main()`:
 - Add `--drug-names-file` (default None): when given, `names = sorted({ln.strip() for ln in Path(...).read_text().splitlines() if ln.strip()})` and `_target_names` is not called (no HuggingFace import).
@@ -844,7 +844,7 @@ In `main()`:
 - Delete the superseded summary-dict block, the `_corr` closure, and `_draw` (Task 3 already replaced their logic).
 - Keep the panel handling (`--panel-file` pins; top-HVG fallback prints its warning) exactly as ported.
 
-- [ ] **Step 6: Run the reporting tests, then an end-to-end fixture run**
+- [x] **Step 6: Run the reporting tests, then an end-to-end fixture run**
 
 Run: `uv run pytest tests/test_rung0_controls.py -v`
 Expected: all PASS.
@@ -871,7 +871,7 @@ PY
 
 Expected: exits 0; prints the four output files plus the params sidecar; the printed summary's `splithalf_mean_r` is ≈0.8 (the fixture's planted reliability) and `p_vs_null` ≤ 0.005. (Use the scratchpad path of your session if `/tmp` is disallowed.)
 
-- [ ] **Step 7: Full suite, commit**
+- [x] **Step 7: Full suite, commit**
 
 Run: `uv run pytest -q` — expected: pass.
 
@@ -892,7 +892,7 @@ git commit -m "feat: rung-0 reporting -- mean headline with MDEs, tercile contro
 - Consumes: `fmharness.schema.PromotedResult`, `EnvironmentSnapshot`.
 - Produces: CLI `python scripts/promote_result.py --task <slug> --result <path> --script <repo-relative> --input <path> [--input ...] --seed 0 --data-commit <tranche-content-hash> --arg key=value [--log <path>] [--job-id N] [--repo <path>]`, and importable `promote(...) -> Path` (used by tests).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_promote_result.py`:
 
@@ -989,12 +989,12 @@ def test_promotion_refuses_a_script_not_in_the_repo(repo: Path) -> None:
         _promote(repo, script="scripts/never_existed.py")
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest tests/test_promote_result.py -v`
 Expected: FAIL — `scripts/promote_result.py` does not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `scripts/promote_result.py`:
 
@@ -1147,12 +1147,12 @@ if __name__ == "__main__":
 
 Note on the test fixture's `git add -A`: it runs inside a throwaway `tmp_path` repo the test itself creates — the never-`add -A` constraint protects this repository's working tree, which that fixture never touches.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_promote_result.py -v`
 Expected: all PASS. `test_rule_01_*` in `tests/test_project_rules.py` still skip (nothing promoted in this repo yet) — that is correct.
 
-- [ ] **Step 5: Full suite, commit**
+- [x] **Step 5: Full suite, commit**
 
 ```bash
 uv run pytest -q
@@ -1172,7 +1172,7 @@ git commit -m "feat: promotion emits a schema-validated PromotedResult and refus
 - Consumes: `fmharness.schema.Tranche`; the HuggingFace download-cache metadata layout (`<data-dir>/.cache/huggingface/download/metadata/**/<shard>.metadata`, line 1 = dataset revision at download time, line 2 = per-file sha256 etag).
 - Produces: CLI writing `data/tranches/<tranche-id>.json` (a `Tranche`) plus `<tranche-id>.manifest.txt` beside it; importable `shard_manifest`, `content_hash`, `read_download_metadata`, `register`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_register_tranche.py`:
 
@@ -1256,11 +1256,11 @@ def test_registration_writes_a_valid_tranche_and_refuses_overwrite(tmp_path: Pat
         )
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest tests/test_register_tranche.py -v` — expected: FAIL (script absent).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `scripts/register_tranche.py`:
 
@@ -1410,11 +1410,11 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_register_tranche.py -v` — expected: all PASS.
 
-- [ ] **Step 5: Full suite, commit**
+- [x] **Step 5: Full suite, commit**
 
 ```bash
 uv run pytest -q
@@ -1432,7 +1432,7 @@ git commit -m "feat: tranche ingestion with etag cross-check and immutability re
 **Interfaces:**
 - Produces: `ralpine switch <branch>` (fetch, `git switch`, ff to upstream); job scripts Task 8 submits. All sbatch scripts assume repo root as cwd and the proven PATH-based `stack` env activation (NOT `module load anaconda` — see the ported comments for the evidence).
 
-- [ ] **Step 1: Port ralpine and add `switch`**
+- [x] **Step 1: Port ralpine and add `switch`**
 
 ```bash
 mkdir -p scripts/alpine
@@ -1463,7 +1463,7 @@ Also add `switch` to the usage block in the header comment (one line under `ralp
 
 Run: `bash -n scripts/alpine/ralpine` — expected: no output (syntax ok).
 
-- [ ] **Step 2: Extract the download script**
+- [x] **Step 2: Extract the download script**
 
 Create `scripts/download_tahoe_pseudobulk_de.py`:
 
@@ -1512,7 +1512,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 3: Port 00 and 01**
+- [x] **Step 3: Port 00 and 01**
 
 ```bash
 git show rung0-replicate-ceiling-old-lineage:scripts/alpine/00_target_cids.sbatch > scripts/alpine/00_target_cids.sbatch
@@ -1539,7 +1539,7 @@ and add one line to its header comment: `# The archived lineage's variant also b
 
 Note: `00_target_cids.sbatch` reads `data/static/gdsc2_auc_pubchem_cids.txt`, which is untracked on Alpine and not landed here. Neither 00 nor 01 is re-run by this task (their outputs exist and are pinned by hash/tranche); they land as the provenance chain. The GDSC2 CID list becomes a tracked input when rung 4 registers GDSC2 — note this in Task 9's verification.md.
 
-- [ ] **Step 4: The registration job**
+- [x] **Step 4: The registration job**
 
 Create `scripts/alpine/register_tranche.sbatch`:
 
@@ -1584,7 +1584,7 @@ python scripts/register_tranche.py \
     --out data/tranches/tahoe100m-pseudobulk-de.v1.json
 ```
 
-- [ ] **Step 5: The measurement job**
+- [x] **Step 5: The measurement job**
 
 ```bash
 git show rung0-replicate-ceiling-old-lineage:scripts/alpine/delta_reproducibility.sbatch > scripts/alpine/delta_reproducibility.sbatch
@@ -1604,7 +1604,7 @@ python scripts/delta_reproducibility.py \
 
 (Everything else in the ported sbatch — partition/QoS, PATH-based env, `PYTHONUNBUFFERED`, HF token plumbing for the drug-name lookup — stays as ported; those comments carry evidence from real failures.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 uv run pytest -q
@@ -1618,7 +1618,7 @@ git commit -m "feat: Alpine plumbing -- ralpine switch verb, extracted DE downlo
 
 This task runs against the cluster; each step verifies before acting (PROCESS §2). Standing permissions cover `ralpine submit/cancel/update` and commit/push on this branch.
 
-- [ ] **Step 1: Deploy, and bind the remote paths once**
+- [x] **Step 1: Deploy, and bind the remote paths once**
 
 ```bash
 git push
@@ -1634,7 +1634,7 @@ SCRATCH="/scratch/alpine/$(./scripts/alpine/ralpine run whoami | tr -d '[:space:
 echo "ROOT=$ROOT"; echo "SCRATCH=$SCRATCH"
 ```
 
-- [ ] **Step 2: Verify job inputs exist**
+- [x] **Step 2: Verify job inputs exist**
 
 ```bash
 ./scripts/alpine/ralpine run ls "$SCRATCH/tahoe_pseudobulk_de/pseudobulk_differential_expression" | head -3
@@ -1643,7 +1643,7 @@ echo "ROOT=$ROOT"; echo "SCRATCH=$SCRATCH"
 
 Expected: parquet shards listed; panel 14121 lines; CID file 32 lines. Any of the three missing is a stop — rebuild via `01_pseudobulk_shortcut.sbatch` (pool) or stop and report (panel/CIDs), never submit into missing inputs.
 
-- [ ] **Step 3: Register the tranche**
+- [x] **Step 3: Register the tranche**
 
 ```bash
 ./scripts/alpine/ralpine submit scripts/alpine/register_tranche.sbatch
@@ -1653,7 +1653,7 @@ Expected: parquet shards listed; panel 14121 lines; CID file 32 lines. Any of th
 
 If registration fails on an etag mismatch: the pool is corrupt — stop, report, and re-download via `01_pseudobulk_shortcut.sbatch` before re-registering. Do not register a pool that fails its own integrity check.
 
-- [ ] **Step 4: Pull and commit the tranche record**
+- [x] **Step 4: Pull and commit the tranche record**
 
 ```bash
 ./scripts/alpine/ralpine pull "$ROOT/data/tranches/tahoe100m-pseudobulk-de.v1.json" data/tranches/tahoe100m-pseudobulk-de.v1.json
@@ -1667,7 +1667,7 @@ git push
 
 (`$ROOT` is bound in Task 8 Step 1; the pull verb takes the full remote path.)
 
-- [ ] **Step 5: Submit the measurement**
+- [x] **Step 5: Submit the measurement**
 
 ```bash
 ./scripts/alpine/ralpine submit scripts/alpine/delta_reproducibility.sbatch
@@ -1677,7 +1677,7 @@ git push
 
 Expected wall time ~2h. Sanity against the design's Expected result: `splithalf_mean_r` near 0.135, `null_diff_drug_mean_r` near 0.03, `p_vs_null` ≤ 0.001, n_pairs 1,600, ~13,886 panel genes present. A large departure is a stop-and-investigate, not a promote.
 
-- [ ] **Step 6: Pull outputs and log**
+- [x] **Step 6: Pull outputs and log**
 
 ```bash
 for f in rung0_delta_reproducibility.csv rung0_delta_reproducibility.params.json rung0_per_gene_reliability.csv rung0_pool_description.csv rung0_ceiling.png; do
@@ -1689,7 +1689,7 @@ mkdir -p results/rung0-replicate-ceiling
 
 (The log lands in `results/<task-slug>/` per PROCESS §2.)
 
-- [ ] **Step 7: Commit the run outputs**
+- [x] **Step 7: Commit the run outputs**
 
 ```bash
 git add docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.params.json docs/tasks/rung0-replicate-ceiling/rung0_per_gene_reliability.csv docs/tasks/rung0-replicate-ceiling/rung0_pool_description.csv docs/tasks/rung0-replicate-ceiling/rung0_ceiling.png results/rung0-replicate-ceiling/delta-repro-<JOBID>.out
@@ -1704,7 +1704,7 @@ git commit -m "run: rung-0 ceiling outputs and job log, job <JOBID>"
 - Modify: `docs/STATE.md` (ladder row 0 with its three links), `README.md` (status), `docs/tasks/rung0-replicate-ceiling/design.md` (status/current-result note)
 - Create: `results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` + `.provenance.json` (via the promote script), `docs/tasks/rung0-replicate-ceiling/verification.md`
 
-- [ ] **Step 1: Stage the promotion inputs**
+- [x] **Step 1: Stage the promotion inputs**
 
 The panel file is referenced on Alpine; promotion records its hash. Pull a temporary copy to hash it (not committed):
 
@@ -1715,7 +1715,7 @@ The panel file is referenced on Alpine; promotion records its hash. Pull a tempo
 
 (Use the session scratchpad instead of `/tmp` when available.)
 
-- [ ] **Step 2: Promote**
+- [x] **Step 2: Promote**
 
 ```bash
 uv run python scripts/promote_result.py \
@@ -1733,22 +1733,22 @@ uv run python scripts/promote_result.py \
 
 Expected: `promoted -> results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` plus the record path. Note: `clean_tree` will be `False` if any working-tree edit is pending — promote from a clean tree (commit doc edits first, promote, then commit the promotion).
 
-- [ ] **Step 3: Run the project-rule tests — they now bind**
+- [x] **Step 3: Run the project-rule tests — they now bind**
 
 Run: `uv run pytest tests/test_project_rules.py -v -m "step_promote or step_score or step_null or step_document"`
 Expected: rule-1 tests now RUN (not skip) and PASS against the real record; rule-4 edge test now RUNS and PASSES (known-answer-marked tests exist).
 
-- [ ] **Step 4: Write `verification.md`**
+- [x] **Step 4: Write `verification.md`**
 
 Create `docs/tasks/rung0-replicate-ceiling/verification.md` with: the exact commands of Tasks 8–9 as actually run, the job id, the tail of the job log showing the summary block, the pool-description highlights (pairs scored, plates per half), the tercile-control values and whether they rose monotonically, both MDE columns with one sentence reading them, and the note that `data/static/gdsc2_auc_pubchem_cids.txt` (00's input) becomes a tracked input when rung 4 registers GDSC2. Every number cited must be copied from the pulled CSV, not from memory.
 
-- [ ] **Step 5: Move STATE, README, and the design status**
+- [x] **Step 5: Move STATE, README, and the design status**
 
 - `docs/STATE.md` rung-0 row → done, with the three links: spec (`docs/tasks/rung0-replicate-ceiling/design.md`), code (the branch's commits), outputs (`results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` + its provenance record). Update the "No results/ directory exists" line — it is no longer true.
 - `README.md` Status section: rung 0 landed, the ceiling exists, higher rungs read against it. No result numbers in commit messages — numbers live in STATE/the CSV.
 - `design.md`: add a dated "Current result" note pointing at the promoted artifact (numbers by reference, not restated).
 
-- [ ] **Step 6: Full suite, commit, push**
+- [x] **Step 6: Full suite, commit, push**
 
 ```bash
 uv run pytest -q
@@ -1761,9 +1761,9 @@ git push
 
 ### Task 10: Review and close out
 
-- [ ] **Step 1: Self-review the diff** — run `/code-review` (or the superpowers:requesting-code-review flow) on the branch diff vs `project-docs`; record each finding and its disposition in `docs/tasks/rung0-replicate-ceiling/review.md`; fix what review surfaces, re-running the suite.
-- [ ] **Step 2: Verification gate** — superpowers:verification-before-completion: every "done" claim in `verification.md` backed by command output.
-- [ ] **Step 3: Open the PR** — superpowers:finishing-a-development-branch. Target the trunk (`project-docs` if still open, else `main`), title "Rung 0 — the replicate ceiling", body linking design.md, verification.md, and the promoted artifact. One functional area; CodeRabbit + one lab-member approval per Greene Lab standard. Confirm the target with Lucas before opening.
+- [x] **Step 1: Self-review the diff** — run `/code-review` (or the superpowers:requesting-code-review flow) on the branch diff vs `project-docs`; record each finding and its disposition in `docs/tasks/rung0-replicate-ceiling/review.md`; fix what review surfaces, re-running the suite.
+- [x] **Step 2: Verification gate** — superpowers:verification-before-completion: every "done" claim in `verification.md` backed by command output.
+- [x] **Step 3: Open the PR** — superpowers:finishing-a-development-branch. Target the trunk (`project-docs` if still open, else `main`), title "Rung 0 — the replicate ceiling", body linking design.md, verification.md, and the promoted artifact. One functional area; CodeRabbit + one lab-member approval per Greene Lab standard. Confirm the target with Lucas before opening.
 
 ---
 
@@ -1772,3 +1772,45 @@ git push
 - **Spec coverage:** declared statistic (T3–T4), controls per step (T3–T4 tests), MDE (T2, T4), tranche + `data_commit` chain (T6, T8–T9), promotion refusal (T5), pool description measured (T4, T8), per-gene diagnostic unpromoted (T4, T8 outputs; not promoted in T9), panel pinned by hash at promotion (T9), provenance-chain scripts on branch (T1, T7), landed-references (T1 amendment; ported docstrings rewritten), STATE/README move with the number (T9).
 - **Known deviation recorded:** `build_tahoe_pseudobulk_deltas.py` not ported (T1 amendment with dated design entry).
 - **Type consistency:** `build_split_half_frame` / `score_split_half` / `stratified_null_draws` / `masked_rowwise_pearson` signatures match between Task 3's definitions and Task 4/8 consumers; `promote()` and `register()` keyword signatures match their tests.
+
+## Post-hoc reconciliation (2026-08-28, drift audit)
+
+All checkboxes above are ticked: every task in this plan ran. Six execution rulings and one
+dependency addition landed during implementation without a dated note against this plan's text
+(drift-audit finding 3 + 12); recorded here, each against what the plan showed, what shipped, and
+why:
+
+- **`spearman_brown`** — the plan's statistics section (Task 2) shows the Spearman-Brown lift
+  computed inline as `2*r/(1+r)`; shipped `src/fmharness/statistics.py::spearman_brown` as a
+  third, independently tested helper, consumed by `summarize()` (commit `5a4d038`) — so the lift
+  is the same tested code wherever it is used, not reimplemented per call site.
+- **Null sampler `replace=False`** — plan:543 shows `rng.choice(..., replace=avail.size < n_perm)`
+  (falls back to sampling with replacement once a stratum runs short); shipped samples without
+  replacement whenever `avail.size >= n_perm` regardless (commit `9b24cc0`) — drawing the same
+  mismatched pair twice would inflate apparent null precision without adding information.
+- **Column intersection in `score_split_half`** — plan:498 intersects only the pivot INDEX
+  (patient, drug) across halves; shipped also intersects the pivot COLUMNS, i.e. the gene sets
+  (commit `9b24cc0`) — `pivot_table` drops all-NaN columns per half independently, so two halves
+  can carry different gene sets even after the row intersection, and a caller that skipped it
+  could silently correlate misaligned genes.
+- **`clean_tree` redefinition** — plan:1100 shows plain `git status --porcelain`, captured after
+  the result is copied into `results/`; shipped uses `--porcelain -uno` (tracked files only),
+  captured BEFORE the copy (commit `441b238`) — untracked task-folder scratch sits in the working
+  tree throughout this task, so counting it would make `clean_tree` permanently `False`, and
+  capturing after the write would count the promotion's own output as a dirty-tree signal. This
+  changes what the promoted record's `clean_tree` field means relative to the plan's text.
+- **Unverified-shard refusal in `register()`** — plan:1358 refuses only shards whose hash
+  MISMATCHES a download-time etag; shipped also refuses shards with NO etag entry at all (commit
+  `61060f3`) — an unlisted shard is not verified as unmodified, so silently registering it would
+  be a weaker guarantee than the plan's text describes.
+- **`--input LABEL=PATH`** — plan:1122 shows `--input` taking a bare path (`type=Path`); shipped
+  parses `LABEL=PATH` so the promoted record's `inputs` dict is keyed by a durable label rather
+  than an ephemeral scratch path (commit `4211e30`) — already noted forward-looking in
+  `verification.md`.
+- **`pyarrow>=15`** — the plan's Task 1 dependency block (`pyproject.toml`) lists `pydantic`,
+  `numpy`, `pandas`, `duckdb`, `matplotlib`; the shipped `pyproject.toml` also carries
+  `pyarrow>=15`, needed transitively for the parquet-writing path the fixture-based tests exercise
+  — never added to the plan's text.
+
+Per project rule 2, this is the record; the superseded code blocks above are left as originally
+written rather than rewritten to match what shipped.
