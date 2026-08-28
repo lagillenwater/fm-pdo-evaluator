@@ -22,11 +22,11 @@ hypothetical 1.0.
 ## What was measured
 
 For each of 1,600 (cell line, drug) conditions scored — 50 lines by 31 of the 32 declared drugs
-(shared with the GDSC2 viability screen) plus one drug's alternate name, a solvate variant of
+(shared with the GDSC2 drug-sensitivity screen — Genomics of Drug Sensitivity in Cancer, release 2) plus one drug's alternate name, a solvate variant of
 Trametinib — the replicate plates were split deterministically in half. The 32nd declared drug,
 Ribociclib, has only a single plate throughout the pool and cannot be split, so it scores zero
 conditions and contributes nothing to the 1,600. Each
-half's per-gene log2 fold change (treated vs plate-matched DMSO) was averaged, and the two
+half's per-gene log2 fold change (treated vs plate-matched DMSO — dimethyl sulfoxide, the drug-free solvent control) was averaged, and the two
 half-profiles were correlated across the declared 14,121-gene panel (13,886 present in the
 data). The headline is the mean of those per-condition correlations, lifted by Spearman-Brown
 to estimate full-data reliability.
@@ -82,21 +82,23 @@ correlations against both mismatched-condition floors, with the headline mean ma
    whose every hash can be re-derived from the committed artifacts, the input data is pinned by
    a content-hashed registration, and each step of the computation recovers planted answers.
 
-One stated assumption, with its exposure: the mismatched-condition floors reuse the same
-half-profiles across many comparisons, so their draws are not fully independent, and the
-p-values and MDEs treat them as an exchangeable pool. That dependence can only widen the null's
-spread, never shift where it sits. The observed gap over the mismatched floor is about 100
-bootstrap standard errors, so losing significance would need the dependence to inflate the
-null's variance more than 3,000-fold — and detection power only degrades by the square root of
-that factor (a tenfold variance inflation would move the smallest detectable effect from 0.039
-to about 0.12, still under the observed 0.135). How much sharing actually happens is small: any
-one half-profile appears in roughly 0.25% of the draw pairs, which produces single-digit
-inflation factors in practice, not thousands. The check has now been run: breaking the pairing
-with 500 derangements — the null that carries the dependence by construction — gives a measured
-inflation factor of 0.87, meaning the dependence does not widen the null at all and the
-reported p-values were, if anything, slightly conservative. The observed mean exceeded every
-one of the 500 rearrangements (exact p = 0.002, the smallest 500 permutations can certify).
-The assumption is discharged by measurement, not argument.
+One caveat, checked and cleared. The floors above come from deliberately mismatched
+comparisons — one condition's first half correlated against a different condition's second
+half. With 1,600 conditions there are only so many halves to go around, so the same halves are
+reused across many of those mismatched comparisons, which makes the comparisons partly
+dependent on one another; the significance calculations initially treated each one as a fresh,
+independent draw. Could that shortcut have flattered the result? Arithmetic already said no:
+the observed agreement sits about a hundred times further above the floor than the floor's own
+uncertainty, so the reuse would have had to distort that uncertainty thousands-fold to change
+the conclusion, and reuse this sparse cannot come close. Rather than leave it argued, we
+measured it: shuffle which first half is paired with which second half — all 1,600 at once, no
+condition keeping its true partner — recompute the average agreement, and repeat 500 times.
+That rebuilds the floor's uncertainty with the reuse fully included. The measured distortion
+factor came out at 0.87: the reuse does not widen the floor's uncertainty at all, and if
+anything the shortcut had slightly overstated it, making the reported significance cautious
+rather than generous. The real, correctly paired agreement exceeded all 500 shuffled versions
+(p = 0.002, the strongest claim 500 shuffles can support). The caveat is settled by
+measurement, not argument.
 
 ## Scripts this task touched
 
