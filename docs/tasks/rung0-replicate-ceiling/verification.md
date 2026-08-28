@@ -5,7 +5,7 @@ Records how the headline number in `docs/tasks/rung0-replicate-ceiling/rung0_del
 
 ## Commands as run (Task 8 — deploy, register, measure)
 
-Run by the controller on 2026-08-27/28, against `docs/tasks/rung0-replicate-ceiling/plan.md`'s Task 8 steps; commands below are those steps with the job ids substituted from `.superpowers/sdd/plan/task-8-facts.md`.
+Run by the controller on 2026-08-27/28, against `docs/tasks/rung0-replicate-ceiling/plan.md`'s Task 8 steps; commands below are those steps with the job ids substituted from the controller's own execution log for that run. Every hash the log recorded is independently recomputable: the two input hashes it produced also appear in the promoted provenance record below and were independently re-derived from the pulled files at audit time, matching exactly.
 
 ```bash
 git push
@@ -91,6 +91,10 @@ Every field above matches `docs/tasks/rung0-replicate-ceiling/rung0_delta_reprod
 
 **Figure**: this run's figure is `docs/tasks/rung0-replicate-ceiling/rung0_ceiling.png`, produced alongside the headline table — per `docs/STATE.md`'s convention, a figure a task cites is pointed at from that task's `verification.md`, which this line does.
 
+## Per-gene diagnostic (from `rung0_per_gene_reliability.csv`)
+
+The per-gene reliability diagnostic (design.md, "per-gene reliability") is an unpromoted CSV of all 13,886 panel genes, each correlated across (line, drug) pairs between the two plate halves, plus its own figure, `rung0_per_gene_reliability.png`. Of the 13,759 genes with a finite value (127 have too few scored pairs to compute one), **97.0% have r > 0** and the **median per-gene r is 0.146** (quartiles 0.089–0.230), a touch above the pair-level headline mean of 0.135 — reproducibility is broadly distributed across the panel rather than concentrated in a handful of genes. The most reproducible individual genes are heat-shock and immediate-early stress-response transcripts (HSP90AA1 r=0.79, EGR1 r=0.75, HSPA1B r=0.72, HSPH1 r=0.71, PLEC r=0.69): a generic perturbation-stress signature that reproduces well regardless of which drug or line induced it. That is the evidence base design.md points to for any future panel restriction — it says nothing about *which* (line, drug) pairs reproduce, the pair-level question the promoted ceiling answers.
+
 ## Pool description (from `rung0_pool_description.csv`)
 
 The pool-description table lists 1,650 (line × drug) rows: 50 cell-line keys by 33 drug-name entries in the DE table matching the target-CID panel (32 drugs, plus a `Trametinib (DMSO_TF solvate)` name variant). All 1,650 rows carry 3 dose levels. One of the 50 line keys is literally `NA` (a missing DepMap id in the source table — the grouping key carries it through as-is), accounting for 33 of the 1,650 rows, one line's worth.
@@ -113,7 +117,9 @@ Both MDEs are far below the observed ceiling — at n ≈ 1,600 pairs this run i
 
 ## Write-up caveat (ledgered at Task 3 review)
 
-The stratified null draws reuse the same half-profiles across mismatched pairs, so they are not i.i.d., while the bootstrap treats them as an exchangeable pool; this is the residual assumption behind the reported p-values and MDEs, inherited from the archived lineage's design and stated rather than solved at rung 0.
+The stratified null draws reuse the same half-profiles across mismatched pairs, so they are not i.i.d., while the bootstrap treats them as an exchangeable pool; this is the residual assumption behind the reported p-values and MDEs, inherited from the archived lineage's design.
+
+**Quantitative exposure (PROCESS §3).** That dependence can only widen the null aggregate's spread, never move its location. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null CI columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — is running; its measured inflation factor will be recorded here.
 
 ## GDSC2 CID list — provenance note
 
@@ -180,9 +186,11 @@ The written record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility
 }
 ```
 
-`inputs` paths are shown with `<scratchpad>` standing in for the session-local scratch directory recorded in the real file; the sha256 values are unabridged and match `.superpowers/sdd/plan/task-8-facts.md`'s pulled-copy hashes exactly. `clean_tree: true` confirms the rule-1 fix (this task's first commit) — the working tree carries plenty of untracked data (`docs/tasks/rung0-replicate-ceiling/plan.md`, Global Constraints), but no tracked-file modification was pending at promotion.
+`inputs` paths are shown with `<scratchpad>` standing in for the session-local scratch directory recorded in the real file; the sha256 values are unabridged and match the controller's execution log's pulled-copy hashes exactly — both input hashes are independently recomputable from the pulled files and were re-derived and checked at audit time. `clean_tree: true` confirms the rule-1 fix (this task's first commit) — the working tree carries plenty of untracked data (`docs/tasks/rung0-replicate-ceiling/plan.md`, Global Constraints), but no tracked-file modification was pending at promotion.
 
 **Commit reconciliation**: the measurement itself (job 31758395) ran against commit `25cec05` — the run's own `rung0_delta_reproducibility.params.json` records `"git_sha": "25cec0540d1cf86beb871aacb807003c14c9a843"`. The provenance record's `environment.code_commit` is `84c094d`, repository HEAD at promotion time, not the measuring commit — but `84c094d` is a descendant of `25cec05` whose only code changes are `scripts/promote_result.py` and its test (`tests/test_promote_result.py`); `scripts/delta_reproducibility.py` and everything under `src/` are byte-identical at both commits (`git diff 25cec05..84c094d -- scripts/delta_reproducibility.py src/` is empty). The measurement is reproducible from either commit; `code_commit` records the promoting commit, per the schema's contract, not the measuring one.
+
+A later docs commit (`c6f1baf`) rewrote prose in `scripts/delta_reproducibility.py` (its module docstring, the `--n-hvg` help text, a comment, and the final print statement) with no computational change — the auditor read the full diff and confirmed no scoring logic moved — so HEAD's script text differs from the record's `code_commit` copy in wording only, while every computation the record reflects is identical; the job log's closing line ("Check-1 achieved r ~ 0.2 ...") is the pre-rewrite print and can no longer be produced verbatim by the shipped script's current print statement.
 
 `scripts/promote_result.py` now accepts `--input LABEL=PATH` so future promotions key `inputs` by a durable label rather than a scratch path; rung 0's own record above ran before that support existed and deliberately stands with its scratchpad-path keys, with the mapping to what they were (the gene panel, the drug-CID file) documented in the promotion command above.
 

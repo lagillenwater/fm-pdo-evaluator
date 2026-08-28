@@ -21,8 +21,11 @@ hypothetical 1.0.
 
 ## What was measured
 
-For each of 1,600 (cell line, drug) conditions — 50 lines by 32 drugs, the drugs shared with
-the GDSC2 viability screen — the replicate plates were split deterministically in half. Each
+For each of 1,600 (cell line, drug) conditions scored — 50 lines by 31 of the 32 declared drugs
+(shared with the GDSC2 viability screen) plus one drug's alternate name, a solvate variant of
+Trametinib — the replicate plates were split deterministically in half. The 32nd declared drug,
+Ribociclib, has only a single plate throughout the pool and cannot be split, so it scores zero
+conditions and contributes nothing to the 1,600. Each
 half's per-gene log2 fold change (treated vs plate-matched DMSO) was averaged, and the two
 half-profiles were correlated across the declared 14,121-gene panel (13,886 present in the
 data). The headline is the mean of those per-condition correlations, lifted by Spearman-Brown
@@ -52,7 +55,7 @@ Controls (every one passed; details in `tests/` and `verification.md`):
 
 | Control | Sign | Result |
 |---|---|---|
-| Synthetic replicate pool with a planted reliability of 0.8, through the real code | positive | recovered (0.796–0.800 across runs) |
+| Synthetic replicate pool with a planted reliability of 0.8, through the real code | positive | recovered (0.800-0.809 across seeds; tolerance plus/minus 0.05) |
 | Synthetic pool with no planted signal | negative | correctly null (p > 0.05) |
 | Planted drug-shared plus line-specific structure | positive | recovers the expected ordering: matched > same-drug floor > mismatched floor |
 | Pure-noise pool | negative | all floors at zero |
@@ -79,10 +82,18 @@ correlations against both mismatched-condition floors, with the headline mean ma
    whose every hash can be re-derived from the committed artifacts, the input data is pinned by
    a content-hashed registration, and each step of the computation recovers planted answers.
 
-One stated assumption: the mismatched-condition floors reuse the same half-profiles across
-comparisons, so their draws are not fully independent; the p-values treat them as an
-exchangeable pool. This is inherited from the measurement design and stated rather than solved
-at rung 0.
+One stated assumption, with its exposure: the mismatched-condition floors reuse the same
+half-profiles across many comparisons, so their draws are not fully independent, and the
+p-values and MDEs treat them as an exchangeable pool. That dependence can only widen the null's
+spread, never shift where it sits. The observed gap over the mismatched floor is about 100
+bootstrap standard errors, so losing significance would need the dependence to inflate the
+null's variance more than 3,000-fold — and detection power only degrades by the square root of
+that factor (a tenfold variance inflation would move the smallest detectable effect from 0.039
+to about 0.12, still under the observed 0.135). How much sharing actually happens is small: any
+one half-profile appears in roughly 0.25% of the draw pairs, which produces single-digit
+inflation factors in practice, not thousands. An exact permutation check that carries this
+dependence by construction — sampling derangements of the pairing rather than treating draws as
+an independent pool — is running, and its measured inflation factor will be recorded here.
 
 ## Scripts this task touched
 
