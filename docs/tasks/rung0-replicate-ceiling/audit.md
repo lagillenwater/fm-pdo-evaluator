@@ -11,7 +11,7 @@ every later task (PROCESS Changes, 2026-08-28).
 
 Method: five passes over `design.md`, SPEC's rung-0 section and rules, and the plan's Global
 Constraints, each clause verified against the tree with named evidence (recomputed hashes,
-recounts of the committed CSVs, diffs against the archive branch, a full-suite run at 50
+recounts of the committed comma-separated values (CSV) files, diffs against the archive branch, a full-suite run at 50
 passed / 0 skipped). Verdicts: ALIGNED, DEVIATION-RECORDED (a dated entry exists), DRIFT
 (departed, unrecorded).
 
@@ -105,7 +105,7 @@ discrepancy invisible in every document.
 - Reverse-direction (landed, undescribed): the ralpine help-verb rewrite; the tranche
   registration's etag cross-check and unverified-shard refusal.
 - Decision-history verification: every dated entry held at HEAD except the renamed-section
-  citation; the 2×-MDE claim held only for the statistics layer; the panel declaration was
+  citation; the 2× minimum detectable effect (MDE) claim held only for the statistics layer; the panel declaration was
   departed from in execution (D14).
 
 ## Fix wave (commits `174ce62`, `e9f5c67`, `4bf24c3`)
@@ -160,7 +160,7 @@ seeds, the 2.031× plant-to-MDE ratio) reproduced the documents' values exactly.
 **Verdict: NOT PASSED on the first pass** — one open item and four one-line issues:
 
 1. P5 residual: `verification.md` still cited the untracked execution-ledger file once more, in
-   the transient-SSH note. Removed.
+   the transient secure shell (SSH) note. Removed.
 2. This document's headline counts did not reconcile with its own condensed tables (transcription
    merged clause ranges). Annotated above rather than silently edited; the 18-clause DRIFT set
    reconciles exactly either way.

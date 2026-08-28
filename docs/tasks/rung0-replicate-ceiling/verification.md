@@ -1,7 +1,7 @@
 # Rung 0 — verification
 
 **Task** `rung0-replicate-ceiling` · **As of** 2026-08-28
-Records how the headline number in `docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` was produced and promoted, and every number this document cites is copied from that CSV or from the job log, not from memory.
+Records how the headline number in `docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` was produced and promoted, and every number this document cites is copied from that comma-separated values (CSV) or from the job log, not from memory.
 
 ## Commands as run (Task 8 — deploy, register, measure)
 
@@ -47,7 +47,7 @@ git add docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv docs/
 git commit -m "run: rung-0 ceiling outputs and job log, job 31758395"   # 0ce4ba7
 ```
 
-One transient SSH failure (Permission denied — network) occurred on 2026-08-27 during this sequence; it resolved itself on retry, no re-auth needed.
+One transient secure shell (SSH) failure (Permission denied — network) occurred on 2026-08-27 during this sequence; it resolved itself on retry, no re-auth needed.
 
 ## Job log — summary block (tail of `results/rung0-replicate-ceiling/delta-repro-31758395.out`)
 
@@ -97,7 +97,7 @@ The per-gene reliability diagnostic (design.md, "per-gene reliability") is an un
 
 ## Pool description (from `rung0_pool_description.csv`)
 
-The pool-description table lists 1,650 (line × drug) rows: 50 cell-line keys by 33 drug-name entries in the DE table matching the target-CID panel (32 drugs, plus a `Trametinib (DMSO_TF solvate)` name variant). All 1,650 rows carry 3 dose levels. One of the 50 line keys is literally `NA` (a missing DepMap id in the source table — the grouping key carries it through as-is), accounting for 33 of the 1,650 rows, one line's worth.
+The pool-description table lists 1,650 (line × drug) rows: 50 cell-line keys by 33 drug-name entries in the differential expression (DE) table matching the target PubChem compound identifier (CID) panel (32 drugs, plus a `Trametinib (DMSO_TF solvate)` name variant). All 1,650 rows carry 3 dose levels. One of the 50 line keys is literally `NA` (a missing DepMap id in the source table — the grouping key carries it through as-is), accounting for 33 of the 1,650 rows, one line's worth.
 
 - 1,210 of 1,650 rows (the majority) have exactly 3 plates: 1,200 of those split 1 plate in half0 / 2 in half1, and 10 split 2/1 — the typical case, with the minority split running the other way.
 - 290 rows have 4 plates (2/2), 50 have 6 (2/4), 50 have 7 (3/4) — drugs profiled on more plates (e.g. Afatinib, Trametinib, Cytarabine, Docetaxel, Rapamycin, Retinoic acid, Temsirolimus).
@@ -111,7 +111,7 @@ The pool-description table lists 1,650 (line × drug) rows: 50 cell-line keys by
 ## Minimum detectable effect
 
 - `mde_80_vs_diff_drug` = 0.0392 — the smallest split-half mean r this run (n = 1,600 pairs) could distinguish from the diff-drug (generic-structure) null floor at α = 0.05, power = 0.80. The observed 0.135 clears it by a wide margin (~3.4×).
-- `mde_80_vs_same_drug` = 0.0846 — the corresponding MDE against the stricter same-drug (line-specificity) null floor; the observed 0.135 clears this one too (~1.6×), the tighter of the two comparisons.
+- `mde_80_vs_same_drug` = 0.0846 — the corresponding minimum detectable effect (MDE) against the stricter same-drug (line-specificity) null floor; the observed 0.135 clears this one too (~1.6×), the tighter of the two comparisons.
 
 Both MDEs are far below the observed ceiling — at n ≈ 1,600 pairs this run is trivially powered, which is expected and stated in the design (design.md, "Controls and power"): the same reporting will matter honestly at rung 5, where power is the whole question.
 
@@ -123,7 +123,7 @@ The stratified null draws reuse the same half-profiles across mismatched pairs, 
 
 ## GDSC2 CID list — provenance note
 
-`00_target_cids.sbatch` (which built `data/static/tahoe_target_cids.txt`, one of this promotion's two declared inputs) reads `data/static/gdsc2_auc_pubchem_cids.txt` on Alpine. That file is untracked on Alpine and not landed in this repository; neither `00_target_cids.sbatch` nor `01_pseudobulk_shortcut.sbatch` is re-run by this task — their outputs exist already and are pinned by hash (the CID file) and by the tranche (the DE pool). `data/static/gdsc2_auc_pubchem_cids.txt` becomes a tracked input in this repository when rung 4 registers GDSC2.
+`00_target_cids.sbatch` (which built `data/static/tahoe_target_cids.txt`, one of this promotion's two declared inputs) reads `data/static/gdsc2_auc_pubchem_cids.txt` on Alpine. That file is untracked on Alpine and not landed in this repository; neither `00_target_cids.sbatch` nor `01_pseudobulk_shortcut.sbatch` is re-run by this task — their outputs exist already and are pinned by hash (the CID file) and by the tranche (the DE pool). `data/static/gdsc2_auc_pubchem_cids.txt` becomes a tracked input in this repository when rung 4 registers Genomics of Drug Sensitivity in Cancer, release 2 (GDSC2).
 
 ## Promotion (Task 9)
 

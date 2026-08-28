@@ -17,7 +17,7 @@ below are grouped by where they were found; each carries its disposition. Number
 - **Statistics** — 1 finding, plan-mandated: the Spearman-Brown test exercised a local closure
   instead of shipped code. Resolved by shipping `fmharness.statistics.spearman_brown` as the one
   implementation of the lift, with the test importing it; the reporting layer consumes it. The
-  round also brought the branch under the CI gates the plan had omitted (ruff check/format,
+  round also brought the branch under the continuous integration (CI) gates the plan had omitted (ruff check/format,
   strict pyright) — added to the plan's Global Constraints mid-run.
 - **Measurement core** — reviewed at the strongest tier; the masked-Pearson algebra, the three
   null strata with their cross-half construction, and both planted closed forms were verified
@@ -28,7 +28,7 @@ below are grouped by where they were found; each carries its disposition. Number
   the available pairs. All fixed and re-verified; the last two were ruled against the plan's own
   text.
 - **Reporting layer** — clean (no Critical/Important findings). The planted end-to-end fixture
-  recovered its known reliability through the real CLI.
+  recovered its known reliability through the real command-line interface (CLI).
 - **Promotion** — the reviewer's one Critical (a suspected false lint-gate claim) was refuted by
   the controller running the gate directly; one report-completeness gap fixed. The implementer
   caught a genuine defect in the planned code: capturing the clean-tree flag after writing
@@ -40,7 +40,7 @@ below are grouped by where they were found; each carries its disposition. Number
   2 findings on stale content in the rewritten download job (vestigial dependency check,
   memory sized for removed work, header describing removed aggregation) — fixed.
 - **Execution & promotion** — the evidence-critical review verified the chain end to end:
-  recorded hashes against recomputed ones, byte-identity of the task-side and promoted CSV,
+  recorded hashes against recomputed ones, byte-identity of the task-side and promoted comma-separated values (CSV),
   the tranche `content_hash` against `data_commit`, and the pool arithmetic reconciling exactly
   to the scored pair count. 1 Critical + 3 Important, all in the prose around the number
   (a stale "produces no measurement" claim, the number missing from STATE's own row, an
@@ -67,7 +67,7 @@ edges (a `.cache` decoy test, clean failure on truncated metadata, atomic record
 writes); the promotion script's subprocess calls on the refusal path; `00`/`01` job scripts
 still using the `module load anaconda` pattern the other jobs document as failing (bites only
 on a scratch-purge rebuild); `docs/environment.md` §4's asserted-but-absent static-asset
-manifest (reconcile when rung 4 registers GDSC2); Python-level bootstrap loops in
+manifest (reconcile when rung 4 registers Genomics of Drug Sensitivity in Cancer, release 2 (GDSC2)); Python-level bootstrap loops in
 `fmharness.statistics` (vectorizable); the schema docstrings' `PredictionRecord` references
 (rung 1's reconciliation); and the pre-existing `.gitignore` trailing-comment hazard — three
 patterns (`reports/`, `containers/*.sif`, `.fmharness/`) carry inline comments and so match
@@ -76,7 +76,7 @@ nothing.
 One observation worth carrying to rung 1's design rather than fixing here: the design's Steps
 line omits `restrict` and `split` although the run restricts (panel, drugs) and splits
 (plates); their behavior is exercised inside the build/score controls and measured by the pool
-description, but a wrong CID list would pass every declared control — the declared-panel hashes
+description, but a wrong PubChem compound identifier (CID) list would pass every declared control — the declared-panel hashes
 recorded at promotion are the guard.
 
 ## Drift audit
