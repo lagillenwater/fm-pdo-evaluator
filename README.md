@@ -43,10 +43,10 @@ or where a rung stands, it updates the README in the same change — see `PROCES
 
 ## Status
 
-No rung has landed yet. Rung 0 — the replicate ceiling every higher rung is read against — is in
-progress on the `rung0-replicate-ceiling` branch
-([design](docs/tasks/rung0-replicate-ceiling/design.md)). `results/` does not exist, so nothing
-here is evidence of anything. [`docs/STATE.md`](docs/STATE.md) is authoritative.
+Rung 0 — the replicate ceiling every higher rung is read against — has landed on the
+`rung0-replicate-ceiling` branch ([design](docs/tasks/rung0-replicate-ceiling/design.md)), with
+its promoted result and provenance record in `results/rung0-replicate-ceiling/`. Higher rungs now
+read against this ceiling. [`docs/STATE.md`](docs/STATE.md) is authoritative.
 
 ## Quickstart
 

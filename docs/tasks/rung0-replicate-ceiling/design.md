@@ -1,6 +1,6 @@
 # Rung 0 — the replicate ceiling
 
-**Task** `rung0-replicate-ceiling` · **Status** OPEN · **Branch** `rung0-replicate-ceiling`
+**Task** `rung0-replicate-ceiling` · **Status** DONE · **Branch** `rung0-replicate-ceiling`
 **Steps** build, score, null, promote, document.
 **Spec** [docs/SPEC.md](../../SPEC.md), rung 0 · **State** [docs/STATE.md](../../STATE.md)
 **As of** 2026-08-27.
@@ -77,6 +77,10 @@ The headline CSV is promoted to `results/rung0-replicate-ceiling/` by `scripts/p
 The old-lineage pilot (job 31676846, commit `ff88bba` on `rung0-replicate-ceiling-old-lineage`): split-half mean 0.135 (median 0.109), Spearman-Brown on the median 0.197, diff-drug null 0.033, same-drug null 0.069, both p = 0.0005, over 1,600 pairs and 13,886 panel genes present.
 The mean-headline re-run is expected in this vicinity, with Spearman-Brown on the mean ≈ 0.24.
 The pilot is superseded on this lineage by the re-run's promoted record.
+
+## Current result
+
+**2026-08-28** — Promoted: `results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv`, with its provenance record `results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json` (job 31758395). Numbers live there and in `docs/STATE.md`, not restated here; the run and promotion are documented in `docs/tasks/rung0-replicate-ceiling/verification.md`.
 
 ## Ported apparatus
 
