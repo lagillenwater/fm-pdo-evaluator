@@ -11,6 +11,7 @@ Run by the controller on 2026-08-27/28, against `docs/tasks/rung0-replicate-ceil
 git push
 ./scripts/alpine/ralpine switch rung0-replicate-ceiling      # ran at b5da999 (registration), 25cec05 (measurement) after a ff
 ./scripts/alpine/ralpine run find "$SCRATCH/tahoe_pseudobulk_de" -name "*.parquet" -not -path "*/.cache/*" | wc -l
+# (find was removed from ralpine's READ_ONLY allowlist on 2026-08-28, a security fix; today's equivalent read is `ralpine du`/`ralpine ls`, not a find invocation)
 # -> 1026 (shards live under metadata/pseudobulk_differential_expression/ inside the scratch
 #    dir, the HF repo's own layout — ties the tranche manifest's 1,026 lines to the job log's
 #    "reading 1026 DE parquet files" line)

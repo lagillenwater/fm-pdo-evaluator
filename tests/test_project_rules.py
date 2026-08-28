@@ -315,11 +315,14 @@ def test_rule_04_every_task_declares_controls_for_its_measurement_steps() -> Non
             if entry is None:
                 problems.append(f"{folder.name}: no control entry for step '{step}'")
                 continue
+            # Strip markdown emphasis before the colon-form search, so a bolded declaration
+            # like "**positive**:" is recognized the same as a plain "positive:".
+            body = entry.group(1).lower().replace("*", "")
             for sign in ("positive", "negative"):
                 # Require the declaration FORM "positive:"/"negative:" (colon required), not a
                 # bare occurrence of the word -- prose like "positive control omitted" contains
                 # the word "positive" without declaring one, and used to pass this scan.
-                if f"{sign}:" not in entry.group(1).lower():
+                if f"{sign}:" not in body:
                     problems.append(f"{folder.name}: step '{step}' lacks a '{sign}:' control")
     assert not problems, problems
 

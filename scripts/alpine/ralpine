@@ -34,6 +34,7 @@
 #   ralpine switch <branch>        # git switch the Alpine checkout to an origin branch
 #   ralpine submit <script.sbatch> [sbatch-args...]   # runs sbatch from $REMOTE_ROOT
 #   ralpine cancel <JOBID>         # scancel, one numeric job id only
+#   ralpine jobinfo <JOBID>        # scontrol show job, read-only, one numeric job id only
 #
 set -euo pipefail
 
@@ -49,10 +50,22 @@ REMOTE_ROOT="${ALPINE_ROOT:-/projects/lgillenwater@xsede.org/repositories/fm-pdo
 # read-only boundary this allowlist exists to enforce. The `log` verb needs find-like
 # behavior; it gets a fixed-command path via remote_fixed instead (see below), built from
 # literals in this script plus a pattern validated to a safe character set.
+#
+# `scontrol` is also ABSENT: it is write-capable through remote()'s pass-through --
+# `scontrol write batch_script <id> <path>` writes files, `scontrol update
+# JobId=<id> TimeLimit=00:00:01` can destroy running work (the exact thing `cancel` above is
+# deliberately narrowed to guard against), and `requeue`/`hold`/`suspend` mutate job state.
+# The `jobinfo` verb below gives read-only `scontrol show job` access as a fixed-command path
+# instead, the same pattern as `log`.
+#
+# `file` and `nvidia-smi` are also ABSENT: `file -C` compiles and writes a magic file to disk,
+# and `nvidia-smi -f <path>` writes its query output to a path -- this block's invariant is
+# that NOTHING here writes, so both fail it. Either can come back as a fixed verb (mirroring
+# `jobinfo`/`log`) if a task needs it.
 READ_ONLY=(
-  squeue sacct sinfo sstat scontrol sshare squota
-  ls cat head tail wc du df stat grep zgrep realpath readlink file
-  hostname pwd whoami date echo uptime nvidia-smi module quota
+  squeue sacct sinfo sstat sshare squota
+  ls cat head tail wc du df stat grep zgrep realpath readlink
+  hostname pwd whoami date echo uptime module quota
 )
 
 die() { echo "ralpine: $*" >&2; exit 1; }
@@ -73,9 +86,13 @@ is_read_only() {
   return 1
 }
 
-# Send a command line built entirely from literals in THIS script. Never reachable from
-# user input, so it needs no allowlist check -- `rev` uses it for read-only git subcommands
-# that would be unsafe to permit wholesale (bare `git` would also admit `git pull`).
+# Send a command line built from literals in THIS script, plus values validated at the call
+# site (never raw, unvalidated user input) and spliced in with printf %q. `rev`/`update` use
+# it for read-only git subcommands that would be unsafe to permit wholesale (bare `git` would
+# also admit `git pull`). The validated splice points elsewhere are: `log` (pattern, against
+# ^[A-Za-z0-9._-]*$), `switch` (branch name, against ^[A-Za-z0-9._/-]+$), `cancel`/`jobinfo`
+# (job id, against ^[0-9]+$), and `submit` (script path, via reject_metacharacters plus
+# arg-by-arg quoting).
 remote_fixed() {
   ssh -o BatchMode=yes "$HOST" "$@"
 }
@@ -176,6 +193,15 @@ case "$sub" in
     [[ "$1" =~ ^[0-9]+$ ]] || die "refusing '$1': cancel takes a bare numeric job id only"
     echo "ralpine: scancel $1" >&2
     remote_fixed "scancel $(printf '%q' "$1")" && echo "cancelled $1"
+    ;;
+  jobinfo)
+    # Read-only `scontrol show job` -- `scontrol` itself is not in READ_ONLY (see the comment
+    # above it: it is write-capable through remote()'s pass-through), so this is a
+    # fixed-command path via remote_fixed instead, the same pattern `log` uses for `find`.
+    # Same narrowness as `cancel`: exactly one numeric job id, nothing else.
+    [[ $# -eq 1 ]] || die "usage: ralpine jobinfo <JOBID>   (exactly one job id)"
+    [[ "$1" =~ ^[0-9]+$ ]] || die "refusing '$1': jobinfo takes a bare numeric job id only"
+    remote_fixed "scontrol show job $(printf '%q' "$1")"
     ;;
   submit)
     # The one mutating verb. Echoes the exact command before sending it, so the submission
