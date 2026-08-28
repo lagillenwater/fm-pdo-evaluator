@@ -184,6 +184,8 @@ The written record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility
 
 **Commit reconciliation**: the measurement itself (job 31758395) ran against commit `25cec05` — the run's own `rung0_delta_reproducibility.params.json` records `"git_sha": "25cec0540d1cf86beb871aacb807003c14c9a843"`. The provenance record's `environment.code_commit` is `84c094d`, repository HEAD at promotion time, not the measuring commit — but `84c094d` is a descendant of `25cec05` whose only code changes are `scripts/promote_result.py` and its test (`tests/test_promote_result.py`); `scripts/delta_reproducibility.py` and everything under `src/` are byte-identical at both commits (`git diff 25cec05..84c094d -- scripts/delta_reproducibility.py src/` is empty). The measurement is reproducible from either commit; `code_commit` records the promoting commit, per the schema's contract, not the measuring one.
 
+`scripts/promote_result.py` now accepts `--input LABEL=PATH` so future promotions key `inputs` by a durable label rather than a scratch path; rung 0's own record above ran before that support existed and deliberately stands with its scratchpad-path keys, with the mapping to what they were (the gene panel, the drug-CID file) documented in the promotion command above.
+
 ## Project-rule tests (Task 9, Step 4)
 
 Before promotion, the rule-1 and rule-4-edge tests skipped (no promoted results yet). After promotion:

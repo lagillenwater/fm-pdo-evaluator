@@ -12,10 +12,15 @@ Usage (rung 0):
         --task rung0-replicate-ceiling \
         --result docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv \
         --script scripts/delta_reproducibility.py \
-        --input <panel file copy> --input <cid file> \
+        --input gene_panel=/path/to/common_panel.txt \
+        --input drug_cids=/path/to/tahoe_target_cids.txt \
         --seed 0 --data-commit <tranche content_hash> \
         --arg tranche_id=tahoe100m-pseudobulk-de.v1 --job-id <slurm id> \
         --log results/rung0-replicate-ceiling/<job log>
+
+``--input`` takes ``LABEL=PATH``, so the promoted record's ``inputs`` dict is keyed by a durable
+label rather than a scratch path; a bare ``PATH`` (no ``=``) is still accepted for back-compat
+and keyed by the path string, as before.
 """
 
 from __future__ import annotations
@@ -59,6 +64,7 @@ def promote(
     job_id: str | None,
     log: Path | None,
     repo: Path,
+    input_labels: dict[Path, str] | None = None,
 ) -> Path:
     repo = repo.resolve()
     if not (repo / script).exists():
@@ -101,7 +107,7 @@ def promote(
         task=task,
         script=script,
         args={k: str(v) for k, v in args.items()},
-        inputs={str(p): sha256_of(p) for p in inputs},
+        inputs={(input_labels or {}).get(p, str(p)): sha256_of(p) for p in inputs},
         log=str(log) if log else None,
         log_sha256=sha256_of(log) if log else None,
         job_id=job_id,
@@ -127,7 +133,15 @@ def main() -> None:
     ap.add_argument("--task", required=True)
     ap.add_argument("--result", required=True, type=Path)
     ap.add_argument("--script", required=True)
-    ap.add_argument("--input", action="append", default=[], type=Path, dest="inputs")
+    ap.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        dest="raw_inputs",
+        help="an input this result depends on, as LABEL=PATH (e.g. gene_panel=/path/to/"
+        "common_panel.txt) so the record keys it by a durable label; a bare PATH (no '=') "
+        "is accepted for back-compat and keyed by the path string. Repeatable.",
+    )
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--data-commit", required=True)
     ap.add_argument("--arg", action="append", default=[], help="key=value, repeatable")
@@ -135,17 +149,28 @@ def main() -> None:
     ap.add_argument("--log", type=Path, default=None)
     ap.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[1])
     ns = ap.parse_args()
+
+    inputs: list[Path] = []
+    input_labels: dict[Path, str] = {}
+    for raw in ns.raw_inputs:
+        label, sep, rest = raw.partition("=")
+        p = Path(rest) if sep else Path(raw)
+        if sep:
+            input_labels[p] = label
+        inputs.append(p)
+
     promote(
         task=ns.task,
         result=ns.result,
         script=ns.script,
-        inputs=ns.inputs,
+        inputs=inputs,
         seed=ns.seed,
         data_commit=ns.data_commit,
         args=dict(kv.split("=", 1) for kv in ns.arg),
         job_id=ns.job_id,
         log=ns.log,
         repo=ns.repo,
+        input_labels=input_labels,
     )
 
 

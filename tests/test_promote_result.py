@@ -109,3 +109,12 @@ def test_promotion_ignores_an_untracked_stray_file(repo: Path) -> None:
     (repo / "stray_untracked.txt").write_text("not part of the repo\n")
     record_path = _promote(repo)
     assert PromotedResult.model_validate_json(record_path.read_text()).clean_tree is True
+
+
+def test_promotion_keys_a_labeled_input_by_its_label(repo: Path) -> None:
+    """A labeled --input (LABEL=PATH, parsed in main()) lands under its label, not its path,
+    with the hash still computed from the real file."""
+    input_path = repo / "docs" / "input.txt"
+    record_path = _promote(repo, inputs=[input_path], input_labels={input_path: "gene_panel"})
+    record = PromotedResult.model_validate_json(record_path.read_text())
+    assert record.inputs == {"gene_panel": pr.sha256_of(input_path)}
