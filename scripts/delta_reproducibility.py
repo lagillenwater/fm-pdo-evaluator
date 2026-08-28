@@ -1,19 +1,18 @@
 """Delta reproducibility ceiling: how noisy is the real Tahoe delta itself?
 
-Check 1 asks how faithfully a source reproduces the real (line, drug) delta and finds r ~ 0.2.
-Whether 0.2 is "near the achievable ceiling" or "leaves room for Stack" depends on how reproducible
-the real delta is to begin with. This measures that noise floor the same way the label-ceiling
-script measured viability reproducibility: split each (line, drug)'s replicate plates into two
-halves, aggregate each half's delta, and correlate the two halves over the same top-HVG genes
-Check 1 uses. That split-half correlation is the delta's own test-retest reliability -- the most any
-predictor, Stack included, could score on Check 1. Spearman-Brown then lifts the half-data number to
-the full-data delta the Check-1 sources actually target.
+This is rung 0 of the ladder in docs/SPEC.md: a reference every other rung reads its score
+against. Split each (line, drug) pair's replicate plates into two halves, aggregate each
+half's delta, and correlate the two halves over the declared gene panel. That split-half
+correlation is the delta's own test-retest reliability -- the most any predictor at rung 1
+could score against the real delta. Spearman-Brown then lifts the half-data number to the
+full-data reliability rung 1 is read against.
 
-Reuses the DuckDB-over-local-parquet path (the Tahoe DE config is already on scratch from the
-pseudobulk shortcut), so it needs no GPU and runs alongside the context build.
+Reuses the DuckDB-over-local-parquet path (the Tahoe DE table is already local or on
+scratch), so it needs no GPU.
 
   python scripts/delta_reproducibility.py --local-dir /scratch/alpine/$USER/tahoe_pseudobulk_de \\
-      --drugs-cid-file data/static/tahoe_target_cids.txt
+      --drug-names-file data/static/tahoe_drug_names.txt \\
+      --panel-file results/rung1_panel/common_panel.txt --out-dir rung0_outputs
 """
 
 from __future__ import annotations
@@ -334,7 +333,12 @@ def main() -> None:
         "and offline runs need no `datasets` import.",
     )
     ap.add_argument("--replicate-col", default=None, help="plate/replicate column (auto-detected)")
-    ap.add_argument("--n-hvg", type=int, default=2000, help="top HVGs, matching check 1")
+    ap.add_argument(
+        "--n-hvg",
+        type=int,
+        default=2000,
+        help="top HVGs by variance, used only without --panel-file",
+    )
     ap.add_argument("--min-genes", type=int, default=50, help="min shared genes to score a pair")
     ap.add_argument(
         "--panel-file",
@@ -403,7 +407,7 @@ def main() -> None:
     # of draws exceeding the observed 0.299. That null is inflated by same-drug matches and
     # cannot be read as a floor for reproducibility.
     #
-    # Three strata, the same distinction Check 1b draws between shuffle_all and within_drug:
+    # Three strata, the same distinction design.md's "Why three null strata" draws:
     #   any_pair      two random pairs. Mixed; reported only for continuity with the first run.
     #   diff_drug     different line AND different drug -- the floor from generic gene structure.
     #                 This is the one the CEILING must clear to be a ceiling at all.
@@ -436,9 +440,8 @@ def main() -> None:
     for k, v in summary.items():
         print(f"  {k:22s} {v}")
     print(
-        f"\nCheck-1 achieved r ~ 0.2; the ceiling is the split-half mean "
-        f"({summary['splithalf_mean_r']:.3f}) / Spearman-Brown full-data "
-        f"({summary['spearman_brown_full']:.3f}).\nwrote {summary_path}"
+        f"\nrung-0 ceiling: split-half mean r = {summary['splithalf_mean_r']:.3f}, "
+        f"Spearman-Brown full-data = {summary['spearman_brown_full']:.3f}.\nwrote {summary_path}"
     )
 
 

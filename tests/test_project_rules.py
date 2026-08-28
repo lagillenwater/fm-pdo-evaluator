@@ -1,9 +1,12 @@
 """One test per numbered project rule in ``docs/SPEC.md``.
 
 The project rules are what every task must satisfy, whichever rung or dataset it is about. They
-arrive with the work that first needs them, and so do their tests: this repository holds
-documents and the review apparatus, so it carries the two rules that bind those. Rules governing
-splits, statistics, controls, capacity and embargo land with the code and data they constrain.
+arrive with the work that first needs them, and so do their tests. Four rules live here so far:
+rule 1 (every promoted result carries a provenance record), rule 2 (a task is named in the spec
+tree, and a reversal of a task document's own lines carries a dated entry), rule 3 (the README
+stays in step with the documents it summarises), and rule 4 (every measurement step declares a
+positive and a negative control). Rules governing splits, statistics, capacity and embargo land
+with the code and data they constrain.
 
 Two kinds of test live here, and the difference decides how much a pass is worth:
 
@@ -17,9 +20,9 @@ Where a rule has nothing to check yet â€” no promoted results, no task folders â
 rather than passing. A vacuous pass is worse than a skip, because a green run then reports
 compliance that was never tested.
 
-Neither rule here has per-instance cases, so there is nothing to exempt. The registry of known
-violations, and the strict-xfail machinery that forces an entry out once its owning task lands,
-arrives with the first rule that checks instances one at a time.
+No rule here has per-instance exemptions yet, so there is nothing to exempt. The registry of
+known violations, and the strict-xfail machinery that forces an entry out once its owning task
+lands, arrives with the first rule that checks instances one at a time.
 """
 
 from __future__ import annotations

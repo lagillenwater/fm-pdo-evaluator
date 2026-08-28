@@ -236,7 +236,10 @@ case "$sub" in
     rsync -avh --progress -e "ssh -o BatchMode=yes" "$HOST:$1" "$2"
     ;;
   ""|-h|--help|help)
-    sed -n '/^# Read-only Alpine/,/^#   ralpine pull/p' "$0" | sed 's/^# \{0,1\}//'
+    # Print the leading comment block verbatim (shebang excluded), stopping at the first
+    # non-comment line. A fixed line-range sed pattern goes stale silently whenever the
+    # header prose changes above or below the usage lines; this tracks the block itself.
+    awk 'NR==1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
     ;;
   *) die "unknown subcommand '$sub' (try: ralpine help)" ;;
 esac

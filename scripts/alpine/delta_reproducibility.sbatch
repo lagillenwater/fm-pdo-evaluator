@@ -10,11 +10,11 @@
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.out
 #
-# Delta-reproducibility ceiling for check 1. Splits each (line, drug)'s replicate plates into two
-# halves, aggregates each half's delta in DuckDB, and correlates the halves over the HVG genes --
-# the delta's own test-retest reliability, i.e. the most any predictor (Stack included) could score
-# on check 1. CPU only; reads the Tahoe DE parquet already on scratch, so it runs alongside the
-# context build (03) on a separate node -- NOT part of the 00-05 pipeline.
+# Rung-0 delta-reproducibility ceiling (docs/SPEC.md). Splits each (line, drug)'s replicate
+# plates into two halves, aggregates each half's delta in DuckDB, and correlates the halves
+# over the declared gene panel -- the delta's own test-retest reliability, the most any
+# predictor at rung 1 could score against the real delta. CPU only; reads the Tahoe DE
+# parquet already on scratch.
 #
 # Authenticate first (drug_metadata is fetched from HF):  hf auth login
 set -euo pipefail
