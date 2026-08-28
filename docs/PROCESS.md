@@ -76,7 +76,7 @@ A result without a `.provenance.json` provenance record is not citable in a writ
   Never copy a file to Alpine directly — if Alpine needs a file that isn't code, that's a sign it belongs in `data/` with a download/build script, not a one-off transfer.
 - **Chained jobs**: pass `--dependency=afterok:<jobid>` etc. to `ralpine submit`; the wrapper reorders args correctly, but *verify* with `ralpine run scontrol show job <id> | grep Dependency` after submitting — a chain that silently drops its dependency runs immediately and out of order.
 - **Verify inputs exist before submitting.**
-  `ralpine ls`/`ralpine run find` the files a job needs first.
+  `ralpine ls`/`ralpine du` the files a job needs first.
 - **Pull the job's log into `results/<task-slug>/` when it finishes.**
   A log left on the cluster is unreadable to anyone reviewing the pull request, and is gone when the scratch space is cleared.
   It is the record of what the run actually did — the resolved arguments, the warnings, the wall time — so it belongs beside the result it produced.

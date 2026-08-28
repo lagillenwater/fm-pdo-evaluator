@@ -43,9 +43,15 @@ REMOTE_ROOT="${ALPINE_ROOT:-/projects/lgillenwater@xsede.org/repositories/fm-pdo
 
 # Remote binaries this script will invoke. Everything here inspects state; nothing writes,
 # submits, or deletes. Adding to this list is a deliberate, reviewable change.
+#
+# `find` is deliberately ABSENT: its -exec and -delete predicates execute arbitrary remote
+# commands, so admitting it here would let `ralpine run find . -exec ...` escape the
+# read-only boundary this allowlist exists to enforce. The `log` verb needs find-like
+# behavior; it gets a fixed-command path via remote_fixed instead (see below), built from
+# literals in this script plus a pattern validated to a safe character set.
 READ_ONLY=(
   squeue sacct sinfo sstat scontrol sshare squota
-  ls cat head tail wc du df stat find grep zgrep realpath readlink file
+  ls cat head tail wc du df stat grep zgrep realpath readlink file
   hostname pwd whoami date echo uptime nvidia-smi module quota
 )
 
@@ -118,9 +124,14 @@ case "$sub" in
            remote tail -n "${2:-80}" "$1" ;;
   log)
     # Newest log for a job name (or newest overall), then its tail -- the usual "what happened".
+    # `find` is not in READ_ONLY (see the comment above it), so this builds a fully literal
+    # find invocation via remote_fixed: every word is a literal from this script except the
+    # pattern, which is validated to a safe character set below and then shell-quoted with
+    # printf %q before being spliced in -- the same pattern `update`/`rev` use for git.
     pattern="${1:-}"
-    newest=$(remote find "$REMOTE_ROOT/logs" -name "*${pattern}*.out" -printf '%T@ %p\n' \
-             | sort -rn | head -1 | cut -d' ' -f2-) || true
+    [[ "$pattern" =~ ^[A-Za-z0-9._-]*$ ]] \
+      || die "refusing '$pattern': log pattern may contain only letters, digits, '.', '_', '-'"
+    newest=$(remote_fixed "find $(printf '%q' "$REMOTE_ROOT/logs") -name $(printf '%q' "*${pattern}*.out") -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-") || true
     [[ -n "${newest:-}" ]] || die "no log matching '${pattern}' under $REMOTE_ROOT/logs"
     echo "== $newest" >&2
     remote tail -n 120 "$newest"
