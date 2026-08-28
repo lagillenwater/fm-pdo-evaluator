@@ -11,7 +11,7 @@ Reuses the DuckDB-over-local-parquet path (the Tahoe DE table is already local o
 scratch), so it needs no GPU.
 
   python scripts/delta_reproducibility.py --local-dir /scratch/alpine/$USER/tahoe_pseudobulk_de \\
-      --drug-names-file data/static/tahoe_drug_names.txt \\
+      --drug-names-file <a file of Tahoe drug names, one per line> \\
       --panel-file results/rung1_panel/common_panel.txt --out-dir rung0_outputs
 """
 
@@ -286,6 +286,31 @@ def write_figure(r: np.ndarray, nulls: dict[str, np.ndarray], out_png: Path) -> 
     plt.close(fig)
 
 
+def write_per_gene_figure(per_gene: pd.DataFrame, out_png: Path) -> None:
+    """Histogram of the per-gene split-half diagnostic (design.md, 'per-gene reliability').
+
+    Unpromoted, same as the CSV it reads: says which panel genes carry reproducible
+    perturbation signal, not the pair-level ceiling `write_figure` reports.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    r = per_gene["r"].to_numpy(dtype=float)
+    r = r[np.isfinite(r)]
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.hist(r, bins=60, alpha=0.75, color="tab:blue")
+    ax.axvline(0.0, color="k", lw=1.0, linestyle="--", label="zero")
+    ax.axvline(float(np.median(r)), color="tab:red", lw=1.5, label=f"median ({np.median(r):.3f})")
+    ax.set_xlabel("split-half r per gene, across (line, drug) conditions")
+    ax.set_ylabel("count")
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=150)
+    plt.close(fig)
+
+
 def _write_params_sidecar(result_path, args_ns, extra=None) -> None:
     """Record the git sha and every resolved argument beside the result.
 
@@ -430,7 +455,9 @@ def main() -> None:
     pd.DataFrame([summary]).to_csv(summary_path, index=False)
     _write_params_sidecar(summary_path, args, extra={"n_pairs": summary["n_pairs"]})
 
-    per_gene_reliability(piv0, piv1).to_csv(out_dir / "rung0_per_gene_reliability.csv", index=False)
+    per_gene = per_gene_reliability(piv0, piv1)
+    per_gene.to_csv(out_dir / "rung0_per_gene_reliability.csv", index=False)
+    write_per_gene_figure(per_gene, out_dir / "rung0_per_gene_reliability.png")
     pool_description(paths, names, repl, local.parent / "duckdb_tmp").to_csv(
         out_dir / "rung0_pool_description.csv", index=False
     )

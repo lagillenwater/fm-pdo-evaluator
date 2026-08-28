@@ -127,6 +127,42 @@ def test_score_negative_zero_signal_returns_null(tmp_path: Path) -> None:
     assert p > 0.05, f"no planted signal must not clear the null, got p={p}"
 
 
+def test_restrict_positive_panel_subset_scores_exactly_the_subset(tmp_path: Path) -> None:
+    """A panel covering a strict subset of the data's genes restricts scoring to that subset.
+
+    Exercises the real restrict step: `score_split_half`'s `panel` argument is exactly what
+    a `--panel-file` resolves to in `main()`, so a fixture set here stands in for one.
+    """
+    path = _write_fixture_pool(tmp_path)  # default: 300 genes, G0..G299
+    de, _ = dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    subset = {f"G{k}" for k in range(100)}  # 100 of the fixture's 300 genes
+    r, piv0, piv1 = dr.score_split_half(de, subset)
+    assert piv0.shape[1] == len(subset), f"scored {piv0.shape[1]} genes, panel had {len(subset)}"
+    assert piv1.shape[1] == len(subset)
+    assert r.size > 0, "the restricted panel must still leave scoreable pairs"
+
+
+def test_restrict_negative_disjoint_panel_scores_nothing(tmp_path: Path) -> None:
+    """A panel disjoint from the data's genes leaves nothing for the real code to score.
+
+    `score_split_half` itself does not raise on an empty intersection -- it returns an empty
+    result -- so this asserts that honestly; `main()` is what turns an empty result into a
+    `SystemExit` (the "aborts the run" behavior design.md's restrict control describes).
+    """
+    path = _write_fixture_pool(tmp_path)
+    de, _ = dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    disjoint = {f"ZZZ{k}" for k in range(10)}  # none of these genes are in the fixture
+    r, piv0, piv1 = dr.score_split_half(de, disjoint)
+    assert r.size == 0, "a disjoint panel must leave nothing scoreable, not silently score empty"
+    assert piv0.shape[1] == 0 and piv1.shape[1] == 0
+
+
 def test_null_positive_planted_components_recover_the_stratum_ordering(tmp_path: Path) -> None:
     # Drug-shared + line-specific components: matched pairs share both, same-drug
     # mismatches share only the drug component, diff-drug mismatches share nothing.
