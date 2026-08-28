@@ -332,9 +332,7 @@ def test_rule_04_edge_promoted_tasks_have_known_answer_tests() -> None:
         pytest.skip("no promoted results yet; declared controls precede their implementation")
 
     marked = [
-        p
-        for p in sorted((REPO / "tests").glob("test_*.py"))
-        if "known_answer" in p.read_text()
+        p for p in sorted((REPO / "tests").glob("test_*.py")) if "known_answer" in p.read_text()
     ]
     assert marked, (
         "results are promoted but no test file carries pytest.mark.known_answer; rule 4 "

@@ -15,7 +15,11 @@ import math
 import numpy as np
 import pytest
 
-from fmharness.statistics import bootstrap_aggregate_pvalue, minimum_detectable_aggregate, spearman_brown
+from fmharness.statistics import (
+    bootstrap_aggregate_pvalue,
+    minimum_detectable_aggregate,
+    spearman_brown,
+)
 
 pytestmark = pytest.mark.known_answer
 
@@ -51,8 +55,8 @@ def test_the_wrong_form_is_the_one_that_fails_to_recover_it() -> None:
 
 
 def test_spearman_brown_lifts_half_data_reliability_as_documented() -> None:
-    assert spearman_brown(0.0) == pytest.approx(0.0)
-    assert spearman_brown(1.0) == pytest.approx(1.0)
+    assert spearman_brown(0.0) == 0.0
+    assert abs(spearman_brown(1.0) - 1.0) < 1e-12
     assert spearman_brown(0.3) > 0.3, "correcting half-data reliability must raise it"
     assert spearman_brown(0.5) > spearman_brown(0.3)
 

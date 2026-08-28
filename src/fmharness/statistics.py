@@ -45,9 +45,7 @@ def bootstrap_aggregate_pvalue(
     if null_draws.size < min_null_draws or n_obs < 1:
         return float("nan"), float("nan"), float("nan")
     rng = np.random.default_rng(seed)
-    boot = np.array([
-        agg(rng.choice(null_draws, size=n_obs, replace=True)) for _ in range(n_boot)
-    ])
+    boot = np.array([agg(rng.choice(null_draws, size=n_obs, replace=True)) for _ in range(n_boot)])
     p = float((1 + np.sum(boot >= observed_agg)) / (1 + boot.size))
     lo, hi = float(np.quantile(boot, 0.025)), float(np.quantile(boot, 0.975))
     return p, lo, hi
