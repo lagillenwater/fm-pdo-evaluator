@@ -14,6 +14,14 @@ and builds the null distribution of the MEAN mismatched correlation directly fro
 derangements. The ratio of that derangement-null variance to the i.i.d.-pool bootstrap's
 assumed variance is the design effect the exchangeable-pool treatment ignores.
 
+That any-pair derangement validates the POOLED aggregate, but the promoted p-values are
+per-stratum (`p_vs_null` vs a diff-drug mismatched-pair pool, `p_vs_same_drug` vs a same-drug
+pool that clusters over ~32 drugs) and an any-pair derangement mixes both mismatch types
+freely, carrying neither stratum's dependence specifically. `stratified_derangement_null`
+builds two more permutation nulls that do: `sample_within_drug_derangement` (mismatched pairs
+stay inside one drug -- the `same_drug` stratum) and `sample_cross_derangement` (mismatched
+pairs change both line and drug -- the `diff_drug` stratum).
+
 Reuses the measurement core in `scripts/delta_reproducibility.py` (`build_split_half_frame`,
 `score_split_half`, `stratified_null_draws`, `masked_rowwise_pearson`) rather than
 reimplementing it, loaded the same way `tests/test_rung0_controls.py` loads it.
@@ -34,6 +42,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +71,61 @@ def sample_derangement(rng: np.random.Generator, n: int, max_tries: int = 1000) 
         if not np.any(perm == identity):
             return perm
     raise RuntimeError(f"failed to sample a derangement of size {n} within {max_tries} tries")
+
+
+def sample_within_drug_derangement(rng: np.random.Generator, drugs: np.ndarray) -> np.ndarray:
+    """A permutation sigma with ``sigma(i) != i`` and ``drugs[sigma(i)] == drugs[i]`` for every
+    row in a drug group of size >= 2 -- a per-drug derangement, built by rejection-sampling
+    `sample_derangement` independently within each drug's row indices.
+
+    A drug group of size 1 has no derangement (the same degeneracy `sample_derangement` hits at
+    n=1): those rows are left mapped to themselves rather than raising, and are excluded from
+    any aggregate over the result -- the mask of included rows is directly computable from
+    ``drugs``' own per-row group counts (``>= 2``), so it is not returned separately here.
+    """
+    n = len(drugs)
+    sigma = np.arange(n)
+    order = np.argsort(drugs, kind="stable")
+    sorted_drugs = drugs[order]
+    boundaries = np.flatnonzero(np.r_[True, sorted_drugs[1:] != sorted_drugs[:-1], True])
+    for start, end in pairwise(boundaries):
+        idx = order[start:end]
+        if idx.size < 2:
+            continue  # singleton drug group: no derangement exists, row stays a fixed point
+        sigma[idx] = idx[sample_derangement(rng, idx.size)]
+    return sigma
+
+
+def sample_cross_derangement(
+    rng: np.random.Generator, drugs: np.ndarray, lines: np.ndarray, max_sweeps: int = 200
+) -> np.ndarray:
+    """A permutation sigma with ``sigma(i) != i``, ``drugs[sigma(i)] != drugs[i]``, AND
+    ``lines[sigma(i)] != lines[i]`` for every row -- exactly `stratified_null_draws`'s
+    ``diff_drug`` mask (different line and different drug).
+
+    Starts from a uniform random permutation, then repeatedly sweeps the violating positions
+    and swaps each with a uniformly random other position, until no violations remain. With the
+    real pool (~33 drugs, ~50 lines, ~1,600 rows) violations are sparse -- most random partners
+    already differ on both drug and line -- so this converges in a handful of sweeps;
+    ``max_sweeps`` bounds a pathological composition (e.g. one drug shared by most rows) so a
+    non-converging repair fails loudly instead of looping forever.
+    """
+    n = len(drugs)
+    sigma = rng.permutation(n)
+    idx = np.arange(n)
+    for _ in range(max_sweeps):
+        bad = (sigma == idx) | (drugs[sigma] == drugs) | (lines[sigma] == lines)
+        bad_idx = np.flatnonzero(bad)
+        if bad_idx.size == 0:
+            return sigma
+        partners = rng.integers(0, n, size=bad_idx.size)
+        for i, j in zip(bad_idx.tolist(), partners.tolist(), strict=True):
+            sigma[i], sigma[j] = sigma[j], sigma[i]
+    raise RuntimeError(
+        f"sample_cross_derangement failed to repair every violation within {max_sweeps} sweeps "
+        f"(n={n}) -- the diff-drug constraint may be unsatisfiable for this drug/line "
+        "composition (e.g. too few distinct drugs or lines)"
+    )
 
 
 def derangement_null(
@@ -145,6 +209,111 @@ def derangement_null(
     return summary, perm_means
 
 
+def stratified_derangement_null(
+    piv0: pd.DataFrame,
+    piv1: pd.DataFrame,
+    r: np.ndarray,
+    min_genes: int,
+    n_perm: int,
+    seed: int,
+) -> tuple[dict[str, float], dict[str, np.ndarray]]:
+    """Stratum-preserving derangement nulls for the promoted PER-STRATUM p-values.
+
+    `derangement_null`'s any-pair derangement validates the pooled aggregate, but the promoted
+    p-values in `delta_reproducibility.summarize` (``p_vs_null`` vs the diff-drug pool,
+    ``p_vs_same_drug`` vs the same-drug pool, which clusters over ~32 drugs) are per-stratum: an
+    any-pair derangement mixes same- and diff-drug mismatches freely and carries neither
+    stratum's dependence specifically. This builds two more permutation nulls that DO, by
+    construction:
+
+    - ``same_drug``: `sample_within_drug_derangement` -- every draw's mismatched pairing stays
+      inside one drug, exactly `stratified_null_draws`'s ``same_drug`` mask (same drug,
+      different line). Rows in a singleton drug group have no derangement and are excluded from
+      both the null and the observed comparator, which is therefore computed over the SAME row
+      subset (``observed_mean_same_drug_rows``, ``n_rows_same_drug``) rather than the full pool.
+    - ``diff_drug``: `sample_cross_derangement` -- every draw changes both line and drug,
+      exactly `stratified_null_draws`'s ``diff_drug`` mask, over all finite rows.
+
+    Each stratum's ``design_effect`` is the derangement-null variance of the mean over the
+    matching `stratified_null_draws` pool's variance at that stratum's own row count -- the same
+    construction as `derangement_null`'s design effect, applied per stratum.
+
+    Returns a summary dict with ``_same_drug``/``_diff_drug``-suffixed keys (plus the two
+    same-drug-only row-count/observed-mean keys) and a dict of the two raw perm-mean arrays,
+    keyed ``"same_drug"``/``"diff_drug"``.
+    """
+    finite = np.isfinite(r)
+    piv0_f, piv1_f = piv0.loc[finite], piv1.loc[finite]
+    a = piv0_f.to_numpy(dtype=float)
+    b = piv1_f.to_numpy(dtype=float)
+    r_f = r[finite]
+    n = a.shape[0]
+    if n < 2:
+        raise ValueError(
+            f"stratified_derangement_null needs at least 2 finite (line, drug) pairs, got {n}"
+        )
+    if n_perm < 2:
+        raise ValueError(f"stratified_derangement_null needs n_perm >= 2, got {n_perm}")
+
+    lines = piv0_f.index.get_level_values(0).to_numpy(dtype=str)
+    drugs = piv0_f.index.get_level_values(1).to_numpy(dtype=str)
+    observed_mean = float(np.mean(r_f))
+
+    drug_counts = pd.Series(drugs).map(pd.Series(drugs).value_counts())
+    multi_mask = (drug_counts >= 2).to_numpy()
+    n_multi = int(multi_mask.sum())
+    if n_multi < 2:
+        raise ValueError(
+            "stratified_derangement_null needs at least 2 rows in >=2-row drug groups, got "
+            f"{n_multi}"
+        )
+    observed_mean_multi = float(np.mean(r_f[multi_mask]))
+
+    rng = np.random.default_rng(seed)
+    perm_means_same = np.empty(n_perm, dtype=float)
+    for k in range(n_perm):
+        sigma = sample_within_drug_derangement(rng, drugs)
+        row_r = dr.masked_rowwise_pearson(a[multi_mask], b[sigma[multi_mask]], min_genes)
+        perm_means_same[k] = float(np.nanmean(row_r))
+    # Same NaN-propagation hazard `derangement_null` guards against: a broken draw (zero
+    # scoreable pairs among the multi-row rows) must fail loudly, not silently corrupt
+    # perm_mean_mean/perm_mean_sd/design_effect while p_exact's `>=` treats NaN as False.
+    assert not np.isnan(perm_means_same).any(), (
+        "a within-drug derangement produced zero scoreable pairs among multi-row drug groups"
+    )
+
+    perm_means_diff = np.empty(n_perm, dtype=float)
+    for k in range(n_perm):
+        sigma = sample_cross_derangement(rng, drugs, lines)
+        row_r = dr.masked_rowwise_pearson(a, b[sigma], min_genes)
+        perm_means_diff[k] = float(np.nanmean(row_r))
+    assert not np.isnan(perm_means_diff).any(), "a cross derangement produced zero scoreable pairs"
+
+    pools = dr.stratified_null_draws(piv0_f, piv1_f, n_perm=n_perm, seed=seed, min_genes=min_genes)
+
+    def _stratum(perm_means: np.ndarray, pool: np.ndarray, n_used: int, observed: float) -> dict:
+        var_pool = float(np.var(pool, ddof=1))
+        design_effect = float(np.var(perm_means, ddof=1) / (var_pool / n_used))
+        p_exact = float((1 + np.sum(perm_means >= observed)) / (1 + n_perm))
+        return {
+            "perm_mean_mean": round(float(np.mean(perm_means)), 4),
+            "perm_mean_sd": round(float(np.std(perm_means, ddof=1)), 4),
+            "p_exact": round(p_exact, 4),
+            "design_effect": round(design_effect, 3),
+        }
+
+    same = _stratum(perm_means_same, pools["same_drug"], n_multi, observed_mean_multi)
+    diff = _stratum(perm_means_diff, pools["diff_drug"], n, observed_mean)
+
+    summary = {
+        "n_rows_same_drug": n_multi,
+        "observed_mean_same_drug_rows": round(observed_mean_multi, 4),
+        **{f"{k}_same_drug": v for k, v in same.items()},
+        **{f"{k}_diff_drug": v for k, v in diff.items()},
+    }
+    return summary, {"same_drug": perm_means_same, "diff_drug": perm_means_diff}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--local-dir", required=True, help="dir with the Tahoe DE parquet (on scratch)")
@@ -206,7 +375,15 @@ def main() -> None:
         raise SystemExit("no (line, drug) pair had enough shared panel genes to score")
 
     summary, perm_means = derangement_null(piv0, piv1, r, args.min_genes, args.n_perm, args.seed)
-    summary_row = {"replicate_col": repl, "n_genes": len(panel), **summary}
+    strat_summary, strat_perm_means = stratified_derangement_null(
+        piv0, piv1, r, args.min_genes, args.n_perm, args.seed
+    )
+    summary_row = {
+        "replicate_col": repl,
+        "n_genes": len(panel),
+        **summary,
+        **strat_summary,
+    }
 
     summary_path = out_dir / "rung0_derangement_summary.csv"
     pd.DataFrame([summary_row]).to_csv(summary_path, index=False)
@@ -215,15 +392,36 @@ def main() -> None:
     pd.DataFrame({"perm_mean": perm_means}).to_csv(
         out_dir / "rung0_derangement_perm_means.csv", index=False
     )
+    pd.DataFrame({"perm_mean": strat_perm_means["same_drug"]}).to_csv(
+        out_dir / "rung0_derangement_perm_means_same_drug.csv", index=False
+    )
+    pd.DataFrame({"perm_mean": strat_perm_means["diff_drug"]}).to_csv(
+        out_dir / "rung0_derangement_perm_means_diff_drug.csv", index=False
+    )
 
     print("\n=== derangement-based exact permutation null (rung 0, final verification step) ===")
     for k, v in summary_row.items():
         print(f"  {k:22s} {v}")
     print(
-        f"\nobserved mean r = {summary['observed_mean']:.4f}, derangement null mean = "
+        f"\nany-pair: observed mean r = {summary['observed_mean']:.4f}, derangement null mean = "
         f"{summary['perm_mean_mean']:.4f} +/- {summary['perm_mean_sd']:.4f} (sd), "
         f"p_exact = {summary['p_exact']:.4f}, design effect = {summary['design_effect']:.3f} "
-        f"(se_iid_pool = {summary['se_iid_pool']:.5f}).\nwrote {summary_path}"
+        f"(se_iid_pool = {summary['se_iid_pool']:.5f})."
+    )
+    print(
+        f"same-drug ({strat_summary['n_rows_same_drug']} rows in >=2-row drug groups): "
+        f"observed mean r = {strat_summary['observed_mean_same_drug_rows']:.4f}, "
+        f"within-drug null mean = {strat_summary['perm_mean_mean_same_drug']:.4f} +/- "
+        f"{strat_summary['perm_mean_sd_same_drug']:.4f} (sd), p_exact = "
+        f"{strat_summary['p_exact_same_drug']:.4f}, design effect = "
+        f"{strat_summary['design_effect_same_drug']:.3f}."
+    )
+    print(
+        f"diff-drug: observed mean r = {summary['observed_mean']:.4f}, cross null mean = "
+        f"{strat_summary['perm_mean_mean_diff_drug']:.4f} +/- "
+        f"{strat_summary['perm_mean_sd_diff_drug']:.4f} (sd), p_exact = "
+        f"{strat_summary['p_exact_diff_drug']:.4f}, design effect = "
+        f"{strat_summary['design_effect_diff_drug']:.3f}.\nwrote {summary_path}"
     )
 
 

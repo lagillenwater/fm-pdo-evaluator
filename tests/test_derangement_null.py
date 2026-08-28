@@ -139,3 +139,118 @@ def test_design_effect_sits_in_a_sane_band_on_near_independent_rows(tmp_path: Pa
     assert 0.2 <= summary["design_effect"] <= 5.0, (
         f"design effect {summary['design_effect']} outside the sane band [0.2, 5.0]"
     )
+
+
+# --- Stratum-preserving derangement nulls -----------------------------------------------
+#
+# The any-pair derangement above validates the POOLED aggregate, but the promoted p-values
+# (`delta_reproducibility.summarize`'s `p_vs_null` and `p_vs_same_drug`) are per-stratum:
+# `p_vs_same_drug` is read against a same-drug mismatched-pair pool that clusters over ~32
+# drugs, and `p_vs_null` against a diff-drug pool. An any-pair derangement mixes same- and
+# diff-drug mismatches freely and carries neither stratum's dependence specifically. These
+# tests cover the two stratum-constrained permutation samplers and the stratified null they
+# build, on the same synthetic fixtures as the rest of this file and `test_rung0_controls.py`.
+
+
+def test_sample_within_drug_derangement_excludes_singletons_and_deranges_the_rest() -> None:
+    """Uneven drug-group sizes, including a singleton drug with no derangement: every row in a
+    >=2-row drug group maps to a DIFFERENT row of the SAME drug; the singleton row has no valid
+    target and must map to itself, i.e. sit outside any >=2-row aggregate."""
+    drugs = np.array(["D0", "D0", "D0", "D1", "D1", "D2"])  # D2 is a singleton
+    multi = np.array([True, True, True, True, True, False])
+    rng = np.random.default_rng(0)
+    sigma = dn.sample_within_drug_derangement(rng, drugs)
+    assert sigma.shape == (6,)
+    assert sorted(sigma.tolist()) == list(range(6)), f"not a permutation: {sigma}"
+    for i in range(6):
+        if multi[i]:
+            assert sigma[i] != i, f"row {i} (drug {drugs[i]}) mapped to itself"
+            assert drugs[sigma[i]] == drugs[i], (
+                f"row {i} (drug {drugs[i]}) mapped to drug {drugs[sigma[i]]}"
+            )
+        else:
+            assert sigma[i] == i, f"singleton row {i} (drug {drugs[i]}) must map to itself"
+
+
+def test_sample_cross_derangement_satisfies_all_three_constraints() -> None:
+    """`sample_cross_derangement` on a fixture shaped like a real (line, drug) pivot index (4
+    lines x 3 drugs, one row per combination -- the diff-drug stratum's constraints are easily
+    satisfiable here): every row's partner differs in row index, drug, AND line."""
+    lines = np.array([f"L{i // 3}" for i in range(12)])
+    drugs = np.array([f"D{i % 3}" for i in range(12)])
+    rng = np.random.default_rng(0)
+    sigma = dn.sample_cross_derangement(rng, drugs, lines)
+    assert sigma.shape == (12,)
+    assert sorted(sigma.tolist()) == list(range(12)), f"not a permutation: {sigma}"
+    idx = np.arange(12)
+    assert not np.any(sigma == idx), "some row mapped to itself"
+    assert not np.any(drugs[sigma] == drugs), "some row mapped within its own drug"
+    assert not np.any(lines[sigma] == lines), "some row mapped within its own line"
+
+
+def test_stratified_null_drug_effects_survive_within_drug_die_across_drugs(
+    tmp_path: Path,
+) -> None:
+    """Ordering known answer, the stratified analog of
+    `test_null_positive_planted_components_recover_the_stratum_ordering` in
+    `test_rung0_controls.py`: with a planted drug-shared component (drug_sd > 0) plus
+    line-specific signal, a within-drug derangement's mismatched pairs still share the drug
+    component (same drug, different line), while a cross derangement's mismatched pairs share
+    nothing (different drug AND different line). The within-drug permutation-null MEAN must
+    therefore sit above the cross permutation-null MEAN."""
+    path = _write_fixture_pool(
+        tmp_path, n_lines=6, n_drugs=4, signal_sd=0.7, drug_sd=0.7, noise_sd=0.7
+    )
+    de, _ = dn.dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2", "D3"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dn.dr.score_split_half(de, set(de["gene_name"].unique()))
+    strat, _ = dn.stratified_derangement_null(piv0, piv1, r, min_genes=50, n_perm=150, seed=0)
+    same_mean, diff_mean = strat["perm_mean_mean_same_drug"], strat["perm_mean_mean_diff_drug"]
+    assert same_mean > diff_mean + 0.1, (
+        f"within-drug null mean {same_mean:.3f} !> cross null mean {diff_mean:.3f} by 0.1"
+    )
+
+
+def test_stratified_zero_signal_pool_is_not_significant(tmp_path: Path) -> None:
+    """Zero-signal negative control for both stratified nulls, and the same design-effect
+    sanity band as `test_design_effect_sits_in_a_sane_band_on_near_independent_rows`, applied
+    to each stratum."""
+    path = _write_fixture_pool(tmp_path, signal_sd=0.0, noise_sd=1.0)
+    de, _ = dn.dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dn.dr.score_split_half(de, set(de["gene_name"].unique()))
+    strat, _ = dn.stratified_derangement_null(piv0, piv1, r, min_genes=50, n_perm=200, seed=0)
+    assert strat["p_exact_same_drug"] > 0.01, (
+        f"zero-signal same-drug stratum must not clear its null, got p={strat['p_exact_same_drug']}"
+    )
+    assert strat["p_exact_diff_drug"] > 0.01, (
+        f"zero-signal diff-drug stratum must not clear its null, got p={strat['p_exact_diff_drug']}"
+    )
+    assert 0.2 <= strat["design_effect_same_drug"] <= 5.0, (
+        f"same-drug design effect {strat['design_effect_same_drug']} outside [0.2, 5.0]"
+    )
+    assert 0.2 <= strat["design_effect_diff_drug"] <= 5.0, (
+        f"diff-drug design effect {strat['design_effect_diff_drug']} outside [0.2, 5.0]"
+    )
+
+
+def test_stratified_planted_signal_clears_both_nulls(tmp_path: Path) -> None:
+    """Planted-signal positive control for both stratified nulls, at n_perm=99 -- the same
+    fixture as `test_planted_signal_pool_clears_the_derangement_null`."""
+    path = _write_fixture_pool(tmp_path, signal_sd=1.0, noise_sd=1.0)
+    de, _ = dn.dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dn.dr.score_split_half(de, set(de["gene_name"].unique()))
+    strat, _ = dn.stratified_derangement_null(piv0, piv1, r, min_genes=50, n_perm=99, seed=0)
+    assert strat["p_exact_same_drug"] < 0.05, (
+        f"planted signal must clear the same-drug null, got p={strat['p_exact_same_drug']}"
+    )
+    assert strat["p_exact_diff_drug"] < 0.05, (
+        f"planted signal must clear the diff-drug null, got p={strat['p_exact_diff_drug']}"
+    )

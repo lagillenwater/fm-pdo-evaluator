@@ -12,10 +12,13 @@
 #
 # Rung-0 derangement-based exact permutation null (docs/tasks/rung0-replicate-ceiling/design.md,
 # decision history). Reuses the same DuckDB split-half build as delta_reproducibility.sbatch,
-# then deranges the pairing between the two half-profile pivots -- a permutation with no fixed
-# points -- to build the null distribution of the MEAN mismatched correlation directly, carrying
-# the half-profile-sharing dependence the bootstrapped p-values had to assume away. CPU only;
-# reads the Tahoe DE parquet already on scratch.
+# then runs THREE derangement-based nulls over the half-profile pivots, carrying the
+# half-profile-sharing dependence the bootstrapped p-values had to assume away by construction
+# in each case: any-pair (a permutation with no fixed points, validating the pooled aggregate),
+# same-drug (a per-drug derangement, carrying the same-drug stratum's ~32-drug clustering that
+# `p_vs_same_drug` is read against), and diff-drug (a permutation constrained to change both
+# line and drug, matching the `p_vs_null` stratum). CPU only; reads the Tahoe DE parquet
+# already on scratch. Same entry point and CLI as before -- no flag changes for the extension.
 #
 # Authenticate first (drug_metadata is fetched from HF):  hf auth login
 set -euo pipefail
