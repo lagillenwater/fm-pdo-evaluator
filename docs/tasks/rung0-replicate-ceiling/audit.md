@@ -195,3 +195,23 @@ carrying this entry (the sidecar is now named in verification.md's artifact list
 reader confirmed the correction and the absence of further unnamed derangement artifacts.
 
 **Audit delta: PASSED after the one correction.**
+
+## Audit delta — external-review response (2026-08-31, fresh reader, at `8876212` + fix `fe72ba3`)
+
+The CodeRabbit response (three waves: allowlist security closure with regression tests; stratum-
+preserving derangement nulls, run as job 31770850; documentation reconciliation and the labeled
+re-promotion) audited as one late addition under the convergence rule. The reader re-derived the
+re-promoted record's every hash (result and log checksums unchanged from the first promotion;
+inputs now keyed `gene_panel`/`drug_cids` with identical hashes; `data_commit` still the tranche
+content hash; clean tree true), recomputed the stratified permutation summaries from the raw
+per-permutation files (all matched, including each stratum's exact p at the permutation floor),
+and mechanically recounted this document's canonical clause tally. Six delta clauses: five
+ALIGNED; one DRIFT (the superseded stands-ruling lacked its marker at one of its two locations)
+— fixed with three further documentary defects (a false commit-ordering claim in the
+re-promotion justification, an unreconciled finding count, dangling cross-references) in
+`fe72ba3`; a confirmation pass verified all five corrections and that only documents changed.
+
+**Audit delta: PASSED after the fix round.** The promoted CSV is byte-identical since first
+promotion; the record's evidentiary fields are unchanged; the per-stratum design effects
+(0.872 / 0.516 / 0.071) confirm the pooled null treatment was conservative in every promoted
+comparison.
