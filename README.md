@@ -25,7 +25,11 @@ are reviewed together. Every measurement ships with a positive and a negative co
 promoted comparison reports the smallest effect it was powered to detect. Every task passes a
 drift audit of its design against what landed before promoting its result, carries a
 plain-language summary of hypothesis, evidence, and conclusions, and opens its pull request as
-a draft for a final review round. All rungs are scored
+a draft for a final review round. Each task also ships an executable verification entry point —
+a script plus a notebook that recompute every promoted claim from the committed artifacts, so a
+reviewer re-derives the numbers rather than trusting the write-up. The dated history of project
+and task decisions lives in [docs/decisions.md](docs/decisions.md) and each task's own
+`decisions.md`. All rungs are scored
 inside one declared evaluation frame — the same datasets, gene and drug panels, and statistic —
 so their numbers divide like by like; a new dataset opens a new frame rather than silently
 shifting the old one.

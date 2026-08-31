@@ -157,8 +157,10 @@ def _merge_base() -> str | None:
 
 @pytest.mark.step_document
 def test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry() -> None:
-    """A task document that rewrites its own history must say so, dated, at its foot.
+    """A task document that rewrites its own history must say so, dated.
 
+    The dated entry lives in the task's ``decisions.md`` (SPEC rule 2's amended location,
+    2026-08-31) or in the rewritten document itself (the original form, still accepted).
     Appending to a task document is free. Deleting or rewriting lines already there is a
     reversal of something the document previously asserted, and the rule requires the old choice
     and the reason for changing it to be recorded rather than overwritten. That distinction is a
@@ -197,10 +199,19 @@ def test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry() -> None:
             continue  # removed at HEAD; there is no document left to carry an entry
         new_dates = set(DATED_ENTRY.findall(after)) - set(DATED_ENTRY.findall(before))
         if not new_dates:
+            # SPEC rule 2's amended location: the dated entry may live in the task's
+            # decisions.md rather than in the rewritten document itself
+            decisions = str(Path(doc).parent / "decisions.md")
+            decisions_before = _git("show", f"{base}:{decisions}") or ""
+            decisions_after = _git("show", f"HEAD:{decisions}") or ""
+            new_dates = set(DATED_ENTRY.findall(decisions_after)) - set(
+                DATED_ENTRY.findall(decisions_before)
+            )
+        if not new_dates:
             offenders.append(doc)
     assert not offenders, (
-        "these task documents rewrote existing lines without recording the change, dated, at"
-        f" the foot of the document: {offenders}"
+        "these task documents rewrote existing lines without recording the change, dated, in"
+        f" the task's decisions.md or the document itself: {offenders}"
     )
 
 

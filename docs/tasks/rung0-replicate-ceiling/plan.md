@@ -1775,42 +1775,6 @@ git push
 
 ## Post-hoc reconciliation (2026-08-28, drift audit)
 
-All checkboxes above are ticked: every task in this plan ran. Six execution rulings and one
-dependency addition landed during implementation without a dated note against this plan's text
-(drift-audit finding 3 + 12); recorded here, each against what the plan showed, what shipped, and
-why:
-
-- **`spearman_brown`** — the plan's statistics section (Task 2) shows the Spearman-Brown lift
-  computed inline as `2*r/(1+r)`; shipped `src/fmharness/statistics.py::spearman_brown` as a
-  third, independently tested helper, consumed by `summarize()` (commit `5a4d038`) — so the lift
-  is the same tested code wherever it is used, not reimplemented per call site.
-- **Null sampler `replace=False`** — plan:543 shows `rng.choice(..., replace=avail.size < n_perm)`
-  (falls back to sampling with replacement once a stratum runs short); shipped samples without
-  replacement whenever `avail.size >= n_perm` regardless (commit `9b24cc0`) — drawing the same
-  mismatched pair twice would inflate apparent null precision without adding information.
-- **Column intersection in `score_split_half`** — plan:498 intersects only the pivot INDEX
-  (patient, drug) across halves; shipped also intersects the pivot COLUMNS, i.e. the gene sets
-  (commit `9b24cc0`) — `pivot_table` drops all-NaN columns per half independently, so two halves
-  can carry different gene sets even after the row intersection, and a caller that skipped it
-  could silently correlate misaligned genes.
-- **`clean_tree` redefinition** — plan:1100 shows plain `git status --porcelain`, captured after
-  the result is copied into `results/`; shipped uses `--porcelain -uno` (tracked files only),
-  captured BEFORE the copy (commit `441b238`) — untracked task-folder scratch sits in the working
-  tree throughout this task, so counting it would make `clean_tree` permanently `False`, and
-  capturing after the write would count the promotion's own output as a dirty-tree signal. This
-  changes what the promoted record's `clean_tree` field means relative to the plan's text.
-- **Unverified-shard refusal in `register()`** — plan:1358 refuses only shards whose hash
-  MISMATCHES a download-time etag; shipped also refuses shards with NO etag entry at all (commit
-  `61060f3`) — an unlisted shard is not verified as unmodified, so silently registering it would
-  be a weaker guarantee than the plan's text describes.
-- **`--input LABEL=PATH`** — plan:1122 shows `--input` taking a bare path (`type=Path`); shipped
-  parses `LABEL=PATH` so the promoted record's `inputs` dict is keyed by a durable label rather
-  than an ephemeral scratch path (commit `4211e30`) — already noted forward-looking in
-  `verification.md`.
-- **`pyarrow>=15`** — the plan's Task 1 dependency block (`pyproject.toml`) lists `pydantic`,
-  `numpy`, `pandas`, `duckdb`, `matplotlib`; the shipped `pyproject.toml` also carries
-  `pyarrow>=15`, needed transitively for the parquet-writing path the fixture-based tests exercise
-  — never added to the plan's text.
-
-Per project rule 2, this is the record; the superseded code blocks above are left as originally
-written rather than rewritten to match what shipped.
+Moved to [`decisions.md`](decisions.md) (2026-08-31): the six execution rulings and one
+dependency addition recorded against this plan's text, under that file's plan.md section. The
+superseded code blocks above are left as originally written, per project rule 2.

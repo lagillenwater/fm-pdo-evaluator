@@ -1,6 +1,6 @@
 # fm-pm-evaluator — project spec
 
-**As of** 2026-08-27.
+**As of** 2026-08-31.
 
 ## The question
 
@@ -137,11 +137,11 @@ The rules stay generic: which artifact violates one today is current state, and 
    **Edge-case test** `::test_rule_01_edge_promoted_records_validate_against_the_schema` — every record must parse as `PromotedResult`, so a second provenance format cannot appear alongside the first without failing.
 
 2. **Reversing an analysis design, a method, or a data source is written into the task's own documents, not left to the commit.**
-   The old choice and the reason for changing it are dated and appended to the bottom of that task's `design.md` and `plan.md`, so the document a reader arrives at carries its own history.
+   The old choice and the reason for changing it are dated and appended to that task's `decisions.md`, labeled by the document they amend (project-level decisions go to `docs/decisions.md`), so a task's history sits in one findable place while `design.md` and `plan.md` carry the current position.
    A reversal recorded only in git log is invisible to everyone who reads the documents, which is how a decision gets silently reinstated by the next person to touch it.
    **Step** document. **Enforced by** `tests/test_project_rules.py::test_rule_02_every_task_is_named_in_the_spec_tree` (`-m step_document`).
    **Edge case** the check reads the document, not the work: a reversal carried out in code while the task document is left untouched passes it. Where the reversal moves a promoted number, rule 1's checksum catches it instead; where it changes a method without yet changing a number, nothing does.
-   **Edge-case test** `::test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry` — a task document whose diff against the merge base deletes or rewrites existing lines must also gain a dated entry at its foot. Appending needs no entry; rewriting history does.
+   **Edge-case test** `::test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry` — a task document whose diff against the merge base deletes or rewrites existing lines must also gain a dated entry, in the document itself or in the task's `decisions.md`. Appending needs no entry; rewriting history does.
 
 3. **The README stays in step with the documents it summarises.**
    Most readers open the README and nothing else, so a stale summary misinforms more people than a stale document does.
@@ -164,7 +164,4 @@ The short version: every task gets a folder under `docs/tasks/`, its own branch 
 
 ## Changes
 
-- **2026-08-27** (`rung0-replicate-ceiling`) — Rung 0's measure now declares the ladder-wide statistic (per-pair Pearson, mean over pairs) with stratified nulls and a positive control, and rung 1's measure references the same statistic. Previously the aggregation was undeclared, and the old lineage had already paid for that: its rung-0 headline was a median while its rung 1 reported means, blocking fraction-of-ceiling. Project rule 4 added — positive and negative controls per measurement step, minimum detectable effect beside every promoted comparison. First task indexed in the spec tree: `rung0-replicate-ceiling`.
-- **2026-08-27** (`rung0-replicate-ceiling`, spec review) — The evaluation **frame** added to the vocabulary, out of a discussion of rung 0's drug scope: should the ceiling be computed over all Tahoe drugs, or over the intersection the upper rungs can score? The intersection — a ceiling must be measured on the pairs it will denominate, and an all-corpus ceiling would shift with drug-composition effects unrelated to the assay. Generalized: tranches, panels, and statistic are frame elements; a new tranche or panel opens a new frame and recomputes the rungs within it, while prior frames' promoted results stand under their own provenance. Rung 0's measure now names the declared drug panel beside the gene panel.
-- **2026-08-28** (`rung0-replicate-ceiling`) — The Process summary gained the two close-out stages added to PROCESS §1 at Lucas's direction: a clause-level drift audit of the design against the landed tree, and a plain-language summary, both before the pull request.
-- **2026-08-28** (`rung0-replicate-ceiling`, after its first audit) — the audit moved before promotion in the Process summary, matching PROCESS §1's reorder: rung 0's own audit, run post-promotion, found a declared-vs-scored panel discrepancy that promotion should have waited for. Pull requests now open as drafts for one final review round.
+This document's dated change lineage lives in [`docs/decisions.md`](decisions.md) (moved 2026-08-31).
