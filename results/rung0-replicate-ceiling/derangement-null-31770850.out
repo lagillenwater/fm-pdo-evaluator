@@ -1,0 +1,37 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+33 target drugs; reading 1026 DE parquet files ...
+DE columns: ['gene_name', 'baseMean', 'log2FoldChange', 'lfcSE', 'stat', 'pvalue', 'padj', 'plate', 'n_cells_trt', 'n_cells_ctrl', 'Cell_ID_Cellosaur', 'Cell_ID_DepMap', 'drug', 'concentration', 'concentration_unit', 'Cell_Name_Vevo']
+splitting plates by hash(plate) % 2
+scoring on the supplied panel: 13886 of 14121 genes present
+wrote /projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator/rung0_outputs/rung0_derangement_summary.params.json
+
+=== derangement-based exact permutation null (rung 0, final verification step) ===
+  replicate_col          plate
+  n_genes                13886
+  n_pairs                1600
+  n_perm                 500
+  observed_mean          0.1348
+  perm_mean_mean         0.0361
+  perm_mean_sd           0.0009
+  p_exact                0.002
+  se_iid_pool            0.00099
+  design_effect          0.872
+  z_derangement          106.84
+  n_rows_same_drug       1600
+  same_drug_rows_equal_n True
+  observed_mean_same_drug_rows 0.1348
+  observed_mean_diff_drug_rows 0.1348
+  perm_mean_mean_same_drug 0.0792
+  perm_mean_sd_same_drug 0.0004
+  p_exact_same_drug      0.002
+  design_effect_same_drug 0.071
+  perm_mean_mean_diff_drug 0.0342
+  perm_mean_sd_diff_drug 0.0008
+  p_exact_diff_drug      0.002
+  design_effect_diff_drug 0.516
+
+any-pair: observed mean r = 0.1348, derangement null mean = 0.0361 +/- 0.0009 (sd), p_exact = 0.0020, design effect = 0.872 (se_iid_pool = 0.00099).
+same-drug (1600 rows in >=2-row drug groups): observed mean r = 0.1348, within-drug null mean = 0.0792 +/- 0.0004 (sd), p_exact = 0.0020, design effect = 0.071.
+same-drug design effect measured over 1600 of 1600 rows (transfers directly to the promoted p_vs_same_drug)
+diff-drug: observed mean r = 0.1348, cross null mean = 0.0342 +/- 0.0008 (sd), p_exact = 0.0020, design effect = 0.516.
+wrote /projects/lgillenwater@xsede.org/repositories/fm-pdo-evaluator/rung0_outputs/rung0_derangement_summary.csv

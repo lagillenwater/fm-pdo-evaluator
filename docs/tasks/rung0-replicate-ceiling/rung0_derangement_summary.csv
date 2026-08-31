@@ -1,2 +1,2 @@
-replicate_col,n_genes,n_pairs,n_perm,observed_mean,perm_mean_mean,perm_mean_sd,p_exact,se_iid_pool,design_effect,z_derangement
-plate,13886,1600,500,0.1348,0.0361,0.0009,0.002,0.00099,0.872,106.84
+replicate_col,n_genes,n_pairs,n_perm,observed_mean,perm_mean_mean,perm_mean_sd,p_exact,se_iid_pool,design_effect,z_derangement,n_rows_same_drug,same_drug_rows_equal_n,observed_mean_same_drug_rows,observed_mean_diff_drug_rows,perm_mean_mean_same_drug,perm_mean_sd_same_drug,p_exact_same_drug,design_effect_same_drug,perm_mean_mean_diff_drug,perm_mean_sd_diff_drug,p_exact_diff_drug,design_effect_diff_drug
+plate,13886,1600,500,0.1348,0.0361,0.0009,0.002,0.00099,0.872,106.84,1600,True,0.1348,0.1348,0.0792,0.0004,0.002,0.071,0.0342,0.0008,0.002,0.516

@@ -1,7 +1,7 @@
 {
   "result": "rung0_derangement_summary.csv",
-  "git_sha": "a7ec0777fb60af0df16b7dac8923e5b8fa9e6ef7",
-  "slurm_job_id": "31764582",
+  "git_sha": "2d3dd22cf74921a6d87a276c2ca13a1d357be577",
+  "slurm_job_id": "31770850",
   "args": {
     "local_dir": "/scratch/alpine/lgillenwater@xsede.org/tahoe_pseudobulk_de",
     "drugs_cid_file": "data/static/tahoe_target_cids.txt",
