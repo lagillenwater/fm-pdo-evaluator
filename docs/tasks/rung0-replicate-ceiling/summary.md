@@ -1,6 +1,6 @@
 # Rung 0, in plain language
 
-**As of** 2026-08-28. The technical record is [`design.md`](design.md) (what and why),
+**As of** 2026-08-31. The technical record is [`design.md`](design.md) (what and why),
 [`verification.md`](verification.md) (the run and its evidence), and [`review.md`](review.md)
 (what review found). This page says what was asked, what was found, and what it means.
 
@@ -47,9 +47,11 @@ Headline (promoted: [`results/rung0-replicate-ceiling/`](../../../results/rung0-
 | Significance vs both floors | p = 0.0005 |
 | Smallest detectable effect at 80% power (vs each floor) | 0.039 / 0.085 |
 
-The observed 0.135 sits roughly 3.4 times above what the experiment could have detected, so the
-result is not a power artifact — and the same two power columns will report honestly at the
-organoid rung, where small cohorts make power the whole question.
+The observed 0.135 is roughly 3.4 times the mismatched-condition detection threshold (0.039)
+and roughly 1.6 times the stricter same-drug detection threshold (0.085) — the experiment was
+not underpowered to find either floor, so the result is not a power artifact — and the same two
+power columns will report honestly at the organoid rung, where small cohorts make power the
+whole question.
 
 Controls (every one passed; details in `tests/` and `verification.md`):
 
@@ -99,6 +101,14 @@ anything the shortcut had slightly overstated it, making the reported significan
 rather than generous. The real, correctly paired agreement exceeded all 500 shuffled versions
 (p = 0.002, the strongest claim 500 shuffles can support). The caveat is settled by
 measurement, not argument.
+
+The same shuffle check was then repeated separately within each comparison type the promoted
+numbers actually use, not just on the original all-conditions version — once shuffling lines
+only within the same drug, and once shuffling only across different drugs and lines. In every
+version the distortion factor stayed at or below one (0.87 for the original all-conditions
+check, 0.52 for the across-drugs-and-lines version, and 0.07 for the within-drug version), with
+the true pairing beating all 500 shuffles every time. So the shortcut was cautious in every
+comparison the promoted numbers make, not just the one first checked.
 
 ## Scripts this task touched
 

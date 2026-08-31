@@ -15,7 +15,7 @@ recounts of the committed comma-separated values (CSV) files, diffs against the 
 passed / 0 skipped). Verdicts: ALIGNED, DEVIATION-RECORDED (a dated entry exists), DRIFT
 (departed, unrecorded).
 
-**Counts — 68 clauses: ALIGNED 47, DEVIATION-RECORDED 3, DRIFT 18** (the first auditor's own enumeration; the condensed tables below merge some clause ranges in transcription and expand to 69/49/2/18 — the DRIFT set of 18 reconciles exactly either way, and it is the set that matters).
+**Counts — canonical (the condensed clause-verdict tables below): 69 clauses: ALIGNED 49, DEVIATION-RECORDED 2, DRIFT 18.** The first auditor's own enumeration — 68 clauses: ALIGNED 47, DEVIATION-RECORDED 3, DRIFT 18 — is retained below as the historical enumeration; the difference between the two counts is transcription merging some clause ranges when the condensed tables were built, not a second pass over the tree. The DRIFT set of 18 is identical either way, and it is the set that matters.
 
 Auditor's judgment, verbatim: the scientific artifact is faithful and independently checkable —
 the tranche content hash recomputed from the committed manifest, both promotion input hashes,

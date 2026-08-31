@@ -1,6 +1,6 @@
 # Rung 0 — review record
 
-**As of** 2026-08-28.
+**As of** 2026-08-31.
 
 How this branch was reviewed and what came of it. Every task went through a two-stage gate — an
 implementation-scoped review (spec compliance + code quality) with fix rounds re-verified by a
@@ -69,9 +69,13 @@ still using the `module load anaconda` pattern the other jobs document as failin
 on a scratch-purge rebuild); `docs/environment.md` §4's asserted-but-absent static-asset
 manifest (reconcile when rung 4 registers Genomics of Drug Sensitivity in Cancer, release 2 (GDSC2)); Python-level bootstrap loops in
 `fmharness.statistics` (vectorizable); the schema docstrings' `PredictionRecord` references
-(rung 1's reconciliation); and the pre-existing `.gitignore` trailing-comment hazard — three
+(rung 1's reconciliation); the pre-existing `.gitignore` trailing-comment hazard — three
 patterns (`reports/`, `containers/*.sif`, `.fmharness/`) carry inline comments and so match
-nothing.
+nothing; lock-based Alpine provisioning (containers/`uv` on Alpine, superseding the pinned
+pip-fallback installs); `ALPINE_HOST` option-injection validation in `ralpine`; a `module save`
+write primitive for `ralpine`'s allowlist; and a provably-uniform constrained sampler for
+`sample_cross_derangement` (its current repair-based sampler is measurably non-uniform over the
+`diff_drug` constraint set — see `verification.md`'s derangement section).
 
 One observation worth carrying to rung 1's design rather than fixing here: the design's Steps
 line omits `restrict` and `split` although the run restricts (panel, drugs) and splits
@@ -84,5 +88,31 @@ recorded at promotion are the guard.
 The audit stage's full record — the 68-clause first audit, the fix wave's dispositions, and the
 re-audit verdict — lives in [`audit.md`](audit.md). Headline: 47 aligned, 3 recorded deviations,
 18 drift, all drift documentary except the declared-vs-scored panel finding; every item fixed or
-recorded by the fix wave, re-audit pending. The measurement itself was independently
-re-derived and reproduced exactly.
+recorded by the fix wave, and the audit passed (re-audit + confirmation recorded in
+`audit.md`). The measurement itself was independently re-derived and reproduced exactly.
+
+## External review (CodeRabbit, PR 14)
+
+18 findings triaged. Dispositions:
+
+- **15 accepted and fixed**: `ralpine`'s `find`/`scontrol`/`file`/`nvidia-smi` allowlist escapes
+  closed, with a new read-only `jobinfo` verb replacing the write-capable `scontrol` access and
+  boundary regression tests; `00_target_cids.sbatch`'s empty-mapped-set guard; the Tahoe
+  download's pinned `--revision` and always-resume behavior, with new behavior tests;
+  `derangement_null.py`'s input validation (`n < 2` finite pairs, `n_perm < 2`) refused before
+  the permutation loop; `promote_result.py`'s provenance-record immutability refusal; the
+  rule-4 controls scan tightened to the `positive:`/`negative:` colon form; three loader
+  edge-case controls added to `test_rung0_controls.py`; the Alpine sbatch jobs' pip-fallback
+  installs pinned to the `pyproject.toml` floors with upper bounds; the stratified (within-drug,
+  cross-constrained) derangement nulls measured on the real Tahoe pool (job 31770850, recorded
+  in `verification.md`); the seven documentation corrections above (a–g, `verification.md`,
+  `summary.md`, `audit.md`, this document, `docs/environment.md`, `design.md`); and the labeled
+  re-promotion below.
+- **1 dismissed with evidence**: a finding that the shard manifest was missing from the
+  repository — already committed at
+  `data/tranches/tahoe100m-pseudobulk-de.v1.manifest.txt` since the tranche-registration commit
+  (`25cec05`).
+- **Deferred follow-ups** (recorded, not blocking; also carried in Standing follow-ups above):
+  lock-based Alpine provisioning; `ALPINE_HOST` option-injection validation; a `module save`
+  write primitive for `ralpine`'s allowlist; and a provably-uniform constrained sampler for
+  `sample_cross_derangement`.

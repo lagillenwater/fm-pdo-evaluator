@@ -98,7 +98,7 @@ When upgrading a dependency:
 | `python_version` | `sys.version` | yes |
 | `torch_version` | `torch.__version__` if torch available | yes (GPU runs) |
 | `cuda_version` | `torch.version.cuda` if CUDA available | yes (GPU runs) |
-| `model_weights_hash` | sha256 of the loaded checkpoint bytes | yes |
+| `model_weights_hash` | sha256 of the loaded checkpoint bytes | yes (model runs) |
 | `data_commit` | tranche `content_hash` for the inputs | yes |
 | `seed` | seed passed into the CLI | yes |
 | `cuda_deterministic` | `True` iff `fix_seeds` ran + det algos enabled | yes |

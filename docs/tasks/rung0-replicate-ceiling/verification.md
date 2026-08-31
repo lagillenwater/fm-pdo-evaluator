@@ -1,7 +1,7 @@
 # Rung 0 — verification
 
-**Task** `rung0-replicate-ceiling` · **As of** 2026-08-28
-Records how the headline number in `docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` was produced and promoted, and every number this document cites is copied from that comma-separated values (CSV) or from the job log, not from memory.
+**Task** `rung0-replicate-ceiling` · **As of** 2026-08-31
+Records how the headline number in `docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv` was produced and promoted. Every number this document cites is copied from the named artifact tables — the headline comma-separated values (CSV), the pool-description and per-gene CSVs, and the derangement summary and per-permutation CSVs — or from the job logs, not from memory, with any derived calculation shown at the point it is used.
 
 ## Commands as run (Task 8 — deploy, register, measure)
 
@@ -120,7 +120,7 @@ Both MDEs are far below the observed ceiling — at n ≈ 1,600 pairs this run i
 
 The stratified null draws reuse the same half-profiles across mismatched pairs, so they are not i.i.d., while the bootstrap treats them as an exchangeable pool; this is the residual assumption behind the reported p-values and MDEs, inherited from the archived lineage's design.
 
-**Quantitative exposure (PROCESS §3).** That dependence can only widen the null aggregate's spread, never move its location. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null confidence-interval (CI) columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — was run; its result is in the section below.
+**Quantitative exposure (PROCESS §3).** That dependence can widen or narrow the null aggregate's spread depending on the sign of the shared-profile covariance it introduces — positive sharing covariance widens it, while the derangement's balanced, each-half-used-exactly-once reuse in fact narrows it, as measured below. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null confidence-interval (CI) columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — was run; its result is in the section below.
 
 ## GDSC2 CID list — provenance note
 
@@ -215,28 +215,91 @@ tests/test_project_rules.py::test_rule_04_edge_promoted_tasks_have_known_answer_
 
 All 8 run (none skip) and all pass: rule 1's two tests validate the real record above; rule 4's edge test finds `pytest.mark.known_answer` already present in the suite (`tests/test_statistics_known_answers.py`, `tests/test_rung0_controls.py`). The full suite (`uv run pytest -q`) also runs with zero skips now — every project-rule test that was gated on a promoted result binds.
 
-## Derangement permutation check (2026-08-28, job 31764582)
+## Derangement permutation check (2026-08-28/31, superseding job 31770850)
 
 The exposure argument above bounded the damage the profile-sharing dependence could do; this
 check measured it. `scripts/derangement_null.py` (submitted as
 `scripts/alpine/derangement_null.sbatch`, same inputs as the ceiling run) broke the matched
 pairing with 500 derangements of the 1,600 finite-scored conditions and computed the mean
 mismatched correlation per derangement — the null distribution of the reported aggregate with
-the dependence carried by construction. Summary
-(`rung0_derangement_summary.csv`; per-permutation means in `rung0_derangement_perm_means.csv`;
-resolved arguments and producing commit in `rung0_derangement_summary.params.json`;
-log at `results/rung0-replicate-ceiling/derangement-null-31764582.out`):
+the dependence carried by construction.
+
+The first run (job 31764582) covered only the pooled any-pair aggregate. External review
+observed that the promoted p-values are per-stratum (`p_vs_null` against the `diff_drug`
+mismatched-pair pool, `p_vs_same_drug` against the `same_drug` pool), while an any-pair
+derangement mixes both mismatch types freely and carries neither stratum's dependence
+specifically. The same script, extended with two stratum-preserving nulls
+(`sample_within_drug_derangement`, `sample_cross_derangement`), was rerun as job 31770850; that
+run supersedes 31764582 and is the current content of every artifact named below. The any-pair
+numbers are unchanged from the first run.
+
+Summary (`rung0_derangement_summary.csv`; per-permutation means in the three files named below;
+resolved arguments and producing commit in `rung0_derangement_summary.params.json`; log at
+`results/rung0-replicate-ceiling/derangement-null-31770850.out`):
 
 ```
-observed_mean 0.1348   perm_mean_mean 0.0361   perm_mean_sd 0.0009
-p_exact 0.002          se_iid_pool 0.00099     design_effect 0.872   z_derangement 106.84
+any-pair    : observed_mean 0.1348   perm_mean_mean 0.0361   perm_mean_sd 0.0009
+              p_exact 0.002   se_iid_pool 0.00099   design_effect 0.872   z_derangement 106.84
+same-drug   : perm_mean_mean 0.0792   perm_mean_sd 0.0004   p_exact 0.002   design_effect 0.071
+              (1600 of 1600 finite rows are in >=2-row drug groups: n_rows_same_drug 1600 =
+              n_pairs 1600, same_drug_rows_equal_n True)
+diff-drug   : perm_mean_mean 0.0342   perm_mean_sd 0.0008   p_exact 0.002   design_effect 0.516
 ```
 
-Reading: the measured design effect is **0.872** — the dependence does not widen the null
+Per-permutation means live in three files: `rung0_derangement_perm_means.csv` (any-pair),
+`rung0_derangement_perm_means_same_drug.csv` (within-drug), and
+`rung0_derangement_perm_means_diff_drug.csv` (cross-constrained), each 500 rows; resolved
+arguments and the producing commit are in the `rung0_derangement_summary.params.json` sidecar;
+the job log is `results/rung0-replicate-ceiling/derangement-null-31770850.out`.
+
+Reading: the any-pair design effect is **0.872** — the dependence does not widen the null
 mean's spread at all (a derangement uses each half-profile exactly once, whose balance slightly
 *tightens* the permutation mean relative to independent pooling), so the exchangeable-pool
 treatment behind the reported p-values and MDEs was marginally conservative, not optimistic.
-The observed mean exceeds every one of the 500 permutation means; p_exact = 0.002 is the
-smallest value 500 permutations can certify. The stated assumption is discharged by
-measurement rather than argument. The check is an unpromoted verification diagnostic: the
-promoted record is unchanged, per PROCESS §1's convergence rule.
+The two per-stratum design effects read the same way and are smaller still: **0.071** for the
+same-drug (within-drug) null and **0.516** for the diff-drug (cross-constrained) null, both
+< 1. Because `n_rows_same_drug` (1600) equals `n_pairs` (1600, `same_drug_rows_equal_n` = True),
+the same-drug design effect is measured over the same rows `p_vs_same_drug` is, so it transfers
+directly to that promoted p-value with no scope caveat.
+
+The two permutation-null means also independently reproduce the pooled floors the headline CSV
+already reports: the same-drug derangement's `perm_mean_mean` (0.0792) matches
+`null_same_drug_mean_r` (0.079) and the diff-drug derangement's `perm_mean_mean` (0.0342)
+matches `null_diff_drug_mean_r` (0.035) — two numbers computed by an entirely different sampling
+mechanism (exact derangement vs. bootstrapped exchangeable pool) landing on the same floor.
+Verify both pairs against `rung0_delta_reproducibility.csv` and `rung0_derangement_summary.csv`
+directly rather than trusting this sentence.
+
+In every stratum the observed mean exceeds every one of its 500 permutation means; p_exact =
+0.002 is the smallest value 500 permutations can certify. The stated non-independence assumption
+is discharged by measurement rather than argument, for the pooled aggregate and for both
+per-stratum p-values the promotion actually reports. The check is an unpromoted verification
+diagnostic: the promoted record is unchanged, per PROCESS §1's convergence rule.
+
+Two caveats, carried forward honestly rather than smoothed over:
+
+1. **The cross-constrained sampler is not provably uniform.** `sample_cross_derangement`
+   repairs a random permutation by local swaps until it matches the `diff_drug` stratum's
+   constraint set (different line and different drug on every row), rather than rejection
+   sampling exactly uniformly over that set the way the any-pair and within-drug samplers do.
+   An empirical, data-blind probe (brute-force enumeration of all 448 valid permutations on a
+   small 3-drug × 3-line fixture, then 50,000 draws from the sampler; see the script's
+   `sample_cross_derangement` docstring) found a real departure from uniform: chi-square
+   goodness-of-fit 2857 on 447 degrees of freedom against an expectation of ~447 under
+   uniformity. Because the probe is data-blind (run on a synthetic fixture, not the real pool
+   or its result), any non-uniformity it reveals perturbs the permutation mean's *variance* —
+   a second-order effect on `design_effect` and the width of the null — not its *location*; it
+   cannot manufacture the observed mean's separation from the null. At the margins measured
+   here (every stratum's observed mean above all 500 permutation draws, p_exact at its floor of
+   0.002), the effect is immaterial. A provably uniform cross-derangement sampler (e.g.
+   Metropolis–Hastings with a detailed-balance-respecting proposal) is a recorded follow-up
+   (`review.md`), not done here.
+2. **A stated, inherited aggregation convention.** The per-permutation aggregates use
+   `nanmean` over rows whose mismatched pairing falls below `min_genes` shared finite entries
+   within that one draw, while the observed comparators (`observed_mean`,
+   `observed_mean_same_drug_rows`, `observed_mean_diff_drug_rows`) use a plain `mean` over the
+   rows already restricted to finite `r`; and every `design_effect`'s denominator uses the
+   nominal row count (`n` finite rows, or `n_multi` same-drug rows) rather than re-deriving a
+   per-draw effective count. This mirrors `stratified_null_draws`'s own convention in
+   `scripts/delta_reproducibility.py` and is stated here for completeness, not as a newly found
+   issue.
