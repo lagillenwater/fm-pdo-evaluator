@@ -120,7 +120,7 @@ Both MDEs are far below the observed ceiling — at n ≈ 1,600 pairs this run i
 
 The stratified null draws reuse the same half-profiles across mismatched pairs, so they are not i.i.d., while the bootstrap treats them as an exchangeable pool; this is the residual assumption behind the reported p-values and MDEs, inherited from the archived lineage's design.
 
-**Quantitative exposure (PROCESS §3).** That dependence can widen or narrow the null aggregate's spread depending on the sign of the shared-profile covariance it introduces — positive sharing covariance widens it, while the derangement's balanced, each-half-used-exactly-once reuse in fact narrows it, as measured below. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null confidence-interval (CI) columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile, which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — was run; its result is in the section below.
+**Quantitative exposure (PROCESS §3).** That dependence can widen or narrow the null aggregate's spread depending on the sign of the shared-profile covariance it introduces — positive sharing covariance widens it, while the derangement's balanced, each-half-used-exactly-once reuse in fact narrows it, as measured below. The observed lift over the diff-drug floor (0.135 − 0.035 = 0.100) is roughly 100 bootstrap standard errors, using `SE ≈ (null_mean_ci_hi − null_mean_ci_lo) / (2 × 1.96) ≈ 0.001` from the CSV's null confidence-interval (CI) columns — so losing significance would require the profile-sharing dependence to inflate the null's variance by more than ~3,000-fold. The MDE columns degrade only by the square root of any such factor: a tenfold variance inflation would move `mde_80_vs_diff_drug` from 0.039 to about 0.12, still below the observed 0.135. Profile-sharing is far sparser than that: with 500 draws per stratum over 1,600 candidate pairs, roughly 0.25% of draw pairs share a half-profile — two draws share a half-profile with probability about 4/1,600 ≈ 0.25% — which produces single-digit inflation factors in practice, not thousands. An exact derangement-based permutation check — which carries the dependence by construction, sampling derangements of the pairing rather than assuming an exchangeable pool — was run; its result is in the section below.
 
 ## GDSC2 CID list — provenance note
 
@@ -199,10 +199,10 @@ A later docs commit (`c6f1baf`) rewrote prose in `scripts/delta_reproducibility.
 
 Per design.md's 2026-08-31 REVERSAL entry (in response to external review, CodeRabbit PR 14):
 the first record above deliberately stood with its scratchpad-path input keys because
-`--input LABEL=PATH` support did not exist when it was written. That support has existed since
-before the first promotion ran (`4211e30`, landed ahead of `84c094d`), so the deferral is no
-longer warranted — the record is re-promoted, correcting `inputs` to durable labels, while this
-pull request is still a draft and before the record is cited anywhere outside this repository.
+`--input LABEL=PATH` support did not exist when it was written. That support landed shortly
+after the first promotion (`4211e30`, after `3b674de`), and the pull request is still a draft,
+so the deferral is no longer warranted — the record is re-promoted, correcting `inputs` to
+durable labels, before the record is ever cited outside this repository.
 
 `scripts/promote_result.py`'s provenance record is immutable once written (`fad6de9`), so the
 old record was removed first, in its own commit, immediately preceding this one: `git rm
@@ -325,7 +325,9 @@ pairing with 500 derangements of the 1,600 finite-scored conditions and computed
 mismatched correlation per derangement — the null distribution of the reported aggregate with
 the dependence carried by construction.
 
-The first run (job 31764582) covered only the pooled any-pair aggregate. External review
+The first run (job 31764582; log retained at
+`results/rung0-replicate-ceiling/derangement-null-31764582.out`, the historical record of the
+any-pair-only run superseded below) covered only the pooled any-pair aggregate. External review
 observed that the promoted p-values are per-stratum (`p_vs_null` against the `diff_drug`
 mismatched-pair pool, `p_vs_same_drug` against the `same_drug` pool), while an any-pair
 derangement mixes both mismatch types freely and carries neither stratum's dependence
@@ -365,9 +367,10 @@ directly to that promoted p-value with no scope caveat.
 
 The two permutation-null means also independently reproduce the pooled floors the headline CSV
 already reports: the same-drug derangement's `perm_mean_mean` (0.0792) matches
-`null_same_drug_mean_r` (0.079) and the diff-drug derangement's `perm_mean_mean` (0.0342)
-matches `null_diff_drug_mean_r` (0.035) — two numbers computed by an entirely different sampling
-mechanism (exact derangement vs. bootstrapped exchangeable pool) landing on the same floor.
+`null_same_drug_mean_r` (0.079) and the diff-drug derangement's `perm_mean_mean` (0.0342) lands
+within 0.001 of `null_diff_drug_mean_r` (0.035) — two numbers computed by an entirely different
+sampling mechanism (exact derangement vs. bootstrapped exchangeable pool) landing on the same
+floor.
 Verify both pairs against `rung0_delta_reproducibility.csv` and `rung0_derangement_summary.csv`
 directly rather than trusting this sentence.
 

@@ -56,7 +56,8 @@ unlanded-lineage vocabulary in the shipped measurement script and its job header
 contradiction (ruled: OPEN until merge); this document's absence; a stale test-module docstring;
 `ralpine help` printing nothing; and promotion inputs keyed by ephemeral paths (fixed forward —
 durable labels for future promotions; rung 0's record deliberately stands with its documented
-mapping).
+mapping — superseded 2026-08-31: the record was re-promoted with durable labels; see design.md's
+dated reversal and verification.md's re-promotion section).
 
 ## Standing follow-ups (triaged non-blocking at the final review)
 
@@ -85,15 +86,29 @@ recorded at promotion are the guard.
 
 ## Drift audit
 
-The audit stage's full record — the 68-clause first audit, the fix wave's dispositions, and the
-re-audit verdict — lives in [`audit.md`](audit.md). Headline: 47 aligned, 3 recorded deviations,
-18 drift, all drift documentary except the declared-vs-scored panel finding; every item fixed or
-recorded by the fix wave, and the audit passed (re-audit + confirmation recorded in
-`audit.md`). The measurement itself was independently re-derived and reproduced exactly.
+The audit stage's full record — the first audit's clause-by-clause read, the fix wave's
+dispositions, and the re-audit verdict — lives in [`audit.md`](audit.md). Headline (canonical
+count, per audit.md's condensed tables): 69 clauses, 49 aligned, 2 recorded deviations, 18 drift
+(the first auditor's own historical enumeration counted 68 clauses: 47 aligned, 3 recorded
+deviations, 18 drift — the difference is transcription merging clause ranges, not a second pass;
+the DRIFT set of 18 is identical either way). All drift documentary except the
+declared-vs-scored panel finding; every item fixed or recorded by the fix wave, and the audit
+passed (re-audit + confirmation recorded in `audit.md`). The measurement itself was
+independently re-derived and reproduced exactly.
 
 ## External review (CodeRabbit, PR 14)
 
-18 findings triaged. Dispositions:
+18 findings triaged: 15 accepted and fixed, 1 dismissed with evidence, and 2 deferred as their
+own standing findings (`ALPINE_HOST` option-injection validation; a `module save` write
+primitive for `ralpine`'s allowlist) — 15 + 1 + 2 = 18. Two further items appear in Standing
+follow-ups above but are not separately-counted findings: they are follow-on scope from findings
+already counted among the 15 accepted (lock-based Alpine provisioning extends the pip-fallback
+pin fixed under the `ralpine`/sbatch item below; the provably-uniform constrained sampler extends
+the non-uniformity caveat documented as part of the stratified-derangement-nulls item below). So
+there are 4 standing follow-ups in total — 2 freestanding deferred findings, 2 extensions of
+already-fixed findings — reconciling to the 18 above without double-counting.
+
+Dispositions:
 
 - **15 accepted and fixed**: `ralpine`'s `find`/`scontrol`/`file`/`nvidia-smi` allowlist escapes
   closed, with a new read-only `jobinfo` verb replacing the write-capable `scontrol` access and
@@ -105,14 +120,21 @@ recorded by the fix wave, and the audit passed (re-audit + confirmation recorded
   edge-case controls added to `test_rung0_controls.py`; the Alpine sbatch jobs' pip-fallback
   installs pinned to the `pyproject.toml` floors with upper bounds; the stratified (within-drug,
   cross-constrained) derangement nulls measured on the real Tahoe pool (job 31770850, recorded
-  in `verification.md`); the seven documentation corrections above (a–g, `verification.md`,
-  `summary.md`, `audit.md`, this document, `docs/environment.md`, `design.md`); and the labeled
-  re-promotion below.
+  in `verification.md`); the seven documentation corrections themselves — verification.md's
+  derangement section extended for the stratified rerun, verification.md's provenance-scope
+  statement widened to name every artifact table, verification.md's quantitative-exposure
+  sentence corrected to allow widening or narrowing, summary.md's power sentence qualified
+  against both detection thresholds with its caveat paragraph extended by the per-stratum
+  shuffle-check results, audit.md's clause counts made canonical, this document's drift-audit
+  pointer corrected, and docs/environment.md's `model_weights_hash` requirement note; and
+  verification.md's "Re-promotion — durable input labels" section (the labeled re-promotion).
 - **1 dismissed with evidence**: a finding that the shard manifest was missing from the
   repository — already committed at
   `data/tranches/tahoe100m-pseudobulk-de.v1.manifest.txt` since the tranche-registration commit
   (`25cec05`).
-- **Deferred follow-ups** (recorded, not blocking; also carried in Standing follow-ups above):
-  lock-based Alpine provisioning; `ALPINE_HOST` option-injection validation; a `module save`
-  write primitive for `ralpine`'s allowlist; and a provably-uniform constrained sampler for
+- **2 deferred, standing findings** (recorded, not blocking; also carried in Standing follow-ups
+  above): `ALPINE_HOST` option-injection validation in `ralpine`; a `module save` write primitive
+  for `ralpine`'s allowlist.
+- **2 more standing follow-ups, extensions of already-fixed findings** (not separately counted
+  above): lock-based Alpine provisioning; a provably-uniform constrained sampler for
   `sample_cross_derangement`.
