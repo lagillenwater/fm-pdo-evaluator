@@ -1,0 +1,31 @@
+{
+  "result": "results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv",
+  "result_sha256": "98985f030ba8933589a4910f2d47dda5878b3dff635e51a52bb5dd3b875c2e71",
+  "task": "rung0-replicate-ceiling",
+  "script": "scripts/delta_reproducibility.py",
+  "args": {
+    "tranche_id": "tahoe100m-pseudobulk-de.v1",
+    "panel_file": "results/rung1_panel/common_panel.txt on Alpine",
+    "cid_file": "data/static/tahoe_target_cids.txt on Alpine"
+  },
+  "inputs": {
+    "gene_panel": "356bcfe69c50fef5ab108be78c3d6dea2cd42f24fdc43b7a3d52dfbdc5471344",
+    "drug_cids": "0bd61793d051f9cad8d5bbbabe9e3589563ae01385692a1eb8fe6505076a1081"
+  },
+  "log": "results/rung0-replicate-ceiling/delta-repro-31758395.out",
+  "log_sha256": "3a2398b5a906b475ed2d3789f5c74dd6b1b4683f7a0831a46c7f7a19a5ca0274",
+  "job_id": "31758395",
+  "clean_tree": true,
+  "environment": {
+    "code_commit": "722d64d035979c506be9e13322cfb7cac0040caa",
+    "python_version": "3.13.5",
+    "seed": 0,
+    "cuda_deterministic": false,
+    "data_commit": "9a8797a5698e2c56ec1b61bdd3d5f68d18a972e227e86b64ac341ef507f73dd6",
+    "container_digest": null,
+    "torch_version": null,
+    "cuda_version": null,
+    "model_weights_hash": null
+  },
+  "promoted_at": "2026-08-31T15:02:41.655931Z"
+}

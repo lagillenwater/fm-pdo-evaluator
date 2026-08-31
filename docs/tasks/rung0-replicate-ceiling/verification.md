@@ -193,7 +193,108 @@ The written record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility
 
 A later docs commit (`c6f1baf`) rewrote prose in `scripts/delta_reproducibility.py` (its module docstring, the `--n-hvg` help text, a comment, and the final print statement) with no computational change — the auditor read the full diff and confirmed no scoring logic moved — so HEAD's script text differs from the record's `code_commit` copy in wording only, while every computation the record reflects is identical; the job log's closing line ("Check-1 achieved r ~ 0.2 ...") is the pre-rewrite print and can no longer be produced verbatim by the shipped script's current print statement.
 
-`scripts/promote_result.py` now accepts `--input LABEL=PATH` so future promotions key `inputs` by a durable label rather than a scratch path; rung 0's own record above ran before that support existed and deliberately stands with its scratchpad-path keys, with the mapping to what they were (the gene panel, the drug-CID file) documented in the promotion command above.
+`scripts/promote_result.py` now accepts `--input LABEL=PATH` so future promotions key `inputs` by a durable label rather than a scratch path; rung 0's own record above ran before that support existed and deliberately stands with its scratchpad-path keys, with the mapping to what they were (the gene panel, the drug-CID file) documented in the promotion command above. **Superseded 2026-08-31**: the record above is history of the *first* promotion only — it no longer reflects the promoted record on disk, which was re-promoted with durable `gene_panel`/`drug_cids` labels; see "Re-promotion — durable input labels" below.
+
+## Re-promotion — durable input labels (2026-08-31)
+
+Per design.md's 2026-08-31 REVERSAL entry (in response to external review, CodeRabbit PR 14):
+the first record above deliberately stood with its scratchpad-path input keys because
+`--input LABEL=PATH` support did not exist when it was written. That support has existed since
+before the first promotion ran (`4211e30`, landed ahead of `84c094d`), so the deferral is no
+longer warranted — the record is re-promoted, correcting `inputs` to durable labels, while this
+pull request is still a draft and before the record is cited anywhere outside this repository.
+
+`scripts/promote_result.py`'s provenance record is immutable once written (`fad6de9`), so the
+old record was removed first, in its own commit, immediately preceding this one: `git rm
+results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json`. `git status
+--porcelain -uno` was verified empty before running the command below.
+
+```bash
+SCRATCH=/private/tmp/claude-502/-Users-gillenlu-Repositories-fm-pdo-evaluator/982cf604-f4fc-49b1-9bc3-1bb128cafd76/scratchpad
+uv run python scripts/promote_result.py \
+  --task rung0-replicate-ceiling \
+  --result docs/tasks/rung0-replicate-ceiling/rung0_delta_reproducibility.csv \
+  --script scripts/delta_reproducibility.py \
+  --input gene_panel=$SCRATCH/common_panel.txt \
+  --input drug_cids=$SCRATCH/tahoe_target_cids.txt \
+  --seed 0 \
+  --data-commit "$(uv run python -c "from pathlib import Path; from fmharness.schema import Tranche; print(Tranche.model_validate_json(Path('data/tranches/tahoe100m-pseudobulk-de.v1.json').read_text()).content_hash)")" \
+  --arg tranche_id=tahoe100m-pseudobulk-de.v1 \
+  --arg panel_file="results/rung1_panel/common_panel.txt on Alpine" \
+  --arg cid_file="data/static/tahoe_target_cids.txt on Alpine" \
+  --job-id 31758395 \
+  --log results/rung0-replicate-ceiling/delta-repro-31758395.out
+```
+
+Output:
+
+```
+promoted -> results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv
+           results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json
+```
+
+The re-promoted record (`results/rung0-replicate-ceiling/rung0_delta_reproducibility.provenance.json`):
+
+```json
+{
+  "result": "results/rung0-replicate-ceiling/rung0_delta_reproducibility.csv",
+  "result_sha256": "98985f030ba8933589a4910f2d47dda5878b3dff635e51a52bb5dd3b875c2e71",
+  "task": "rung0-replicate-ceiling",
+  "script": "scripts/delta_reproducibility.py",
+  "args": {
+    "tranche_id": "tahoe100m-pseudobulk-de.v1",
+    "panel_file": "results/rung1_panel/common_panel.txt on Alpine",
+    "cid_file": "data/static/tahoe_target_cids.txt on Alpine"
+  },
+  "inputs": {
+    "gene_panel": "356bcfe69c50fef5ab108be78c3d6dea2cd42f24fdc43b7a3d52dfbdc5471344",
+    "drug_cids": "0bd61793d051f9cad8d5bbbabe9e3589563ae01385692a1eb8fe6505076a1081"
+  },
+  "log": "results/rung0-replicate-ceiling/delta-repro-31758395.out",
+  "log_sha256": "3a2398b5a906b475ed2d3789f5c74dd6b1b4683f7a0831a46c7f7a19a5ca0274",
+  "job_id": "31758395",
+  "clean_tree": true,
+  "environment": {
+    "code_commit": "722d64d035979c506be9e13322cfb7cac0040caa",
+    "python_version": "3.13.5",
+    "seed": 0,
+    "cuda_deterministic": false,
+    "data_commit": "9a8797a5698e2c56ec1b61bdd3d5f68d18a972e227e86b64ac341ef507f73dd6",
+    "container_digest": null,
+    "torch_version": null,
+    "cuda_version": null,
+    "model_weights_hash": null
+  },
+  "promoted_at": "2026-08-31T15:02:41.655931Z"
+}
+```
+
+Verified, every number re-read from the files on disk rather than trusted from this prose:
+
+- `inputs` is now keyed `gene_panel`/`drug_cids` rather than scratch paths; both hashes
+  (`356bcfe6…`, `0bd61793…`) are byte-identical to the first record's, since the underlying
+  files (the same gene panel and CID list) did not change.
+- `result_sha256` (`98985f03…`) is unchanged from the first record — `diff` between the
+  task-side and the newly-written promoted CSV is empty, and `git diff --stat` on the promoted
+  copy shows no change at all: `promote_result.py`'s same-hash path rewrites the destination
+  file with identical bytes rather than refusing or altering it.
+- `log_sha256` (`3a2398b5…`) is unchanged — the same job log as before.
+- `clean_tree` is `true`.
+- `environment.code_commit` (`722d64d`) is the repository HEAD at promotion time — the parent
+  commit of the one carrying this update, which lands the stratified derangement-null outputs
+  (job 31770850). It is not the measuring commit (`25cec05`) for the same reason the first
+  record's `code_commit` was not: the schema's contract records the promoting commit, and the
+  "Commit reconciliation" paragraph above (against `84c094d`) stands as history of the *first*
+  record's own promoting commit — read it as describing that earlier promotion, not this one.
+- The new record validates against `PromotedResult` (checked directly, and by the rule-1 tests
+  below).
+
+Full gates re-run after promotion: `uv run ruff check src tests scripts && uv run ruff format
+--check src tests scripts && uv run pyright && uv run pytest -q` all pass (0 lint findings, 0
+pyright errors, full suite green). `uv run pytest tests/test_project_rules.py -v -m
+"step_promote or step_score or step_null or step_document"` reproduces the same 8 passed / 0
+skipped as the "Project-rule tests" section below — rule-1's two tests now validate this
+re-promoted record.
 
 ## Project-rule tests (Task 9, Step 4)
 
