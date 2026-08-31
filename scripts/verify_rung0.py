@@ -8,10 +8,12 @@ a reviewer who runs this has re-derived the evidence, not read about it.
     uv run python scripts/verify_rung0.py
 
 prints one row per check (claim, recomputed value, PASS/FAIL) and exits nonzero on any
-failure. The notebook ``docs/tasks/rung0-replicate-ceiling/verify.ipynb`` walks the same
-checks with plain-language prose (run it yourself -- it is committed without outputs);
-``tests/test_verify_rung0.py`` runs them in continuous integration so the branch stays
-green independent of anyone opening the notebook.
+failure. The notebook ``docs/tasks/rung0-replicate-ceiling/verify.ipynb`` recomputes the
+same claims in self-contained cells (standard-library hashing, direct table reads --
+nothing imported from this module, so the reviewer reads exactly what is computed) and
+runs this script only as its final cross-check; ``tests/test_verify_rung0.py`` runs this
+battery in continuous integration so the branch stays green independent of anyone
+opening the notebook.
 
 What is NOT checkable locally, stated rather than hidden: the gene and drug panel files
 live on Alpine and are pinned by sha256 in the provenance record, so the declared panel

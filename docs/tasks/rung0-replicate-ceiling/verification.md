@@ -418,9 +418,12 @@ row's internal arithmetic, the 1,650 − 50 = 1,600 pool arithmetic, the three d
 means/spreads/exact p-values/any-pair design effect from the committed per-permutation files,
 the per-gene diagnostic's stated numbers, and every number in `summary.md`'s evidence table and
 caveat paragraphs matched mechanically to the artifact it came from. The notebook
-[`verify.ipynb`](verify.ipynb) walks the same checks with plain-language sections and is
-committed **without outputs** so a reviewer executes it themselves; `tests/test_verify_rung0.py`
-runs the identical battery in continuous integration.
+[`verify.ipynb`](verify.ipynb) recomputes the same claims in self-contained cells — standard-
+library hashing, direct reads of the committed tables, explicit arithmetic, nothing imported
+from this repository's own code, so there is no wrapper to trust — and is committed **without
+outputs** so a reviewer executes it themselves; its final cell runs the scripted battery as a
+cross-check, and `tests/test_verify_rung0.py` runs the identical battery in continuous
+integration.
 
 Commands as run:
 
