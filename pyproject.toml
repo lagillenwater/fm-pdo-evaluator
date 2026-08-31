@@ -27,6 +27,8 @@ dev = [
     "ruff>=0.4",
     "pyright>=1.1.360",
     "pre-commit>=3.7",
+    # for running each task's verify notebook (PROCESS §3's executable verification)
+    "jupyterlab>=4.2",
 ]
 
 [build-system]
