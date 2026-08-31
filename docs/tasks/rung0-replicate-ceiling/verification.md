@@ -420,7 +420,11 @@ the per-gene diagnostic's stated numbers, and every number in `summary.md`'s evi
 caveat paragraphs matched mechanically to the artifact it came from. The notebook
 [`verify.ipynb`](verify.ipynb) recomputes the same claims in self-contained cells — standard-
 library hashing, direct reads of the committed tables, explicit arithmetic, nothing imported
-from this repository's own code, so there is no wrapper to trust — and is committed **without
+from this repository's own code, so there is no wrapper to trust — and draws the evidence live
+from the same data frames the checks just used (the three shuffle nulls against the observed
+mean, the effect-size terciles against both floors and both detection thresholds, the per-gene
+reliability distribution with its stress-response tail, and the plate-split structure that
+yields 1,600 scoreable conditions; no committed image is displayed). It is committed **without
 outputs** so a reviewer executes it themselves; its final cell runs the scripted battery as a
 cross-check, and `tests/test_verify_rung0.py` runs the identical battery in continuous
 integration.
