@@ -1,8 +1,18 @@
 # Rung 0, in plain language
 
 **As of** 2026-08-31. The technical record is [`design.md`](design.md) (what and why),
-[`verification.md`](verification.md) (the run and its evidence), and [`review.md`](review.md)
-(what review found). This page says what was asked, what was found, and what it means.
+[`verification.md`](verification.md) (the run and its evidence), [`review.md`](review.md)
+(what review found), and [`decisions.md`](decisions.md) (the dated decision lineage). This page
+says what was asked, what was found, and what it means.
+
+**Check it yourself before reading further.** Every number on this page recomputes from files
+committed in this repository — no cluster access needed, and no trust in this write-up: run
+`uv run python scripts/verify_rung0.py` (40 checks, about a minute, PASS/FAIL per claim), or
+open [`verify.ipynb`](verify.ipynb) for the same checks with a plain-language explanation of
+what each one proves. How this task was checked, in one line each: the *code* was reviewed per
+task (`review.md`), the *run* was evidenced with commands and output (`verification.md`), the
+*claims* were audited clause-by-clause against what actually landed (`audit.md`), and the
+*numbers* recompute mechanically (the battery above, run continuously by the test suite).
 
 ## The hypothesis
 
@@ -114,6 +124,9 @@ comparison the promoted numbers make, not just the one first checked.
 
 Measurement and statistics: `scripts/delta_reproducibility.py` (the split-half measurement),
 `src/fmharness/statistics.py` (shared significance, power, and Spearman-Brown helpers).
+Verification: `scripts/verify_rung0.py` and [`verify.ipynb`](verify.ipynb) (the executable
+claim-recomputation battery), `tests/test_verify_rung0.py` (the same battery in continuous
+integration).
 Provenance machinery: `scripts/register_tranche.py` (content-hashed data registration),
 `scripts/promote_result.py` (promotion with a schema-validated record).
 Data acquisition: `scripts/download_tahoe_pseudobulk_de.py`, `scripts/alpine/00_target_cids.sbatch`,

@@ -407,3 +407,40 @@ Two caveats, carried forward honestly rather than smoothed over:
    per-draw effective count. This mirrors `stratified_null_draws`'s own convention in
    `scripts/delta_reproducibility.py` and is stated here for completeness, not as a newly found
    issue.
+
+## Executable verification battery (2026-08-31)
+
+Added in response to the lab-meeting review of pull request 14 (PROCESS §3's
+executable-verification bullet, adopted the same day): `scripts/verify_rung0.py` recomputes
+every promoted and reported number on this task from the committed artifacts alone — the
+provenance record's checksums, the tranche content hash from the shard manifest, the headline
+row's internal arithmetic, the 1,650 − 50 = 1,600 pool arithmetic, the three derangement nulls'
+means/spreads/exact p-values/any-pair design effect from the committed per-permutation files,
+the per-gene diagnostic's stated numbers, and every number in `summary.md`'s evidence table and
+caveat paragraphs matched mechanically to the artifact it came from. The notebook
+[`verify.ipynb`](verify.ipynb) walks the same checks with plain-language sections and is
+committed **without outputs** so a reviewer executes it themselves; `tests/test_verify_rung0.py`
+runs the identical battery in continuous integration.
+
+Commands as run:
+
+```
+uv run python scripts/verify_rung0.py
+# -> 40 / 40 checks pass, exit 0
+
+cp docs/tasks/rung0-replicate-ceiling/verify.ipynb docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
+uv run jupyter execute docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
+# -> exit 0 (every in-notebook assertion passed, including the known-answer pytest cell);
+#    the scratch copy was deleted, so the committed notebook remains output-free
+
+uv run pytest
+# -> 75 passed (includes the battery via tests/test_verify_rung0.py)
+```
+
+One measurement subtlety the battery surfaced on its first run, recorded because it would bite
+any future reader of the pool table: `rung0_pool_description.csv` contains a cell-line key that
+is literally the string `NA` (a missing DepMap id the grouping carried through; see the pool
+description section above), which pandas parses as missing data by default, collapsing the
+distinct-line count from 50 to 49. The battery reads that file with `keep_default_na=False` and
+the check now passes against the true 50; the promoted numbers were never affected (the
+measurement run keys on the raw string).
