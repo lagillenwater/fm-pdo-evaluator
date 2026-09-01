@@ -42,8 +42,13 @@ export HF_TOKEN="${HF_TOKEN:-$(cat "${XDG_CACHE_HOME:-$HOME/.cache}/huggingface/
 # Alpine) is a declared follow-up, not done here.
 python -c "import duckdb, matplotlib" 2>/dev/null || pip install -q "duckdb>=1.0,<2" "matplotlib>=3.8,<4"
 
+# --frame-cache: the DuckDB scan over every DE shard dominates this job (~40 min); the rest
+# takes about a minute. Caching the built frame on scratch, keyed by a hash of its inputs, means
+# a rerun that only adds an output or changes a figure skips the scan. Delete the cache dir to
+# force a rebuild from the shards.
 python scripts/delta_reproducibility.py \
     --local-dir "/scratch/alpine/$USER/tahoe_pseudobulk_de" \
     --drugs-cid-file data/static/tahoe_target_cids.txt \
     --panel-file "${PANEL_FILE:-results/rung1_panel/common_panel.txt}" \
+    --frame-cache "/scratch/alpine/$USER/rung0_frame_cache" \
     --out-dir rung0_outputs

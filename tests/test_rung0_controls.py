@@ -410,6 +410,28 @@ def test_example_profiles_reproduce_their_own_correlations(tmp_path: Path) -> No
         assert abs(recomputed - row["r_shown"]) < 5e-3
 
 
+def test_frame_cache_returns_the_built_frame_and_never_the_wrong_one(tmp_path: Path) -> None:
+    # The cache exists so a rerun that only adds an output skips the expensive shard scan.
+    # It must hand back exactly what the build produced, and a different input set must not
+    # resolve to the same cache entry -- that would silently score the wrong pool.
+    import argparse
+
+    path = _write_fixture_pool(tmp_path)
+    paths, names = [str(path)], ["D0", "D1", "D2"]
+    args = argparse.Namespace(replicate_col=None, frame_cache=str(tmp_path / "cache"))
+
+    built, repl = dr._build_or_load_frame(paths, names, args, tmp_path / "pool")
+    cached, repl_again = dr._build_or_load_frame(paths, names, args, tmp_path / "pool")
+    assert repl == repl_again == "plate"
+    assert built.equals(cached), "the cache must return the frame that was built"
+
+    # a different drug set is a different frame, so it must key to a different cache entry
+    assert dr.frame_cache_key(paths, names, None) != dr.frame_cache_key(paths, ["D0"], None)
+    assert dr.frame_cache_key(paths, names, None) != dr.frame_cache_key(paths, names, "well")
+    subset, _ = dr._build_or_load_frame(paths, ["D0"], args, tmp_path / "pool")
+    assert set(subset["drug"].unique()) == {"D0"}, "cache reuse must not cross input sets"
+
+
 def test_per_gene_reliability_separates_reliable_from_noise_genes(tmp_path: Path) -> None:
     # Half the genes carry pair-specific signal, half are pure noise: the diagnostic
     # must rank the signal genes above the noise genes.

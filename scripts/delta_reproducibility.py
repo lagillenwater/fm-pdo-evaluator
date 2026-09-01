@@ -18,6 +18,8 @@ scratch), so it needs no GPU.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from pathlib import Path
 
 import numpy as np
@@ -490,6 +492,47 @@ def _write_params_sidecar(result_path, args_ns, extra=None) -> None:
     print(f"wrote {side}")
 
 
+def frame_cache_key(paths: list[str], names: list[str], replicate_col: str | None) -> str:
+    """Content key for a built split-half frame: the inputs that determine it, hashed.
+
+    Naming the cache after its inputs is what makes it safe -- a different pool, drug set or
+    replicate column resolves to a different file rather than silently reusing the wrong frame.
+    """
+    payload = "\n".join([*sorted(paths), "--", *sorted(names), "--", str(replicate_col)])
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def _build_or_load_frame(
+    paths: list[str], names: list[str], args: argparse.Namespace, local: Path
+) -> tuple[pd.DataFrame, str]:
+    """The split-half frame, from cache when one matches these inputs.
+
+    Building it scans every DE shard through DuckDB and dominates the run (~40 minutes on the
+    real pool); everything after it takes about a minute. Adding an output or changing a figure
+    therefore does not need the scan repeated, so ``--frame-cache`` keeps the built frame beside
+    the data and reuses it when the inputs hash the same.
+    """
+    cache_dir = Path(args.frame_cache) if args.frame_cache else None
+    cache = None
+    if cache_dir is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        key = frame_cache_key(paths, names, args.replicate_col)
+        cache = cache_dir / f"split_half_{key}.parquet"
+        sidecar = cache.with_suffix(".json")
+        if cache.exists() and sidecar.exists():
+            de = pd.read_parquet(cache)
+            repl = str(json.loads(sidecar.read_text())["replicate_col"])
+            print(f"loaded the split-half frame from {cache} ({len(de):,} rows, replicate {repl})")
+            return de, repl
+
+    de, repl = build_split_half_frame(paths, names, args.replicate_col, local.parent / "duckdb_tmp")
+    if cache is not None:
+        de.to_parquet(cache, index=False)
+        cache.with_suffix(".json").write_text(json.dumps({"replicate_col": repl}) + "\n")
+        print(f"cached the split-half frame at {cache}")
+    return de, repl
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--local-dir", required=True, help="dir with the Tahoe DE parquet (on scratch)")
@@ -517,6 +560,13 @@ def main() -> None:
     ap.add_argument("--n-perm", type=int, default=500, help="mismatched-pair null draws")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-dir", default="rung0_outputs")
+    ap.add_argument(
+        "--frame-cache",
+        default=None,
+        help="directory holding the built split-half frame, keyed by a hash of the inputs. "
+        "The build scans every DE shard and dominates the run; with a cache, adding an output "
+        "or changing a figure reruns in about a minute instead of repeating the scan.",
+    )
     args = ap.parse_args()
     repo = Path(__file__).resolve().parent.parent
 
@@ -538,7 +588,7 @@ def main() -> None:
     out_dir = Path(args.out_dir) if Path(args.out_dir).is_absolute() else repo / args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    de, repl = build_split_half_frame(paths, names, args.replicate_col, local.parent / "duckdb_tmp")
+    de, repl = _build_or_load_frame(paths, names, args, local)
     de = de.dropna(subset=["lfc0", "lfc1"])
     if de.empty:
         raise SystemExit("no (line, drug, gene) had both plate halves -- too few plates per pair?")
