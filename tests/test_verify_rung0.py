@@ -34,6 +34,13 @@ def test_every_promoted_claim_recomputes_from_the_committed_artifacts() -> None:
     assert not failures, "documents and artifacts disagree:\n" + "\n".join(failures)
 
 
+def test_the_check_count_matches_the_documents() -> None:
+    # summary.md's trust map and the pull-request description say "40 checks"; pinning the
+    # count here means adding or removing a check forces those transcriptions to be revisited
+    # (scoped-review finding: the count was the one unguarded transcription in the wave).
+    assert len(vr.run_all_checks()) == 40
+
+
 def test_the_check_battery_covers_every_layer() -> None:
     # One check per layer at minimum: hashes, data pin, headline arithmetic, pool
     # arithmetic, permutation nulls, per-gene diagnostic, summary-vs-artifact agreement.

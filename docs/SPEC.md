@@ -141,7 +141,7 @@ The rules stay generic: which artifact violates one today is current state, and 
    A reversal recorded only in git log is invisible to everyone who reads the documents, which is how a decision gets silently reinstated by the next person to touch it.
    **Step** document. **Enforced by** `tests/test_project_rules.py::test_rule_02_every_task_is_named_in_the_spec_tree` (`-m step_document`).
    **Edge case** the check reads the document, not the work: a reversal carried out in code while the task document is left untouched passes it. Where the reversal moves a promoted number, rule 1's checksum catches it instead; where it changes a method without yet changing a number, nothing does.
-   **Edge-case test** `::test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry` — a task document whose diff against the merge base deletes or rewrites existing lines must also gain a dated entry, in the document itself or in the task's `decisions.md`. Appending needs no entry; rewriting history does.
+   **Edge-case test** `::test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry` — a task document (`design.md`, `plan.md`, or `decisions.md` itself) whose diff against the merge base deletes or rewrites existing lines must also gain a dated entry, in the document itself or in the task's `decisions.md`. Appending needs no entry; rewriting history does.
 
 3. **The README stays in step with the documents it summarises.**
    Most readers open the README and nothing else, so a stale summary misinforms more people than a stale document does.

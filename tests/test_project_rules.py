@@ -113,7 +113,7 @@ def test_rule_01_edge_promoted_records_validate_against_the_schema() -> None:
 # Rule 2 — a reversal is written into the task's own documents
 # ======================================================================================
 
-TASK_DOCUMENTS = ("design.md", "plan.md")
+TASK_DOCUMENTS = ("design.md", "plan.md", "decisions.md")
 DATED_ENTRY = re.compile(r"\b(20\d{2}-\d{2}-\d{2})\b")
 
 
@@ -161,6 +161,9 @@ def test_rule_02_edge_non_additive_task_edits_carry_a_dated_entry() -> None:
 
     The dated entry lives in the task's ``decisions.md`` (SPEC rule 2's amended location,
     2026-08-31) or in the rewritten document itself (the original form, still accepted).
+    ``decisions.md`` is itself in the scanned set: it now carries the history this rule
+    protects, so deleting or rewriting its entries demands a new dated entry the same way
+    (found at the wave's scoped review -- the scan set had not followed the moved content).
     Appending to a task document is free. Deleting or rewriting lines already there is a
     reversal of something the document previously asserted, and the rule requires the old choice
     and the reason for changing it to be recorded rather than overwritten. That distinction is a
