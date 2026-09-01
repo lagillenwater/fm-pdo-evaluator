@@ -139,6 +139,55 @@ def check_tranche_content_hash(repo: Path) -> list[Check]:
     ]
 
 
+def check_headline_from_raw_values(repo: Path) -> list[Check]:
+    """Every headline statistic recomputed from the 1,600 per-condition correlations.
+
+    The strongest check in the battery: not one stored summary against another, but the
+    reported row against the raw values it summarizes (`rung0_per_pair_r.csv`, exported by
+    the same job that produced the row -- see verification.md's job 31955710 section).
+    """
+    row = _headline(repo)
+    per_pair = pd.read_csv(repo / "docs" / "tasks" / TASK / "rung0_per_pair_r.csv")
+    r = per_pair["r"].to_numpy(dtype=float)
+    effect = per_pair["mean_abs_delta"].to_numpy(dtype=float)
+    mean = float(np.mean(r))
+    edges = np.quantile(effect, [1 / 3, 2 / 3])
+    terciles = [
+        round(float(np.mean(r[(effect > lo) & (effect <= hi)])), 3)
+        for lo, hi in ((-np.inf, edges[0]), (edges[0], edges[1]), (edges[1], np.inf))
+    ]
+    stats = {
+        "n_pairs": (float(len(per_pair)), float(row["n_pairs"])),
+        "splithalf_mean_r": (round(mean, 3), float(row["splithalf_mean_r"])),
+        "splithalf_median_r": (round(float(np.median(r)), 3), float(row["splithalf_median_r"])),
+        "splithalf_q1_r": (round(float(np.quantile(r, 0.25)), 3), float(row["splithalf_q1_r"])),
+        "splithalf_q3_r": (round(float(np.quantile(r, 0.75)), 3), float(row["splithalf_q3_r"])),
+        "frac_pos": (round(float(np.mean(r > 0)), 3), float(row["frac_pos"])),
+        "spearman_brown_full": (
+            round(2 * mean / (1 + mean), 3),
+            float(row["spearman_brown_full"]),
+        ),
+    }
+    checks = [
+        Check(
+            f"{name} recomputes from the raw per-condition values",
+            f"reported {reported}",
+            f"from {len(per_pair)} raw values: {computed}",
+            computed == reported,
+        )
+        for name, (computed, reported) in stats.items()
+    ]
+    checks.append(
+        Check(
+            "effect-size terciles recompute from the raw values",
+            " / ".join(str(float(row[f"splithalf_mean_r_tercile{t}"])) for t in (1, 2, 3)),
+            " / ".join(str(t) for t in terciles),
+            terciles == [float(row[f"splithalf_mean_r_tercile{t}"]) for t in (1, 2, 3)],
+        )
+    )
+    return checks
+
+
 def check_headline_consistency(repo: Path) -> list[Check]:
     """The promoted row's internal arithmetic: the lift, the quartiles, the terciles."""
     row = _headline(repo)
@@ -470,6 +519,7 @@ def run_all_checks(repo: Path = REPO) -> list[Check]:
     return [
         *check_promoted_hashes(repo),
         *check_tranche_content_hash(repo),
+        *check_headline_from_raw_values(repo),
         *check_headline_consistency(repo),
         *check_pool_arithmetic(repo),
         *check_derangement(repo),

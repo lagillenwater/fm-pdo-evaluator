@@ -7,7 +7,7 @@ says what was asked, what was found, and what it means.
 
 **Check it yourself before reading further.** Every number on this page recomputes from files
 committed in this repository — no cluster access needed, and no trust in this write-up: run
-`uv run python scripts/verify_rung0.py` (40 checks, about a minute, PASS/FAIL per claim), or
+`uv run python scripts/verify_rung0.py` (48 checks, about a minute, PASS/FAIL per claim), or
 open [`verify.ipynb`](verify.ipynb) for the same checks with a plain-language explanation of
 what each one proves. How this task was checked, in one line each: the *code* was reviewed per
 task (`review.md`), the *run* was evidenced with commands and output (`verification.md`), the
@@ -76,7 +76,11 @@ Controls (every one passed; details in `tests/` and `verification.md`):
 | Data integrity: all 1,026 downloaded data shards re-hashed | integrity | every hash matches the value recorded at download time |
 
 Figure: [`rung0_ceiling.png`](rung0_ceiling.png) — the distribution of per-condition split-half
-correlations against both mismatched-condition floors, with the headline mean marked.
+correlations against both mismatched-condition floors, with the headline mean marked. The
+underlying per-condition values are committed as `rung0_per_pair_r.csv` (one row per condition:
+cell line, drug, genes scored, effect size, correlation), so every statistic in the table above
+recomputes from the raw numbers — [`verify.ipynb`](verify.ipynb) draws that distribution and
+recomputes them in front of the reader.
 
 ## Conclusions
 

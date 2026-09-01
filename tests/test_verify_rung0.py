@@ -35,10 +35,10 @@ def test_every_promoted_claim_recomputes_from_the_committed_artifacts() -> None:
 
 
 def test_the_check_count_matches_the_documents() -> None:
-    # summary.md's trust map and the pull-request description say "40 checks"; pinning the
+    # summary.md's trust map and the pull-request description say "48 checks"; pinning the
     # count here means adding or removing a check forces those transcriptions to be revisited
     # (scoped-review finding: the count was the one unguarded transcription in the wave).
-    assert len(vr.run_all_checks()) == 40
+    assert len(vr.run_all_checks()) == 48
 
 
 def test_the_check_battery_covers_every_layer() -> None:
@@ -46,6 +46,7 @@ def test_the_check_battery_covers_every_layer() -> None:
     # arithmetic, permutation nulls, per-gene diagnostic, summary-vs-artifact agreement.
     names = " ".join(c.name for c in vr.run_all_checks())
     for fragment in (
+        "raw per-condition values",
         "checksum",
         "content hash",
         "Spearman-Brown",

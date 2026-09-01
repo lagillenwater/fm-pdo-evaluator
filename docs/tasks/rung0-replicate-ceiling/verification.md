@@ -433,7 +433,7 @@ Commands as run:
 
 ```
 uv run python scripts/verify_rung0.py
-# -> 40 / 40 checks pass, exit 0
+# -> 48 / 48 checks pass, exit 0
 
 cp docs/tasks/rung0-replicate-ceiling/verify.ipynb docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
 uv run jupyter execute docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
@@ -442,6 +442,37 @@ uv run jupyter execute docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
 
 uv run pytest
 # -> 75 passed (includes the battery via tests/test_verify_rung0.py)
+```
+
+## Per-condition table and independent reproduction (job 31955710, 2026-08-31)
+
+The verification notebook could draw the null distributions (500 committed draws per stratum)
+and the per-gene diagnostic (13,886 rows) but not the distribution the ceiling is actually
+about: the 1,600 per-condition split-half correlations existed only as the summary row's mean,
+median, and quartiles. `per_pair_table` (`scripts/delta_reproducibility.py`) now writes
+`rung0_per_pair_r.csv` — one row per condition: cell line, drug, shared finite-gene count,
+effect size (mean absolute delta, the quantity `effect_size_terciles` stratifies on), and the
+split-half r. Alignment control: `test_per_pair_table_rows_are_keyed_to_their_own_scores` plants
+graded per-drug signal that a misaligned export would scramble, and the real command-line
+interface on the synthetic fixture recovers the planted 0.8 from the exported table.
+
+The same job was rerun on Alpine to produce it — identical script path, seed, panel, and pinned
+tranche, submitted as job 31955710 (`ralpine update` to `d11efd0`, then
+`ralpine submit scripts/alpine/delta_reproducibility.sbatch`). Because nothing but the added
+export changed, the rerun doubles as an **independent reproduction** of the promoted result: its
+printed summary block reproduced every promoted value exactly — `n_pairs` 1600, mean 0.135,
+median 0.109, quartiles 0.071/0.155, Spearman-Brown 0.238, `frac_pos` 0.989, floors 0.035 /
+0.079, both p 0.0005, minimum detectable effects 0.0392 / 0.0846, terciles 0.100 / 0.126 /
+0.178. The promoted record and its CSV are untouched (the rerun's outputs stayed on the
+cluster except the new table), per PROCESS §1's convergence rule: no promoted claim changed.
+
+Every headline statistic now recomputes from the raw column, checked in `verify.ipynb`'s
+section 1 and in the scripted battery:
+
+```
+uv run python -c "..."   # (the notebook's section-1 cells, run over the committed table)
+# -> mean 0.135, median 0.109, q1 0.071, q3 0.155, frac_pos 0.989, Spearman-Brown 0.238,
+#    terciles 0.100 / 0.126 / 0.178 -- each equal to the promoted row's value
 ```
 
 One measurement subtlety the battery surfaced on its first run, recorded because it would bite
