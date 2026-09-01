@@ -188,6 +188,98 @@ def check_headline_from_raw_values(repo: Path) -> list[Check]:
     return checks
 
 
+def check_null_draws(repo: Path) -> list[Check]:
+    """The chance floors re-derived from the individual mismatched-pair correlations."""
+    row = _headline(repo)
+    draws = pd.read_csv(repo / "docs" / "tasks" / TASK / "rung0_null_draws.csv")
+    checks: list[Check] = []
+    for stratum, column in (
+        ("diff_drug", "null_diff_drug_mean_r"),
+        ("same_drug", "null_same_drug_mean_r"),
+        ("any_pair", "null_any_pair_mean_r"),
+    ):
+        d = draws[draws["stratum"] == stratum]["r"].to_numpy(dtype=float)
+        mean = round(float(np.mean(d)), 3)
+        checks.append(
+            Check(
+                f"{stratum} floor recomputes from its draws",
+                f"reported {row[column]} over {int(row['null_n_draws'])} draws",
+                f"mean of {d.size} committed draws: {mean}",
+                mean == float(row[column]) and d.size == int(row["null_n_draws"]),
+            )
+        )
+    same = draws[draws["stratum"] == "same_drug"]["r"].to_numpy(dtype=float)
+    diff = draws[draws["stratum"] == "diff_drug"]["r"].to_numpy(dtype=float)
+    checks.append(
+        Check(
+            "same-drug floor sits above the different-drug floor",
+            "shared drug response lifts the stricter floor",
+            f"{np.mean(same):.4f} > {np.mean(diff):.4f}",
+            float(np.mean(same)) > float(np.mean(diff)),
+        )
+    )
+    return checks
+
+
+def check_example_profiles(repo: Path) -> list[Check]:
+    """The scatter data reproduces the correlations it is shown under."""
+    task_dir = repo / "docs" / "tasks" / TASK
+    profiles = pd.read_csv(task_dir / "rung0_example_pair_profiles.csv.gz")
+    index = pd.read_csv(task_dir / "rung0_example_pair_index.csv")
+    per_pair = pd.read_csv(task_dir / "rung0_per_pair_r.csv", keep_default_na=False)
+    checks: list[Check] = []
+    for _, ex in index.iterrows():
+        points = profiles[profiles["example_id"] == ex["example_id"]]
+        recomputed = round(
+            float(
+                np.corrcoef(
+                    points["lfc0"].to_numpy(dtype=float), points["lfc1"].to_numpy(dtype=float)
+                )[0, 1]
+            ),
+            4,
+        )
+        ok = (
+            len(points) == int(ex["n_genes_shown"])
+            and abs(recomputed - float(ex["r_shown"])) < 5e-3
+            and float(ex["r_shown"]) == float(ex["r_full"])
+        )
+        checks.append(
+            Check(
+                f"example {ex['example_id']}: scatter reproduces its correlation",
+                f"index r {ex['r_shown']} over {int(ex['n_genes_shown'])} genes",
+                f"from the committed points: {recomputed}",
+                ok,
+            )
+        )
+    matched = index[index["kind"] == "matched"]
+    agree = [
+        float(
+            per_pair[(per_pair["patient"] == ex["patient0"]) & (per_pair["drug"] == ex["drug0"])][
+                "r"
+            ].iloc[0]
+        )
+        == float(ex["r_full"])
+        for _, ex in matched.iterrows()
+    ]
+    checks.append(
+        Check(
+            "matched examples agree with the per-condition table",
+            "each example's r equals its row in rung0_per_pair_r.csv",
+            f"{sum(agree)} of {len(agree)} agree",
+            all(agree),
+        )
+    )
+    checks.append(
+        Check(
+            "matched examples span the reliability range in order",
+            "5th < 25th < 50th < 95th percentile",
+            " < ".join(str(v) for v in matched.sort_values("example_id")["r_full"]),
+            list(matched.sort_values("example_id")["r_full"]) == sorted(matched["r_full"]),
+        )
+    )
+    return checks
+
+
 def check_headline_consistency(repo: Path) -> list[Check]:
     """The promoted row's internal arithmetic: the lift, the quartiles, the terciles."""
     row = _headline(repo)
@@ -520,6 +612,8 @@ def run_all_checks(repo: Path = REPO) -> list[Check]:
         *check_promoted_hashes(repo),
         *check_tranche_content_hash(repo),
         *check_headline_from_raw_values(repo),
+        *check_null_draws(repo),
+        *check_example_profiles(repo),
         *check_headline_consistency(repo),
         *check_pool_arithmetic(repo),
         *check_derangement(repo),

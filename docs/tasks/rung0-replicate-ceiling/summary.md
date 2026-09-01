@@ -7,7 +7,7 @@ says what was asked, what was found, and what it means.
 
 **Check it yourself before reading further.** Every number on this page recomputes from files
 committed in this repository — no cluster access needed, and no trust in this write-up: run
-`uv run python scripts/verify_rung0.py` (48 checks, about a minute, PASS/FAIL per claim), or
+`uv run python scripts/verify_rung0.py` (60 checks, about a minute, PASS/FAIL per claim), or
 open [`verify.ipynb`](verify.ipynb) for the same checks with a plain-language explanation of
 what each one proves. How this task was checked, in one line each: the *code* was reviewed per
 task (`review.md`), the *run* was evidenced with commands and output (`verification.md`), the

@@ -433,7 +433,7 @@ Commands as run:
 
 ```
 uv run python scripts/verify_rung0.py
-# -> 48 / 48 checks pass, exit 0
+# -> 60 / 60 checks pass, exit 0
 
 cp docs/tasks/rung0-replicate-ceiling/verify.ipynb docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
 uv run jupyter execute docs/tasks/rung0-replicate-ceiling/verify_scratch.ipynb
@@ -465,6 +465,27 @@ median 0.109, quartiles 0.071/0.155, Spearman-Brown 0.238, `frac_pos` 0.989, flo
 0.079, both p 0.0005, minimum detectable effects 0.0392 / 0.0846, terciles 0.100 / 0.126 /
 0.178. The promoted record and its CSV are untouched (the rerun's outputs stayed on the
 cluster except the new table), per PROCESS §1's convergence rule: no promoted claim changed.
+
+Two further exports followed the same reasoning (job 31956355, same code path, seed, and inputs;
+its printed summary block again reproduced every promoted value exactly). `null_draw_table`
+writes `rung0_null_draws.csv` — every individual mismatched-pair correlation with its stratum,
+so the chance floors are distributions rather than two quoted means, and each floor's mean
+recomputes from its 500 committed draws. `example_pair_profiles` writes
+`rung0_example_pair_profiles.csv.gz` and `rung0_example_pair_index.csv` — both halves' per-gene
+log2 fold changes for six example comparisons, so a correlation can be seen as a scatter: four
+real conditions at the 5th, 25th, 50th, and 95th percentile of the per-condition distribution
+(r = 0.028 / 0.071 / 0.109 / 0.354, each matching its row in `rung0_per_pair_r.csv`) plus the
+two mismatched comparisons the floors are built from (same drug, different line: 0.051;
+different drug and line: 0.001). Controls: `test_null_draw_table_carries_the_draws_its_means_summarize`
+and `test_example_profiles_reproduce_their_own_correlations`.
+
+The profile export is gzipped and carries every shared gene, at about 630 kilobytes. An earlier
+version subsampled to 2,000 genes for size; on the real pool that put roughly ±0.04 of sampling
+error on correlations of 0.03–0.11, which reordered the examples (the four rising values above
+came out as 0.062 / 0.054 / 0.069 / 0.357), so a panel captioned as spanning the reliability
+range would have shown correlations that do not rise. With every gene exported, the index's
+`r_shown` equals `r_full` exactly on all six examples — that equality is the committed check
+that nothing was dropped.
 
 Every headline statistic now recomputes from the raw column, checked in `verify.ipynb`'s
 section 1 and in the scripted battery:
