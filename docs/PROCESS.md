@@ -104,6 +104,10 @@ A result without a `.provenance.json` provenance record is not citable in a writ
   Every promoted comparison carries its minimum detectable effect at the declared α and power, computed from the same null bootstrap as its p-value, and positive-control plants are placed relative to it.
   A null result without its MDE cannot be told apart from an underpowered experiment — the distinction rung 5's small cohort will turn on.
 - **Run the full local suite before every push**: `uv run pytest -q`.
+- **Run the lint and type gates over tracked files, not over hand-picked directories.**
+  `git ls-files '*.py' '*.ipynb' | xargs uv run ruff check`, the same with `ruff format --check`, then `uv run pyright`.
+  Continuous integration runs `ruff check .` on a clean checkout, which lints notebook code cells too; a local gate scoped to source directories cannot see a violation in a committed notebook, and the branch went red for a day on exactly that gap.
+  Selecting tracked files keeps the untracked working-tree strays out (the reason the scoping existed) without hiding anything continuous integration will see.
 - **Run the project-rule tests for what you touched.**
   `uv run pytest tests/test_project_rules.py` every time — they may catch a violation the task never intended — plus `-m` for the steps named in the task's `design.md` header, e.g. `uv run pytest -m "step_split or step_score"`.
   The step-to-rule-to-test mapping sits under each rule in `docs/SPEC.md`, and each step's marker is registered in `pyproject.toml` alongside the test that uses it, so the selection is the same whichever rung or dataset the task is about.
