@@ -206,6 +206,8 @@ def example_pair_profiles(
     piv1: pd.DataFrame,
     r: np.ndarray,
     quantiles: tuple[float, ...] = (0.05, 0.25, 0.5, 0.95),
+    max_genes: int = 2000,
+    seed: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Gene-level half-profiles for a few example conditions, so an r can be seen as a scatter.
 
@@ -215,18 +217,26 @@ def example_pair_profiles(
     finite r, nearest-rank) plus the two mismatched comparisons the chance floors are built from,
     each formed by pairing the median condition's first half with another condition's second
     half: same drug and different line, then different drug and line. Deterministic -- selection
-    is by sorted rank and by first-in-index-order among candidates, no sampling.
+    is by sorted rank and by first-in-index-order among candidates.
+
+    Genes are subsampled to ``max_genes`` per example (seeded, so a rerun reproduces the file
+    exactly), because this artifact is illustrative: every condition's authoritative full-panel
+    correlation is already committed for all 1,600 conditions in ``rung0_per_pair_r.csv``, and a
+    scatter of 14,000 points overplots into a blob anyway. The index carries both numbers --
+    ``r_full`` over every shared gene (the reported quantity) and ``r_shown`` over exactly the
+    exported points -- so the committed file verifies against itself and its sampling error
+    against the full panel is visible rather than assumed.
 
     Returns (profiles, index): the long per-gene frame keyed by ``example_id``, and one row per
-    example carrying its kind, the two conditions' labels, gene count, and correlation.
+    example carrying its kind, the two conditions' labels, both gene counts, and both r values.
     """
     a, b = piv0.to_numpy(dtype=float), piv1.to_numpy(dtype=float)
     lines = piv0.index.get_level_values(0).to_numpy(dtype=str)
     drugs = piv0.index.get_level_values(1).to_numpy(dtype=str)
     order = np.flatnonzero(np.isfinite(r))[np.argsort(r[np.isfinite(r)])]
     if order.size == 0:
-        index_cols = ["example_id", "kind", "patient0", "drug0"]
-        index_cols += ["patient1", "drug1", "n_genes", "r"]
+        index_cols = ["example_id", "kind", "patient0", "drug0", "patient1", "drug1"]
+        index_cols += ["n_genes_full", "r_full", "n_genes_shown", "r_shown"]
         return pd.DataFrame(columns=["example_id", "gene", "lfc0", "lfc1"]), pd.DataFrame(
             columns=index_cols
         )
@@ -249,16 +259,24 @@ def example_pair_profiles(
     frames: list[pd.DataFrame] = []
     rows: list[dict[str, object]] = []
     genes = piv0.columns.to_numpy()
+    rng = np.random.default_rng(seed)
     for example_id, kind, i, j in picks:
-        ok = np.isfinite(a[i]) & np.isfinite(b[j])
-        pair_r = float(masked_rowwise_pearson(a[i][None, :], b[j][None, :], min_genes=1)[0])
+        shared = np.flatnonzero(np.isfinite(a[i]) & np.isfinite(b[j]))
+        r_full = float(masked_rowwise_pearson(a[i][None, :], b[j][None, :], min_genes=1)[0])
+        shown = (
+            np.sort(rng.choice(shared, size=max_genes, replace=False))
+            if shared.size > max_genes
+            else shared
+        )
+        x, y = a[i][shown], b[j][shown]
+        r_shown = float(masked_rowwise_pearson(x[None, :], y[None, :], min_genes=1)[0])
         frames.append(
             pd.DataFrame(
                 {
                     "example_id": example_id,
-                    "gene": genes[ok],
-                    "lfc0": np.round(a[i][ok], 4),
-                    "lfc1": np.round(b[j][ok], 4),
+                    "gene": genes[shown],
+                    "lfc0": np.round(x, 4),
+                    "lfc1": np.round(y, 4),
                 }
             )
         )
@@ -270,8 +288,10 @@ def example_pair_profiles(
                 "drug0": drugs[i],
                 "patient1": lines[j],
                 "drug1": drugs[j],
-                "n_genes": int(ok.sum()),
-                "r": round(pair_r, 4),
+                "n_genes_full": int(shared.size),
+                "r_full": round(r_full, 4),
+                "n_genes_shown": int(shown.size),
+                "r_shown": round(r_shown, 4),
             }
         )
     return pd.concat(frames, ignore_index=True), pd.DataFrame(rows)

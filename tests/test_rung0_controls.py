@@ -375,15 +375,20 @@ def test_example_profiles_reproduce_their_own_correlations(tmp_path: Path) -> No
     assert set(index["kind"]) >= {"matched", "same_drug_mismatch", "diff_drug_mismatch"}
     for _, row in index.iterrows():
         sub = profiles[profiles["example_id"] == row["example_id"]]
-        assert len(sub) == row["n_genes"], f"{row['example_id']}: gene count disagrees"
+        assert len(sub) == row["n_genes_shown"], f"{row['example_id']}: gene count disagrees"
         recomputed = np.corrcoef(sub["lfc0"].to_numpy(float), sub["lfc1"].to_numpy(float))[0, 1]
-        assert abs(recomputed - row["r"]) < 5e-3, (
-            f"{row['example_id']}: exported profiles give r={recomputed:.4f}, index says {row['r']}"
+        assert abs(recomputed - row["r_shown"]) < 5e-3, (
+            f"{row['example_id']}: exported points give r={recomputed:.4f}, "
+            f"index says r_shown={row['r_shown']}"
+        )
+        # the subsample must represent the full panel, not drift from it
+        assert abs(row["r_shown"] - row["r_full"]) < 0.05, (
+            f"{row['example_id']}: shown {row['r_shown']} vs full {row['r_full']}"
         )
     # matched examples are ordered by construction (they are drawn at rising quantiles)
     matched = index[index["kind"] == "matched"].sort_values("example_id")
-    assert matched["r"].is_monotonic_increasing, (
-        f"matched examples not ordered: {list(matched['r'])}"
+    assert matched["r_full"].is_monotonic_increasing, (
+        f"matched examples not ordered: {list(matched['r_full'])}"
     )
     # a mismatched pairing keeps its own two conditions' identities
     mismatch = index[index["kind"] == "same_drug_mismatch"].iloc[0]
