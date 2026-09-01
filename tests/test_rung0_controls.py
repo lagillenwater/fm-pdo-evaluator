@@ -278,6 +278,63 @@ def test_tercile_control_rises_monotonically_with_planted_effect_size(tmp_path: 
     ), f"terciles not monotone: {terc}"
 
 
+def test_per_pair_table_rows_are_keyed_to_their_own_scores(tmp_path: Path) -> None:
+    # The exported evidence table must carry each condition's OWN r and effect size.
+    # Graded per-drug signal (as in the tercile control) makes misalignment detectable:
+    # a scrambled export would break the planted D0 < D1 < D2 ordering in both columns.
+    rng = np.random.default_rng(11)
+    lines = [f"L{i}" for i in range(6)]
+    genes = [f"G{k}" for k in range(400)]
+    plates = tuple(f"P{p}" for p in range(8))
+    rows = []
+    for d, s in (("D0", 0.3), ("D1", 0.8), ("D2", 2.0)):
+        for li in lines:
+            signal = rng.normal(0.0, s, len(genes))
+            for p in plates:
+                rows.append(
+                    pd.DataFrame(
+                        {
+                            "Cell_ID_DepMap": li,
+                            "drug": d,
+                            "gene_name": genes,
+                            "log2FoldChange": signal + rng.normal(0.0, 1.0, len(genes)),
+                            "plate": p,
+                        }
+                    )
+                )
+    pool_dir = tmp_path / "pseudobulk_differential_expression"
+    pool_dir.mkdir(parents=True)
+    pd.concat(rows, ignore_index=True).to_parquet(
+        pool_dir / "train-00000-of-00001.parquet", index=False
+    )
+    de, _ = dr.build_split_half_frame(
+        [str(pool_dir / "train-00000-of-00001.parquet")],
+        ["D0", "D1", "D2"],
+        None,
+        tmp_path / "duck",
+        memory_limit="2GB",
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dr.score_split_half(de, set(de["gene_name"].unique()))
+    table = dr.per_pair_table(piv0, piv1, r)
+
+    # column integrity: the r column IS the scored array, in pivot order, keys included
+    assert len(table) == len(piv0) == 18
+    assert np.array_equal(table["r"].to_numpy(), np.round(r, 4), equal_nan=True)
+    assert list(table["patient"]) == list(piv0.index.get_level_values(0))
+    assert list(table["drug"]) == list(piv0.index.get_level_values(1))
+
+    # row keying: planted per-drug ordering recovered in both exported quantities
+    by_drug_effect = table.groupby("drug")["mean_abs_delta"].mean()
+    assert by_drug_effect["D0"] < by_drug_effect["D1"] < by_drug_effect["D2"], (
+        f"effect sizes misordered: {dict(by_drug_effect)}"
+    )
+    by_drug_r = table.groupby("drug")["r"].mean()
+    assert by_drug_r["D0"] < by_drug_r["D1"] < by_drug_r["D2"], (
+        f"reliabilities misordered: {dict(by_drug_r)}"
+    )
+
+
 def test_per_gene_reliability_separates_reliable_from_noise_genes(tmp_path: Path) -> None:
     # Half the genes carry pair-specific signal, half are pure noise: the diagnostic
     # must rank the signal genes above the noise genes.

@@ -120,6 +120,32 @@ def score_split_half(
     return r, piv0, piv1
 
 
+def per_pair_table(piv0: pd.DataFrame, piv1: pd.DataFrame, r: np.ndarray) -> pd.DataFrame:
+    """The result's own data: one row per candidate (line, drug) condition.
+
+    The headline row summarizes these values; committing them makes the summary re-derivable
+    anywhere -- mean, median, quartiles, positive fraction, and the effect-size terciles all
+    recompute from this table without cluster access. Columns: the split-half r whose mean is
+    the declared statistic, the pair's effect size (mean |delta| over genes finite in both
+    halves -- the same quantity ``effect_size_terciles`` stratifies on), and the shared
+    finite-gene count. Rows scored NaN (fewer than ``min_genes`` shared genes) are kept,
+    honestly NaN.
+    """
+    a, b = piv0.to_numpy(dtype=float), piv1.to_numpy(dtype=float)
+    ok = np.isfinite(a) & np.isfinite(b)
+    n = ok.sum(axis=1)
+    mean_abs = np.where(ok, np.abs(a + b) / 2.0, 0.0).sum(axis=1) / np.maximum(n, 1)
+    return pd.DataFrame(
+        {
+            "patient": piv0.index.get_level_values(0),
+            "drug": piv0.index.get_level_values(1),
+            "n_genes_scored": n,
+            "mean_abs_delta": np.round(mean_abs, 4),
+            "r": np.round(r, 4),
+        }
+    )
+
+
 def stratified_null_draws(
     piv0: pd.DataFrame,
     piv1: pd.DataFrame,
@@ -454,6 +480,8 @@ def main() -> None:
     summary_path = out_dir / "rung0_delta_reproducibility.csv"
     pd.DataFrame([summary]).to_csv(summary_path, index=False)
     _write_params_sidecar(summary_path, args, extra={"n_pairs": summary["n_pairs"]})
+
+    per_pair_table(piv0, piv1, r).to_csv(out_dir / "rung0_per_pair_r.csv", index=False)
 
     per_gene = per_gene_reliability(piv0, piv1)
     per_gene.to_csv(out_dir / "rung0_per_gene_reliability.csv", index=False)
