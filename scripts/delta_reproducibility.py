@@ -186,6 +186,97 @@ def stratified_null_draws(
     return out
 
 
+def null_draw_table(nulls: dict[str, np.ndarray]) -> pd.DataFrame:
+    """Every individual mismatched-pair correlation, long-format (stratum, r).
+
+    The summary row reports only each stratum's mean, so the chance floors could be quoted
+    but not seen. These are the draws those means average, committed so the floor
+    distributions can be drawn and their means re-derived off-cluster.
+    """
+    return pd.DataFrame(
+        {
+            "stratum": np.repeat(list(nulls), [len(v) for v in nulls.values()]),
+            "r": np.round(np.concatenate([np.asarray(v, dtype=float) for v in nulls.values()]), 4),
+        }
+    )
+
+
+def example_pair_profiles(
+    piv0: pd.DataFrame,
+    piv1: pd.DataFrame,
+    r: np.ndarray,
+    quantiles: tuple[float, ...] = (0.05, 0.25, 0.5, 0.95),
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Gene-level half-profiles for a few example conditions, so an r can be seen as a scatter.
+
+    Every correlation in this analysis is one point in a distribution; nothing committed showed
+    what the underlying agreement looks like gene by gene. This exports both halves' per-gene
+    deltas for matched conditions spanning the reliability range (at ``quantiles`` of the sorted
+    finite r, nearest-rank) plus the two mismatched comparisons the chance floors are built from,
+    each formed by pairing the median condition's first half with another condition's second
+    half: same drug and different line, then different drug and line. Deterministic -- selection
+    is by sorted rank and by first-in-index-order among candidates, no sampling.
+
+    Returns (profiles, index): the long per-gene frame keyed by ``example_id``, and one row per
+    example carrying its kind, the two conditions' labels, gene count, and correlation.
+    """
+    a, b = piv0.to_numpy(dtype=float), piv1.to_numpy(dtype=float)
+    lines = piv0.index.get_level_values(0).to_numpy(dtype=str)
+    drugs = piv0.index.get_level_values(1).to_numpy(dtype=str)
+    order = np.flatnonzero(np.isfinite(r))[np.argsort(r[np.isfinite(r)])]
+    if order.size == 0:
+        index_cols = ["example_id", "kind", "patient0", "drug0"]
+        index_cols += ["patient1", "drug1", "n_genes", "r"]
+        return pd.DataFrame(columns=["example_id", "gene", "lfc0", "lfc1"]), pd.DataFrame(
+            columns=index_cols
+        )
+
+    def _at(q: float) -> int:
+        return int(order[round(q * (order.size - 1))])
+
+    picks: list[tuple[str, str, int, int]] = [
+        (f"matched_q{round(q * 100):02d}", "matched", _at(q), _at(q)) for q in quantiles
+    ]
+    anchor = _at(0.5)
+    for kind, mask in (
+        ("same_drug_mismatch", (drugs == drugs[anchor]) & (lines != lines[anchor])),
+        ("diff_drug_mismatch", (drugs != drugs[anchor]) & (lines != lines[anchor])),
+    ):
+        candidates = np.flatnonzero(mask)
+        if candidates.size:
+            picks.append((kind, kind, anchor, int(candidates[0])))
+
+    frames: list[pd.DataFrame] = []
+    rows: list[dict[str, object]] = []
+    genes = piv0.columns.to_numpy()
+    for example_id, kind, i, j in picks:
+        ok = np.isfinite(a[i]) & np.isfinite(b[j])
+        pair_r = float(masked_rowwise_pearson(a[i][None, :], b[j][None, :], min_genes=1)[0])
+        frames.append(
+            pd.DataFrame(
+                {
+                    "example_id": example_id,
+                    "gene": genes[ok],
+                    "lfc0": np.round(a[i][ok], 4),
+                    "lfc1": np.round(b[j][ok], 4),
+                }
+            )
+        )
+        rows.append(
+            {
+                "example_id": example_id,
+                "kind": kind,
+                "patient0": lines[i],
+                "drug0": drugs[i],
+                "patient1": lines[j],
+                "drug1": drugs[j],
+                "n_genes": int(ok.sum()),
+                "r": round(pair_r, 4),
+            }
+        )
+    return pd.concat(frames, ignore_index=True), pd.DataFrame(rows)
+
+
 def effect_size_terciles(piv0: pd.DataFrame, piv1: pd.DataFrame, r: np.ndarray) -> dict[str, float]:
     """Split-half mean r within terciles of per-pair effect size (mean |delta|).
 
@@ -482,6 +573,10 @@ def main() -> None:
     _write_params_sidecar(summary_path, args, extra={"n_pairs": summary["n_pairs"]})
 
     per_pair_table(piv0, piv1, r).to_csv(out_dir / "rung0_per_pair_r.csv", index=False)
+    null_draw_table(nulls).to_csv(out_dir / "rung0_null_draws.csv", index=False)
+    profiles, profile_index = example_pair_profiles(piv0, piv1, r)
+    profiles.to_csv(out_dir / "rung0_example_pair_profiles.csv", index=False)
+    profile_index.to_csv(out_dir / "rung0_example_pair_index.csv", index=False)
 
     per_gene = per_gene_reliability(piv0, piv1)
     per_gene.to_csv(out_dir / "rung0_per_gene_reliability.csv", index=False)

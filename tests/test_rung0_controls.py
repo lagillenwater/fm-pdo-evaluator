@@ -335,6 +335,63 @@ def test_per_pair_table_rows_are_keyed_to_their_own_scores(tmp_path: Path) -> No
     )
 
 
+def test_null_draw_table_carries_the_draws_its_means_summarize(tmp_path: Path) -> None:
+    # The exported floor distributions must BE the draws the summary's floor means average:
+    # per-stratum counts and means recomputed from the table must match the dict it came from.
+    path = _write_fixture_pool(tmp_path, n_lines=6, n_drugs=4, signal_sd=0.7, drug_sd=0.7)
+    de, _ = dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2", "D3"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    _, piv0, piv1 = dr.score_split_half(de, set(de["gene_name"].unique()))
+    nulls = dr.stratified_null_draws(piv0, piv1, n_perm=200, seed=0)
+    table = dr.null_draw_table(nulls)
+
+    assert set(table["stratum"]) == set(nulls)
+    for stratum, draws in nulls.items():
+        exported = table[table["stratum"] == stratum]["r"].to_numpy(float)
+        assert exported.size == draws.size, (
+            f"{stratum}: {exported.size} exported, {draws.size} drawn"
+        )
+        assert abs(float(np.mean(exported)) - float(np.mean(draws))) < 5e-4, (
+            f"{stratum} mean not preserved by the export"
+        )
+    # the planted ordering must survive into the exported table, not just the dict
+    means = table.groupby("stratum")["r"].mean()
+    assert means["same_drug"] > means["diff_drug"], f"stratum ordering lost: {dict(means)}"
+
+
+def test_example_profiles_reproduce_their_own_correlations(tmp_path: Path) -> None:
+    # The scatter data must be the scatter the reported r came from: recomputing Pearson
+    # from each example's exported two columns must return that example's index r.
+    path = _write_fixture_pool(tmp_path, n_lines=6, n_drugs=4, signal_sd=0.7, drug_sd=0.7)
+    de, _ = dr.build_split_half_frame(
+        [str(path)], ["D0", "D1", "D2", "D3"], None, tmp_path / "duck", memory_limit="2GB"
+    )
+    de = de.dropna(subset=["lfc0", "lfc1"])
+    r, piv0, piv1 = dr.score_split_half(de, set(de["gene_name"].unique()))
+    profiles, index = dr.example_pair_profiles(piv0, piv1, r)
+
+    assert set(index["kind"]) >= {"matched", "same_drug_mismatch", "diff_drug_mismatch"}
+    for _, row in index.iterrows():
+        sub = profiles[profiles["example_id"] == row["example_id"]]
+        assert len(sub) == row["n_genes"], f"{row['example_id']}: gene count disagrees"
+        recomputed = np.corrcoef(sub["lfc0"].to_numpy(float), sub["lfc1"].to_numpy(float))[0, 1]
+        assert abs(recomputed - row["r"]) < 5e-3, (
+            f"{row['example_id']}: exported profiles give r={recomputed:.4f}, index says {row['r']}"
+        )
+    # matched examples are ordered by construction (they are drawn at rising quantiles)
+    matched = index[index["kind"] == "matched"].sort_values("example_id")
+    assert matched["r"].is_monotonic_increasing, (
+        f"matched examples not ordered: {list(matched['r'])}"
+    )
+    # a mismatched pairing keeps its own two conditions' identities
+    mismatch = index[index["kind"] == "same_drug_mismatch"].iloc[0]
+    assert mismatch["drug0"] == mismatch["drug1"] and mismatch["patient0"] != mismatch["patient1"]
+    cross = index[index["kind"] == "diff_drug_mismatch"].iloc[0]
+    assert cross["drug0"] != cross["drug1"] and cross["patient0"] != cross["patient1"]
+
+
 def test_per_gene_reliability_separates_reliable_from_noise_genes(tmp_path: Path) -> None:
     # Half the genes carry pair-specific signal, half are pure noise: the diagnostic
     # must rank the signal genes above the noise genes.
