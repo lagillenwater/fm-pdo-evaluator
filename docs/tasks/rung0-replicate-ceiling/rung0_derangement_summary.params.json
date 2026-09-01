@@ -1,0 +1,17 @@
+{
+  "result": "rung0_derangement_summary.csv",
+  "git_sha": "2d3dd22cf74921a6d87a276c2ca13a1d357be577",
+  "slurm_job_id": "31770850",
+  "args": {
+    "local_dir": "/scratch/alpine/lgillenwater@xsede.org/tahoe_pseudobulk_de",
+    "drugs_cid_file": "data/static/tahoe_target_cids.txt",
+    "drug_names_file": "None",
+    "panel_file": "results/rung1_panel/common_panel.txt",
+    "replicate_col": "None",
+    "min_genes": "50",
+    "n_perm": "500",
+    "seed": "0",
+    "out_dir": "rung0_outputs"
+  },
+  "n_pairs": 1600
+}

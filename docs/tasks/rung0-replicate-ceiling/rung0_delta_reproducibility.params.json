@@ -1,0 +1,18 @@
+{
+  "result": "rung0_delta_reproducibility.csv",
+  "git_sha": "25cec0540d1cf86beb871aacb807003c14c9a843",
+  "slurm_job_id": "31758395",
+  "args": {
+    "local_dir": "/scratch/alpine/lgillenwater@xsede.org/tahoe_pseudobulk_de",
+    "drugs_cid_file": "data/static/tahoe_target_cids.txt",
+    "drug_names_file": "None",
+    "replicate_col": "None",
+    "n_hvg": "2000",
+    "min_genes": "50",
+    "panel_file": "results/rung1_panel/common_panel.txt",
+    "n_perm": "500",
+    "seed": "0",
+    "out_dir": "rung0_outputs"
+  },
+  "n_pairs": 1600
+}

@@ -1,0 +1,7 @@
+example_id,kind,patient0,drug0,patient1,drug1,n_genes_full,r_full,n_genes_shown,r_shown
+matched_q05,matched,ACH-000521,Cytarabine,ACH-000521,Cytarabine,12562,0.0279,12562,0.0279
+matched_q25,matched,ACH-000148,crizotinib,ACH-000148,crizotinib,11752,0.071,11752,0.071
+matched_q50,matched,ACH-000900,5-Fluorouracil,ACH-000900,5-Fluorouracil,12401,0.1094,12401,0.1094
+matched_q95,matched,ACH-000178,Trametinib,ACH-000178,Trametinib,12793,0.354,12793,0.354
+same_drug_mismatch,same_drug_mismatch,ACH-000900,5-Fluorouracil,ACH-000120,5-Fluorouracil,10470,0.0507,10470,0.0507
+diff_drug_mismatch,diff_drug_mismatch,ACH-000900,5-Fluorouracil,ACH-000120,5-Azacytidine,10442,0.0009,10442,0.0009

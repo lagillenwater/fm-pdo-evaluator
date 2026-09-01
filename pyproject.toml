@@ -6,12 +6,17 @@ authors = [{ name = "Lucas Gillenwater", email = "lucas.gillenwater@cuanschutz.e
 license = { text = "BSD-2-Clause-Patent" }
 readme = "README.md"
 requires-python = ">=3.11"
-# Every dependency here is imported by code in this repository. The rest arrive with the rung
-# that first needs them, so a reviewer can tell what the project actually runs on from the
-# manifest alone rather than from what it might run on later.
+# Every dependency here is imported by code in this repository or by code landing on this
+# task's branch. The rest arrive with the rung that first needs them, so a reviewer can tell
+# what the project actually runs on from the manifest alone rather than from what it might run
+# on later.
 dependencies = [
     "pydantic>=2.7",
     "numpy>=1.26",
+    "pandas>=2.2",
+    "duckdb>=1.0",
+    "pyarrow>=15",
+    "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +27,8 @@ dev = [
     "ruff>=0.4",
     "pyright>=1.1.360",
     "pre-commit>=3.7",
+    # for running each task's verify notebook (PROCESS §3's executable verification)
+    "jupyterlab>=4.2",
 ]
 
 [build-system]
@@ -62,4 +69,7 @@ addopts = "-ra -q"
 markers = [
     "step_promote: writing a result and its provenance record",
     "step_document: recording specs, state, and the reversals behind them",
+    "step_score: computing a reported statistic from a measurement",
+    "step_null: building the negative-control distribution a statistic is read against",
+    "known_answer: plants a known answer and requires the real, shipped function to recover it",
 ]

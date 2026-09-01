@@ -19,8 +19,20 @@ wrong.
 | 5 | Does it transfer to patient-derived organoids? |
 | 6 | Does it hold when the prediction comes first? |
 
-Rungs are built one at a time, and a rung's spec arrives with its implementation, so the design
-of a measurement and the code producing it are reviewed together.
+Rungs are built one at a time — each task on its own branch, named for the task — and a rung's
+spec arrives with its implementation, so the design of a measurement and the code producing it
+are reviewed together. Every measurement ships with a positive and a negative control, and every
+promoted comparison reports the smallest effect it was powered to detect. Every task passes a
+drift audit of its design against what landed before promoting its result, carries a
+plain-language summary of hypothesis, evidence, and conclusions, and opens its pull request as
+a draft for a final review round. Each task also ships an executable verification entry point —
+a script plus a notebook that recompute every promoted claim from the committed artifacts, so a
+reviewer re-derives the numbers rather than trusting the write-up. The dated history of project
+and task decisions lives in [docs/decisions.md](docs/decisions.md) and each task's own
+`decisions.md`. All rungs are scored
+inside one declared evaluation frame — the same datasets, gene and drug panels, and statistic —
+so their numbers divide like by like; a new dataset opens a new frame rather than silently
+shifting the old one.
 
 ## The documents
 
@@ -38,8 +50,10 @@ or where a rung stands, it updates the README in the same change — see `PROCES
 
 ## Status
 
-No rung has landed yet; rung 0 is next. `results/` does not exist, so nothing here is evidence
-of anything. [`docs/STATE.md`](docs/STATE.md) is authoritative.
+Rung 0 — the replicate ceiling every higher rung is read against — has landed on the
+`rung0-replicate-ceiling` branch ([design](docs/tasks/rung0-replicate-ceiling/design.md)), with
+its promoted result and provenance record in `results/rung0-replicate-ceiling/`. Higher rungs now
+read against this ceiling. [`docs/STATE.md`](docs/STATE.md) is authoritative.
 
 ## Quickstart
 
@@ -59,8 +73,16 @@ the project runs on rather than what it might run on later.
 
 ## Datasets
 
-- **Soragni 2024** sarcoma PDTOs ([Synapse PDTOSarcoma](https://www.synapse.org/PDTOSarcoma)) —
-  the organoid cohort rung 5 evaluates against, held as a frozen embargoed holdout.
+Every dataset the project reads is described in the registry, [docs/DATA.md](docs/DATA.md) —
+what it is, the paper behind it, the script and date of its download, and the processing applied
+after. Currently registered:
+
+- **Tahoe-100M** (Vevo Therapeutics; Zhang et al. 2025, CC0-1.0) — ~100M single-cell profiles,
+  50 cancer cell lines, ~1,100 drug–dose perturbations on 14 plates with plate-matched DMSO
+  controls. The delta rungs (0–3) read its pseudobulk differential-expression table, restricted
+  to the 32 drugs shared with GDSC2.
+- Datasets for the higher rungs — the viability screens and the embargoed organoid cohort the
+  ladder names in [docs/SPEC.md](docs/SPEC.md) — enter the registry with their rungs.
 
 ## License
 
