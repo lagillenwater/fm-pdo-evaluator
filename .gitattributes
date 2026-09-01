@@ -2,6 +2,7 @@
 # cluster access (scripts/verify_rung0.py recomputes from these), but not review material.
 # linguist-generated collapses them in the GitHub diff view (PROCESS §1, Close out).
 docs/tasks/**/*.csv linguist-generated=true
+docs/tasks/**/*.csv.gz linguist-generated=true binary
 docs/tasks/**/*.params.json linguist-generated=true
 results/**/*.csv linguist-generated=true
 results/**/*.out linguist-generated=true

@@ -206,7 +206,7 @@ def example_pair_profiles(
     piv1: pd.DataFrame,
     r: np.ndarray,
     quantiles: tuple[float, ...] = (0.05, 0.25, 0.5, 0.95),
-    max_genes: int = 2000,
+    max_genes: int | None = None,
     seed: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Gene-level half-profiles for a few example conditions, so an r can be seen as a scatter.
@@ -219,13 +219,19 @@ def example_pair_profiles(
     half: same drug and different line, then different drug and line. Deterministic -- selection
     is by sorted rank and by first-in-index-order among candidates.
 
-    Genes are subsampled to ``max_genes`` per example (seeded, so a rerun reproduces the file
-    exactly), because this artifact is illustrative: every condition's authoritative full-panel
-    correlation is already committed for all 1,600 conditions in ``rung0_per_pair_r.csv``, and a
-    scatter of 14,000 points overplots into a blob anyway. The index carries both numbers --
-    ``r_full`` over every shared gene (the reported quantity) and ``r_shown`` over exactly the
-    exported points -- so the committed file verifies against itself and its sampling error
-    against the full panel is visible rather than assumed.
+    Every shared gene is exported by default and the file is written gzipped, which keeps it
+    around 700 kilobytes -- a quarter of the plain-text size -- without any sampling error. An
+    earlier version subsampled to 2,000 genes for size; on the real pool that put +/-0.04 of
+    sampling error on correlations of 0.03-0.11, enough to reorder the examples (measured:
+    r_full 0.028/0.071/0.109/0.354 came out as 0.062/0.054/0.069/0.357), so a panel captioned
+    as spanning the reliability range would have shown correlations that do not rise.
+    ``max_genes`` keeps that path available for pools where size forces it; with it set, the
+    subsample is seeded and a rerun reproduces the file exactly.
+
+    The index carries both ``r_full`` over every shared gene (the reported quantity, matching
+    ``rung0_per_pair_r.csv`` for matched examples) and ``r_shown`` over exactly the exported
+    points, so the committed file verifies against itself; with no subsampling the two are
+    equal, which is itself the check that nothing was dropped.
 
     Returns (profiles, index): the long per-gene frame keyed by ``example_id``, and one row per
     example carrying its kind, the two conditions' labels, both gene counts, and both r values.
@@ -265,7 +271,7 @@ def example_pair_profiles(
         r_full = float(masked_rowwise_pearson(a[i][None, :], b[j][None, :], min_genes=1)[0])
         shown = (
             np.sort(rng.choice(shared, size=max_genes, replace=False))
-            if shared.size > max_genes
+            if max_genes is not None and shared.size > max_genes
             else shared
         )
         x, y = a[i][shown], b[j][shown]
@@ -595,7 +601,8 @@ def main() -> None:
     per_pair_table(piv0, piv1, r).to_csv(out_dir / "rung0_per_pair_r.csv", index=False)
     null_draw_table(nulls).to_csv(out_dir / "rung0_null_draws.csv", index=False)
     profiles, profile_index = example_pair_profiles(piv0, piv1, r)
-    profiles.to_csv(out_dir / "rung0_example_pair_profiles.csv", index=False)
+    # gzipped: every shared gene, ~700 KB instead of ~2.4 MB; pandas reads it by extension
+    profiles.to_csv(out_dir / "rung0_example_pair_profiles.csv.gz", index=False)
     profile_index.to_csv(out_dir / "rung0_example_pair_index.csv", index=False)
 
     per_gene = per_gene_reliability(piv0, piv1)

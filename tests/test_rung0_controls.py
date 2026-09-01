@@ -381,9 +381,11 @@ def test_example_profiles_reproduce_their_own_correlations(tmp_path: Path) -> No
             f"{row['example_id']}: exported points give r={recomputed:.4f}, "
             f"index says r_shown={row['r_shown']}"
         )
-        # the subsample must represent the full panel, not drift from it
-        assert abs(row["r_shown"] - row["r_full"]) < 0.05, (
-            f"{row['example_id']}: shown {row['r_shown']} vs full {row['r_full']}"
+        # exporting every shared gene (the default): nothing dropped, so the two agree exactly
+        assert row["n_genes_shown"] == row["n_genes_full"]
+        assert row["r_shown"] == row["r_full"], (
+            f"{row['example_id']}: full export must give r_shown == r_full, "
+            f"got {row['r_shown']} vs {row['r_full']}"
         )
     # matched examples are ordered by construction (they are drawn at rising quantiles)
     matched = index[index["kind"] == "matched"].sort_values("example_id")
@@ -395,6 +397,17 @@ def test_example_profiles_reproduce_their_own_correlations(tmp_path: Path) -> No
     assert mismatch["drug0"] == mismatch["drug1"] and mismatch["patient0"] != mismatch["patient1"]
     cross = index[index["kind"] == "diff_drug_mismatch"].iloc[0]
     assert cross["drug0"] != cross["drug1"] and cross["patient0"] != cross["patient1"]
+
+    # the subsampling path stays available for pools where size forces it: seeded, so a
+    # rerun reproduces the file byte for byte, and the shown points keep their own r
+    small, small_index = dr.example_pair_profiles(piv0, piv1, r, max_genes=100)
+    again, _ = dr.example_pair_profiles(piv0, piv1, r, max_genes=100)
+    assert small.equals(again), "subsampling must be reproducible at a fixed seed"
+    for _, row in small_index.iterrows():
+        assert row["n_genes_shown"] == min(100, row["n_genes_full"])
+        sub = small[small["example_id"] == row["example_id"]]
+        recomputed = np.corrcoef(sub["lfc0"].to_numpy(float), sub["lfc1"].to_numpy(float))[0, 1]
+        assert abs(recomputed - row["r_shown"]) < 5e-3
 
 
 def test_per_gene_reliability_separates_reliable_from_noise_genes(tmp_path: Path) -> None:
